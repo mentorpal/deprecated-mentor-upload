@@ -20,8 +20,6 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
         raise Exception(f"video not found for path '{video_path}'")
     audio_file = video_to_audio(video_path_full)
     transcription_service = transcribe.init_transcription_service()
-    batch_id = "b1"
-    job_id = "video"
     """
      TODO: fix the py-transcribe module...
      - should generate a jobId if you don't set one
@@ -30,12 +28,11 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
      - seems to ignore passed in 'jobId'?
     """
     transcribe_result = transcription_service.transcribe(
-        [transcribe.TranscribeJobRequest(jobId=job_id, sourceFile=audio_file)],
-        batch_id=batch_id,
+        [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
     )
     import logging
 
     logging.warning(f"transcribe_result={transcribe_result.to_dict()}")
-    job_result = transcribe_result.transcribeJobsById.get(f"{batch_id}-{job_id}")
+    job_result = transcribe_result.first()
     transcript = job_result.transcript if job_result else ""
     return ProcessAnswerResponse(**req, transcript=transcript)
