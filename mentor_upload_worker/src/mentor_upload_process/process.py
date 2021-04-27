@@ -22,6 +22,13 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
     transcription_service = transcribe.init_transcription_service()
     batch_id = "b1"
     job_id = "video"
+    """
+     TODO: fix the py-transcribe module...
+     - should generate a jobId if you don't set one
+     - should not require a batch id
+     - {result}.jobs() seems to not return what it should?
+     - seems to ignore passed in 'jobId'?
+    """
     transcribe_result = transcription_service.transcribe(
         [transcribe.TranscribeJobRequest(jobId=job_id, sourceFile=audio_file)],
         batch_id=batch_id,
