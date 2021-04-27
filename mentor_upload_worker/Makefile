@@ -1,5 +1,6 @@
 ROOT=$(shell dirname ${PWD})
 VENV=.venv
+VENV_PIP=$(VENV)/bin/pip
 $(VENV):
 	$(MAKE) $(VENV)-update
 

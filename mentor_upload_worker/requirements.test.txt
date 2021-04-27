@@ -1,6 +1,8 @@
 -r requirements.txt
+# callee==0.3.1
 coverage==5.5
 pip-upgrader
 pytest==6.2.3
-pytest-mock==3.5.1
 pytest-env==0.6.2
+pytest-mock==3.6.0
+pytest-only==1.2.2

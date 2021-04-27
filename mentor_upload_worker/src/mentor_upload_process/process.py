@@ -1,6 +1,7 @@
 from os import environ, path
 
 from . import ProcessAnswerRequest, ProcessAnswerResponse
+from .media_tools import video_to_audio
 
 
 def upload_path(p: str) -> str:
@@ -15,4 +16,5 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
     video_path_full = upload_path(video_path)
     if not path.isfile(video_path_full):
         raise Exception(f"video not found for path '{video_path}'")
+    video_to_audio(video_path_full)
     return req

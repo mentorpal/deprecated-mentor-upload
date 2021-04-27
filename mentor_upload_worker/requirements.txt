@@ -1,2 +1,4 @@
 celery==5.0.5
+ffmpy==0.3.0
+# pymediainfo==5.0.4
 redis==3.5.3
