@@ -2,3 +2,4 @@ celery==5.0.5
 ffmpy==0.3.0
 # pymediainfo==5.0.4
 redis==3.5.3
+transcribe_aws @ git+https://github.com/ictlearningsciences/py-transcribe-aws.git@1.1.0#egg=transcribe_aws

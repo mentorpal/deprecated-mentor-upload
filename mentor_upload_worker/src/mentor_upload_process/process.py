@@ -1,5 +1,7 @@
 from os import environ, path
 
+import transcribe
+
 from . import ProcessAnswerRequest, ProcessAnswerResponse
 from .media_tools import video_to_audio
 
@@ -16,5 +18,17 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
     video_path_full = upload_path(video_path)
     if not path.isfile(video_path_full):
         raise Exception(f"video not found for path '{video_path}'")
-    video_to_audio(video_path_full)
-    return req
+    audio_file = video_to_audio(video_path_full)
+    transcription_service = transcribe.init_transcription_service()
+    batch_id = "b1"
+    job_id = "video"
+    transcribe_result = transcription_service.transcribe(
+        [transcribe.TranscribeJobRequest(jobId=job_id, sourceFile=audio_file)],
+        batch_id=batch_id,
+    )
+    import logging
+
+    logging.warning(f"transcribe_result={transcribe_result.to_dict()}")
+    job_result = transcribe_result.transcribeJobsById.get(f"{batch_id}-{job_id}")
+    transcript = job_result.transcript if job_result else ""
+    return ProcessAnswerResponse(**req, transcript=transcript)

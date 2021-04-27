@@ -10,3 +10,4 @@ class ProcessAnswerRequest(TypedDict):
 class ProcessAnswerResponse(TypedDict):
     mentor: str
     question: str
+    transcript: str

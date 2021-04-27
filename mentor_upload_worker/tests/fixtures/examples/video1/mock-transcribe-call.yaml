@@ -1,0 +1,12 @@
+requests:
+  - jobId: video1
+    sourceFile: video1.mp3
+result:
+  transcribeJobsById:
+    b1-video:
+      batchId: b1
+      jobId: video1
+      sourceFile: video1.mp3
+      mediaFormat: mp3
+      transcript: "mentor answer for question 1"
+      status: SUCCEEDED
