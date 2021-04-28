@@ -1,12 +1,11 @@
 import json
-from os import path
 import re
 from unittest.mock import patch, Mock
 
 import pytest
 import responses
 import transcribe
-from transcribe.mock import MockTranscriptions, mock_transcribe_call_fixture_from_yaml
+from transcribe.mock import MockTranscribeJob, MockTranscriptions
 
 from mentor_upload_process.api import (
     answer_update_gql,
@@ -14,14 +13,13 @@ from mentor_upload_process.api import (
     AnswerUpdateRequest,
 )
 from mentor_upload_process.process import process_answer_video
-from .utils import fixture_path, fixture_upload
+from .utils import fixture_upload
 
 
 @pytest.fixture()
 def uploads_fixture(monkeypatch) -> str:
     uploads_path = fixture_upload("")
     monkeypatch.setenv("UPLOADS", uploads_path)
-    # monkeypatch.setevn("GRAPHQL_ENDPOINT", GRAPHQL_ENDPOINT)
     return uploads_path
 
 
@@ -34,21 +32,27 @@ def test_transcribes_mentor_answer(
     mentor = "m1"
     question = "q1"
     fake_transcript = "mentor answer for question 1"
-    req = {"mentor": mentor, "question": question, "video_path": "video1.mp4"}
+    video_path = "video1.mp4"
+    req = {"mentor": mentor, "question": question, "video_path": video_path}
     expected_res = {
         "mentor": mentor,
         "question": question,
-        "video_path": "video1.mp4",
+        "video_path": video_path,
         "transcript": fake_transcript,
     }
     mock_ffmpeg_inst = Mock()
     mock_ffmpeg_cls.return_value = mock_ffmpeg_inst
 
     mock_transcriptions = MockTranscriptions(mock_init_transcription_service, ".")
-    mock_transcriptions.mock_transcribe_result_and_callbacks(
-        mock_transcribe_call_fixture_from_yaml(
-            fixture_path(path.join("examples", "video1", "mock-transcribe-call.yaml"))
-        )
+    mock_transcriptions.mock_transcribe_result(
+        [
+            MockTranscribeJob(
+                request=transcribe.TranscribeJobRequest(
+                    sourceFile=re.sub("mp4$", "mp3", video_path)
+                ),
+                transcript=fake_transcript,
+            )
+        ]
     )
     responses.add(
         responses.POST,
