@@ -4,6 +4,7 @@ import transcribe
 
 from . import ProcessAnswerRequest, ProcessAnswerResponse
 from .media_tools import video_to_audio
+from .api import update_answer, AnswerUpdateRequest
 
 
 def upload_path(p: str) -> str:
@@ -20,13 +21,8 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
         raise Exception(f"video not found for path '{video_path}'")
     audio_file = video_to_audio(video_path_full)
     transcription_service = transcribe.init_transcription_service()
-    """
-     TODO: fix the py-transcribe module...
-     - should generate a jobId if you don't set one
-     - should not require a batch id
-     - {result}.jobs() seems to not return what it should?
-     - seems to ignore passed in 'jobId'?
-    """
+    mentor = req.get("mentor")
+    question = req.get("question")
     transcribe_result = transcription_service.transcribe(
         [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
     )
@@ -35,4 +31,7 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
     logging.warning(f"transcribe_result={transcribe_result.to_dict()}")
     job_result = transcribe_result.first()
     transcript = job_result.transcript if job_result else ""
+    update_answer(
+        AnswerUpdateRequest(mentor=mentor, question=question, transcript=transcript)
+    )
     return ProcessAnswerResponse(**req, transcript=transcript)
