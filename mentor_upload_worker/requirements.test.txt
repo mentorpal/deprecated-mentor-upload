@@ -4,6 +4,6 @@ coverage==5.5
 pip-upgrader
 pytest==6.2.3
 pytest-env==0.6.2
-pytest-mock==3.6.0
+pytest-mock==3.8.0
 pytest-only==1.2.2
 responses===0.13.3
