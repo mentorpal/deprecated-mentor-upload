@@ -1,7 +1,7 @@
 FROM python:3.8-slim
-WORKDIR /tmp
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+ADD requirements.txt /tmp/requirements.txt
+RUN pip install -r /tmp/requirements.txt
+RUN rm /tmp/requirements.txt
 WORKDIR /app
 COPY src/* .
 COPY bin/training_worker.sh .
