@@ -10,8 +10,6 @@ import pytest
 @pytest.mark.parametrize(
     "endpoint",
     [
-        # ("/upload/trim"),
-        # ("/upload/trim/status/xyz"),
         ("/upload/answer"),
         ("/upload/answer/status/xyz"),
     ],

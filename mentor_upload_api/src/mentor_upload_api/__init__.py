@@ -37,6 +37,4 @@ def create_app():
     from mentor_upload_api.blueprints.upload import upload_blueprint
 
     app.register_blueprint(upload_blueprint, url_prefix="/upload/answer")
-    # from mentor_upload_api.blueprints.trim import trim_blueprint
-    # app.register_blueprint(trim_blueprint, url_prefix="/upload/trim")
     return app
