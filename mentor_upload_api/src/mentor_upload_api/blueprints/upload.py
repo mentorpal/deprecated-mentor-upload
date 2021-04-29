@@ -6,6 +6,7 @@
 #
 from os import environ, path, makedirs
 from flask import Blueprint, jsonify, request
+import uuid
 
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
@@ -29,7 +30,7 @@ def upload():
     upload_file = request.files["video"]
 
     root_ext = path.splitext(upload_file.filename)
-    file_name = f"{mentor}_{question}{root_ext[1]}"
+    file_name = f"{uuid.uuid4()}-{mentor}-{question}{root_ext[1]}"
     file_path = path.join(get_upload_root(), file_name)
     makedirs(get_upload_root(), exist_ok=True)
     upload_file.save(file_path)

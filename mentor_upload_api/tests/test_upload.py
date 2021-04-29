@@ -6,6 +6,7 @@
 #
 from os import path
 from unittest.mock import patch, Mock
+import uuid
 
 import pytest
 
@@ -25,7 +26,9 @@ def python_path_env(monkeypatch, tmpdir):
     ],
 )
 @patch("mentor_upload_tasks.tasks.upload_task")
+@patch.object(uuid, "uuid4")
 def test_upload(
+    mock_uuid,
     mock_upload_task,
     tmpdir,
     upload_domain,
@@ -35,6 +38,7 @@ def test_upload(
     fake_task_id,
     client,
 ):
+    mock_uuid.return_value = "fake_uuid"
     mock_task = Bunch(id=fake_task_id)
     mock_upload_task.apply_async.return_value = mock_task
     data = {
@@ -55,7 +59,9 @@ def test_upload(
     }
     root_ext = path.splitext(input_video)
     assert path.exists(
-        path.join(tmpdir, f"uploads/{input_mentor}_{input_question}{root_ext[1]}")
+        path.join(
+            tmpdir, f"uploads/fake_uuid-{input_mentor}-{input_question}{root_ext[1]}"
+        )
     )
 
 
