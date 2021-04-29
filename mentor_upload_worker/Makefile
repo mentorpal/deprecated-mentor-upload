@@ -1,3 +1,4 @@
+DOCKER_IMAGE?=mentor-upload-worker
 ROOT=$(shell dirname ${PWD})
 VENV=.venv
 VENV_PIP=$(VENV)/bin/pip
@@ -17,6 +18,10 @@ $(VENV)-update: $(VENV)-installed
 .PHONY clean:
 clean:
 	rm -rf .pytest_cache .mypy_cache build
+
+.PHONY docker-build:
+docker-build:
+	docker build -t $(DOCKER_IMAGE) .
 
 .PHONY: format
 format: $(VENV)
