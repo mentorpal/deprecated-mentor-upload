@@ -4,16 +4,17 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-from typing import TypedDict
+import pytest
 
 
-class ProcessAnswerRequest(TypedDict):
-    mentor: str
-    question: str
-    video_path: str
-
-
-class ProcessAnswerResponse(TypedDict):
-    mentor: str
-    question: str
-    transcript: str
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        ("/upload/answer"),
+        ("/upload/answer/status/xyz"),
+    ],
+)
+def test_cors_preflight(endpoint, client):
+    res = client.options(endpoint, follow_redirects=False)
+    assert res.status_code == 200  # redirect would cause fail
+    assert res.headers.get("Access-Control-Allow-Origin") == "*"

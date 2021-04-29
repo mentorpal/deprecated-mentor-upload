@@ -4,16 +4,22 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-from typing import TypedDict
+import os
+
+from celery import Celery
+
+config = {
+    "broker_url": os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0"),
+    "result_backend": os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/0"),
+    "accept_content": ["json"],
+    "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
+    "event_serializer": os.environ.get("CELERY_EVENT_SERIALIZER", "json"),
+    "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
+}
+celery = Celery("mentor_upload_tasks", broker=config["broker_url"])
+celery.conf.update(config)
 
 
-class ProcessAnswerRequest(TypedDict):
-    mentor: str
-    question: str
-    video_path: str
-
-
-class ProcessAnswerResponse(TypedDict):
-    mentor: str
-    question: str
-    transcript: str
+@celery.task()
+def upload_task(req):
+    pass

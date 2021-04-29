@@ -25,17 +25,17 @@ LICENSE_HEADER:
 .PHONY: license
 license: LICENSE LICENSE_HEADER $(VENV)
 	. $(VENV)/bin/activate \
-		&& python -m licenseheaders -t LICENSE_HEADER -d opentutor_classifier/src $(args) \
-		&& python -m licenseheaders -t LICENSE_HEADER -d opentutor_classifier/tests $(args) \
-		&& python -m licenseheaders -t LICENSE_HEADER -d opentutor_classifier_api/src $(args) \
-		&& python -m licenseheaders -t LICENSE_HEADER -d opentutor_classifier_api/tests $(args) \
+		&& python -m licenseheaders -t LICENSE_HEADER -d mentor_upload_worker/src $(args) \
+		&& python -m licenseheaders -t LICENSE_HEADER -d mentor_upload_worker/tests $(args) \
+		&& python -m licenseheaders -t LICENSE_HEADER -d mentor_upload_api/src $(args) \
+		&& python -m licenseheaders -t LICENSE_HEADER -d mentor_upload_api/tests $(args) \
 		&& python -m licenseheaders -t LICENSE_HEADER -d tools $(args) \
 		&& python -m licenseheaders -t LICENSE_HEADER -d word2vec $(args)
 
 .PHONY: test
 test:
-	cd opentutor_classifier && $(MAKE) test
-	cd opentutor_classifier_api && $(MAKE) test
+	cd mentor_upload_worker && $(MAKE) test
+	cd mentor_upload_api && $(MAKE) test
 
 .PHONY: test-all
 test-all:

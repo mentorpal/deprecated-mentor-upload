@@ -4,16 +4,10 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-from typing import TypedDict
 
 
-class ProcessAnswerRequest(TypedDict):
-    mentor: str
-    question: str
-    video_path: str
-
-
-class ProcessAnswerResponse(TypedDict):
-    mentor: str
-    question: str
-    transcript: str
+def test_it_returns_pong_response(client):
+    res = client.get("/upload/ping/")
+    assert res.status_code == 200
+    assert res.json.get("message") == "pong!"
+    assert res.json.get("status") == "success"
