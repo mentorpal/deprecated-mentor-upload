@@ -4,6 +4,7 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
+import json
 from os import path
 from unittest.mock import patch, Mock
 import uuid
@@ -41,14 +42,12 @@ def test_upload(
     mock_uuid.return_value = "fake_uuid"
     mock_task = Bunch(id=fake_task_id)
     mock_upload_task.apply_async.return_value = mock_task
-    data = {
-        "mentor": input_mentor,
-        "question": input_question,
-        "video": open(path.join(fixture_path("input_videos"), input_video), "rb"),
-    }
     res = client.post(
         f"{upload_domain}/upload/answer",
-        data=data,
+        data={
+            "body": json.dumps({"mentor": input_mentor, "question": input_question}),
+            "video": open(path.join(fixture_path("input_videos"), input_video), "rb"),
+        },
     )
     assert res.status_code == 200
     assert res.json == {
@@ -96,14 +95,14 @@ def test_env_fixes_ssl_status_url(
         monkeypatch.setenv("STATUS_URL_FORCE_HTTPS", env_val)
     mock_task = Bunch(id=fake_task_id)
     mock_upload_task.apply_async.return_value = mock_task
-    data = {
-        "mentor": fake_mentor_id,
-        "question": fake_question_id,
-        "video": fake_video,
-    }
     res = client.post(
-        f"{request_root}/upload/answer/",
-        data=data,
+        f"{request_root}/upload/answer",
+        data={
+            "body": json.dumps(
+                {"mentor": fake_mentor_id, "question": fake_question_id}
+            ),
+            "video": fake_video,
+        },
     )
     assert res.status_code == 200
     assert res.json == {
