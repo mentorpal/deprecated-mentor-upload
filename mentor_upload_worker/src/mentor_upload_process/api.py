@@ -36,18 +36,20 @@ class GQLQueryBody(TypedDict):
 
 def answer_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
     return {
-        "query": f"""mutation {{
-            uploadAnswer(
-                mentorId: {req.mentor},
-                questionId: {req.question},
-                answer: {{ transcript: {req.transcript} }}
-            }})
-        }}"""
+        "query": """mutation UploadAnswer($mentorId: ID!, $questionId: ID!, $answer: String!) {
+            uploadAnswer(mentorId: $mentorId, questionId: $questionId, answer: {transcript: $answer})
+        }""",
+        "variables": {
+            "mentorId": req.mentor,
+            "questionId": req.question,
+            "answer": req.transcript,
+        },
     }
 
 
 def update_answer(req: AnswerUpdateRequest) -> None:
-    res = requests.post(get_graphql_endpoint(), json=answer_update_gql(req))
+    body = answer_update_gql(req)
+    res = requests.post(get_graphql_endpoint(), json=body)
     res.raise_for_status()
     tdjson = res.json()
     if "errors" in tdjson:

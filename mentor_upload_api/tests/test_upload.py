@@ -25,7 +25,7 @@ def python_path_env(monkeypatch, tmpdir):
         ("http://a.diff.org", "mentor2", "q2", "video.mp4", "fake_task_id_2"),
     ],
 )
-@patch("mentor_upload_tasks.tasks.upload_task")
+@patch("mentor_upload_tasks.tasks.process_answer_video")
 @patch.object(uuid, "uuid4")
 def test_upload(
     mock_uuid,
@@ -79,7 +79,7 @@ def test_upload(
         ("http://mentor.org", "on", "https://mentor.org"),
     ],
 )
-@patch("mentor_upload_tasks.tasks.upload_task")
+@patch("mentor_upload_tasks.tasks.process_answer_video")
 def test_env_fixes_ssl_status_url(
     mock_upload_task: Mock,
     request_root: str,
@@ -129,7 +129,7 @@ def test_env_fixes_ssl_status_url(
         ),
     ],
 )
-@patch("mentor_upload_tasks.tasks.upload_task")
+@patch("mentor_upload_tasks.tasks.process_answer_video")
 def test_it_returns_status_for_a_upload_job(
     mock_upload_task, task_id, state, status, info, expected_info, client
 ):

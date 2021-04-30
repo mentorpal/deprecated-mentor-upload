@@ -5,6 +5,7 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from os import environ, path
+import uuid
 
 import transcribe
 
@@ -14,8 +15,7 @@ from .api import update_answer, AnswerUpdateRequest
 
 
 def upload_path(p: str) -> str:
-    uploads_dir = path.abspath(environ.get("UPLOADS") or "uploads")
-    return path.join(uploads_dir, p)
+    return path.join(environ.get("UPLOADS") or "./uploads", p)
 
 
 def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
@@ -30,11 +30,9 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
     mentor = req.get("mentor")
     question = req.get("question")
     transcribe_result = transcription_service.transcribe(
-        [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
+        [transcribe.TranscribeJobRequest(sourceFile=audio_file)],
+        batch_id=str(uuid.uuid4()),
     )
-    import logging
-
-    logging.warning(f"transcribe_result={transcribe_result.to_dict()}")
     job_result = transcribe_result.first()
     transcript = job_result.transcript if job_result else ""
     update_answer(

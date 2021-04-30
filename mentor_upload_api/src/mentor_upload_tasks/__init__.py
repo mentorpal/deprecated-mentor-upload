@@ -4,3 +4,16 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
+from typing import TypedDict
+
+
+class ProcessAnswerRequest(TypedDict):
+    mentor: str
+    question: str
+    video_path: str
+
+
+class ProcessAnswerResponse(TypedDict):
+    mentor: str
+    question: str
+    transcript: str

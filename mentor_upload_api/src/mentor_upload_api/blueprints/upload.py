@@ -4,9 +4,11 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
+import json
 from os import environ, path, makedirs
-from flask import Blueprint, jsonify, request
 import uuid
+
+from flask import Blueprint, jsonify, request
 
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
@@ -19,24 +21,25 @@ def _to_status_url(root: str, id: str) -> str:
 
 
 def get_upload_root() -> str:
-    return environ.get("UPLOAD_ROOT") or "uploads"
+    return environ.get("UPLOAD_ROOT") or "./uploads"
 
 
 @upload_blueprint.route("/", methods=["POST"])
 @upload_blueprint.route("", methods=["POST"])
 def upload():
-    mentor = request.form.get("mentor")
-    question = request.form.get("question")
+    body = json.loads(request.form.get("body", "{}"))
+    if not body:
+        raise Exception("missing required param body")
+    mentor = body.get("mentor")
+    question = body.get("question")
     upload_file = request.files["video"]
-
     root_ext = path.splitext(upload_file.filename)
     file_name = f"{uuid.uuid4()}-{mentor}-{question}{root_ext[1]}"
     file_path = path.join(get_upload_root(), file_name)
     makedirs(get_upload_root(), exist_ok=True)
     upload_file.save(file_path)
-
-    req = {"mentor": mentor, "question": question, "video_path": file_path}
-    t = mentor_upload_tasks.tasks.upload_task.apply_async(req)
+    req = {"mentor": mentor, "question": question, "video_path": file_name}
+    t = mentor_upload_tasks.tasks.process_answer_video.apply_async(args=[req])
     return jsonify(
         {
             "data": {
@@ -50,7 +53,7 @@ def upload():
 @upload_blueprint.route("/status/<task_id>/", methods=["GET"])
 @upload_blueprint.route("/status/<task_id>", methods=["GET"])
 def upload_status(task_id: str):
-    t = mentor_upload_tasks.tasks.upload_task.AsyncResult(task_id)
+    t = mentor_upload_tasks.tasks.process_answer_video.AsyncResult(task_id)
     return jsonify(
         {
             "data": {

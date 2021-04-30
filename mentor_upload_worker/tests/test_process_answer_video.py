@@ -48,11 +48,11 @@ def test_transcribes_mentor_answer(
     }
     mock_ffmpeg_inst = Mock()
     mock_ffmpeg_cls.return_value = mock_ffmpeg_inst
-
     mock_transcriptions = MockTranscriptions(mock_init_transcription_service, ".")
     mock_transcriptions.mock_transcribe_result(
         [
             MockTranscribeJob(
+                batch_id="b1",
                 request=transcribe.TranscribeJobRequest(
                     sourceFile=re.sub("mp4$", "mp3", video_path)
                 ),
