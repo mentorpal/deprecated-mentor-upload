@@ -18,6 +18,10 @@ jobs:
         run: make test-types
       - name: test licenses
         run: make test-license
+      - name: test worker
+        run: cd mentor_upload_worker && make test
+      - name: test api
+        run: cd mentor_upload_api && make test
   publish-check:
     name: publish check
     needs:
@@ -61,7 +65,7 @@ jobs:
         run: |
           docker tag "uscictdocker/mentor-upload-worker:${{ steps.tag.outputs.image_tag }}" "uscictdocker/mentor-upload-worker:latest"
           docker tag "uscictdocker/mentor-upload-api:${{ steps.tag.outputs.image_tag }}" "uscictdocker/mentor-upload-api:latest"
-      - name: docker push classifier
+      - name: docker push worker
         run: docker push --all-tags uscictdocker/mentor-upload-worker
       - name: docker push api
         run: docker push --all-tags uscictdocker/mentor-upload-api
