@@ -5,7 +5,6 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from os import environ, path
-import uuid
 
 import transcribe
 
@@ -30,8 +29,7 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
     mentor = req.get("mentor")
     question = req.get("question")
     transcribe_result = transcription_service.transcribe(
-        [transcribe.TranscribeJobRequest(sourceFile=audio_file)],
-        batch_id=str(uuid.uuid4()),
+        [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
     )
     job_result = transcribe_result.first()
     transcript = job_result.transcript if job_result else ""
