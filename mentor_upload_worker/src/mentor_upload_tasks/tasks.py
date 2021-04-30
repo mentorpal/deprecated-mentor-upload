@@ -7,8 +7,11 @@
 import os
 
 from celery import Celery
+from dotenv import load_dotenv
 
 from mentor_upload_process import ProcessAnswerRequest, ProcessAnswerResponse, process
+
+load_dotenv()  # take environment variables from .env.
 
 config = {
     "broker_url": os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0"),

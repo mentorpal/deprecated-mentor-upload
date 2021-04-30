@@ -4,6 +4,6 @@ RUN pip install -r /tmp/requirements.txt
 RUN rm /tmp/requirements.txt
 WORKDIR /app
 COPY src/* ./
-COPY bin/training_worker.sh .
-RUN chmod a+x training_worker.sh
-ENTRYPOINT ["training_worker.sh"]
+COPY bin/entrypoint.sh .
+RUN chmod a+x entrypoint.sh
+ENTRYPOINT ["entrypoint.sh"]
