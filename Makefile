@@ -10,6 +10,15 @@ $(VENV)-update: virtualenv-installed
 	$(VENV)/bin/pip install --upgrade pip
 	$(VENV)/bin/pip install -r ./requirements.txt
 
+.PHONY clean:
+clean:
+	rm -rf .venv htmlcov .coverage
+
+.PHONY: docker-build
+docker-build:
+	cd mentor_upload_api && $(MAKE) docker-build
+	cd mentor_upload_worker && $(MAKE) docker-build
+
 .PHONY: format
 format: $(VENV)
 	$(VENV)/bin/black .

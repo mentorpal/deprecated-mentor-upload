@@ -16,6 +16,10 @@ def get_graphql_endpoint() -> str:
     return environ.get("GRAPHQL_ENDPOINT") or "http://graphql/graphql"
 
 
+def get_api_key() -> str:
+    return environ.get("API_SECRET") or ""
+
+
 @dataclass
 class AnswerUpdateRequest:
     mentor: str
@@ -37,7 +41,9 @@ class GQLQueryBody(TypedDict):
 def answer_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
     return {
         "query": """mutation UploadAnswer($mentorId: ID!, $questionId: ID!, $answer: String!) {
-            uploadAnswer(mentorId: $mentorId, questionId: $questionId, answer: {transcript: $answer})
+            me {
+                updateAnswer(mentorId: $mentorId, questionId: $questionId, answer: {transcript: $answer})
+            }
         }""",
         "variables": {
             "mentorId": req.mentor,
@@ -48,8 +54,9 @@ def answer_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
 
 
 def update_answer(req: AnswerUpdateRequest) -> None:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = answer_update_gql(req)
-    res = requests.post(get_graphql_endpoint(), json=body)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
     res.raise_for_status()
     tdjson = res.json()
     if "errors" in tdjson:
