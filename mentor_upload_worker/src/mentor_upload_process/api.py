@@ -21,10 +21,18 @@ def get_api_key() -> str:
 
 
 @dataclass
+class Media:
+    type: str
+    tag: str
+    url: str
+
+
+@dataclass
 class AnswerUpdateRequest:
     mentor: str
     question: str
     transcript: str
+    media: [Media]
 
 
 @dataclass
@@ -32,6 +40,7 @@ class AnswerUpdateResponse:
     mentor: str
     question: str
     transcript: str
+    media: [Media]
 
 
 class GQLQueryBody(TypedDict):
@@ -40,15 +49,15 @@ class GQLQueryBody(TypedDict):
 
 def answer_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
     return {
-        "query": """mutation UploadAnswer($mentorId: ID!, $questionId: ID!, $answer: String!) {
-            me {
-                updateAnswer(mentorId: $mentorId, questionId: $questionId, answer: {transcript: $answer})
+        "query": """mutation UploadAnswer($mentorId: ID!, $questionId: ID!, $answer: UploadAnswerType!) {
+            api {
+                uploadAnswer(mentorId: $mentorId, questionId: $questionId, answer: $answer)
             }
         }""",
         "variables": {
             "mentorId": req.mentor,
             "questionId": req.question,
-            "answer": req.transcript,
+            "answer": {"transcript": req.transcript, "media": req.media},
         },
     }
 

@@ -33,7 +33,10 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
     )
     job_result = transcribe_result.first()
     transcript = job_result.transcript if job_result else ""
+    media = [{"type": "video", "tag": "web", "url": video_path}]
     update_answer(
-        AnswerUpdateRequest(mentor=mentor, question=question, transcript=transcript)
+        AnswerUpdateRequest(
+            mentor=mentor, question=question, transcript=transcript, media=media
+        )
     )
-    return ProcessAnswerResponse(**req, transcript=transcript)
+    return ProcessAnswerResponse(**req, transcript=transcript, media=media)

@@ -39,12 +39,14 @@ def test_transcribes_mentor_answer(
     question = "q1"
     fake_transcript = "mentor answer for question 1"
     video_path = "video1.mp4"
+    media = [{"type": "video", "tag": "web", "url": video_path}]
     req = {"mentor": mentor, "question": question, "video_path": video_path}
     expected_res = {
         "mentor": mentor,
         "question": question,
         "video_path": video_path,
         "transcript": fake_transcript,
+        "media": media,
     }
     mock_ffmpeg_inst = Mock()
     mock_ffmpeg_cls.return_value = mock_ffmpeg_inst
@@ -65,7 +67,10 @@ def test_transcribes_mentor_answer(
         get_graphql_endpoint(),
         json=answer_update_gql(
             AnswerUpdateRequest(
-                mentor=mentor, question=question, transcript=fake_transcript
+                mentor=mentor,
+                question=question,
+                transcript=fake_transcript,
+                media=media,
             )
         ),
         status=200,
@@ -83,7 +88,10 @@ def test_transcribes_mentor_answer(
     assert responses.calls[0].request.body.decode("UTF-8") == json.dumps(
         answer_update_gql(
             AnswerUpdateRequest(
-                mentor=mentor, question=question, transcript=fake_transcript
+                mentor=mentor,
+                question=question,
+                transcript=fake_transcript,
+                media=media,
             )
         )
     )
