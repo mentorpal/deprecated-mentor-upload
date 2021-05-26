@@ -3,4 +3,4 @@ ffmpy==0.3.0
 redis==3.5.3
 requests==2.25.1
 python-dotenv==0.17.1
-py_transcribe_aws==1.3.3a3
+py_transcribe_aws==1.4.0
