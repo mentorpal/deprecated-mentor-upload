@@ -1,5 +1,4 @@
 -r requirements.txt
-# callee==0.3.1
 coverage==5.5
 pip-upgrader
 pytest==6.2.3
