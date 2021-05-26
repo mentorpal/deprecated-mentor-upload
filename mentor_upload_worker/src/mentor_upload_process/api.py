@@ -7,7 +7,7 @@
 from dataclasses import dataclass
 import json
 from os import environ
-from typing import TypedDict
+from typing import List, TypedDict
 
 import requests
 
@@ -32,7 +32,7 @@ class AnswerUpdateRequest:
     mentor: str
     question: str
     transcript: str
-    media: [Media]
+    media: List[Media]
 
 
 @dataclass
@@ -40,7 +40,7 @@ class AnswerUpdateResponse:
     mentor: str
     question: str
     transcript: str
-    media: [Media]
+    media: List[Media]
 
 
 class GQLQueryBody(TypedDict):
