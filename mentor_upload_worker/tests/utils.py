@@ -6,6 +6,33 @@
 #
 from os import path
 
+from unittest.mock import Mock
+
+
+class Bunch:
+    """
+    Useful for mocking class instances.
+
+    In python, you cannot access dictionary keys with .[prop] notation,
+    e.g. you can access a property like this `mydict['myprop']`
+    but not like this `mydict.prop`
+
+    So when you want to mock an object that has properties,
+    you can't just use a dictionary. You *can* instead
+    just use Bunches like this:
+
+    ```
+    myObj = Bunch(
+        myProp = Bunch(myNestedProp = 'a')
+    )
+
+    print(myObj.myProp.myNestedProp) # prints 'a'
+    ```
+    """
+
+    def __init__(self, **kwds):
+        self.__dict__.update(kwds)
+
 
 def fixture_path(p: str) -> str:
     return path.abspath(path.join(".", "tests", "fixtures", p))
@@ -13,3 +40,13 @@ def fixture_path(p: str) -> str:
 
 def fixture_upload(p="") -> str:
     return fixture_path(path.join("uploads", p))
+
+
+def mock_s3_client(mock_boto3_client: Mock) -> Mock:
+    mock_s3_client = Bunch(upload_file=Mock())
+
+    def return_clients(client_type, **kwargs):
+        return mock_s3_client if client_type == "s3" else None
+
+    mock_boto3_client.side_effect = return_clients
+    return mock_s3_client
