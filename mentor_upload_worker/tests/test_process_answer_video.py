@@ -24,17 +24,17 @@ from mentor_upload_process.api import (
 from mentor_upload_process.process import process_answer_video
 from .utils import fixture_upload, mock_s3_client
 
-TEST_CDN_UPLOAD_AWS_S3_BUCKET = "mentorpal-origin"
+TEST_STATIC_UPLOAD_AWS_S3_BUCKET = "mentorpal-origin"
 
 
 @pytest.fixture()
 def uploads_fixture(monkeypatch) -> str:
     uploads_path = fixture_upload("")
     monkeypatch.setenv("UPLOADS", uploads_path)
-    monkeypatch.setenv("CDN_UPLOAD_AWS_S3_BUCKET", TEST_CDN_UPLOAD_AWS_S3_BUCKET)
-    monkeypatch.setenv("CDN_AWS_REGION", "us-east-10000")
-    monkeypatch.setenv("CDN_AWS_ACCESS_KEY_ID", "fake-access-key-id")
-    monkeypatch.setenv("CDN_AWS_SECRET_ACCESS_KEY", "fake-access-key-secret")
+    monkeypatch.setenv("STATIC_UPLOAD_AWS_S3_BUCKET", TEST_STATIC_UPLOAD_AWS_S3_BUCKET)
+    monkeypatch.setenv("STATIC_AWS_REGION", "us-east-10000")
+    monkeypatch.setenv("STATIC_AWS_ACCESS_KEY_ID", "fake-access-key-id")
+    monkeypatch.setenv("STATIC_AWS_SECRET_ACCESS_KEY", "fake-access-key-secret")
 
     return uploads_path
 
@@ -166,12 +166,12 @@ def test_transcribes_mentor_answer(
     expected_upload_file_calls = [
         call(
             expected_mobile_video_path,
-            TEST_CDN_UPLOAD_AWS_S3_BUCKET,
+            TEST_STATIC_UPLOAD_AWS_S3_BUCKET,
             f"videos/{mentor}/{question}/mobile.mp4",
         ),
         call(
             expected_web_video_path,
-            TEST_CDN_UPLOAD_AWS_S3_BUCKET,
+            TEST_STATIC_UPLOAD_AWS_S3_BUCKET,
             f"videos/{mentor}/{question}/web.mp4",
         ),
     ]
