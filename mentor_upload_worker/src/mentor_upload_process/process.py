@@ -106,6 +106,7 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
                     str(file),
                     s3_bucket,
                     item_path,
+                    ExtraArgs={"ContentType": "video/mp4"},
                 )
             update_answer(
                 AnswerUpdateRequest(

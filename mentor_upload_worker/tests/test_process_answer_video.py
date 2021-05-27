@@ -13,7 +13,6 @@ from typing import List, Tuple
 from unittest.mock import call, patch, Mock
 
 from callee.operators import Contains
-import pytest
 import responses
 import transcribe
 from transcribe.mock import MockTranscribeJob, MockTranscriptions
@@ -133,7 +132,6 @@ def _mock_gql_answer_update(
     )
 
 
-@pytest.mark.only
 @responses.activate
 @patch.object(transcribe, "init_transcription_service")
 @patch("ffmpy.FFmpeg")
@@ -187,11 +185,13 @@ def test_transcribes_mentor_answer(
                 expected_mobile_video_path,
                 TEST_STATIC_AWS_S3_BUCKET,
                 f"videos/{mentor}/{question}/mobile.mp4",
+                ExtraArgs={"ContentType": "video/mp4"},
             ),
             call(
                 expected_web_video_path,
                 TEST_STATIC_AWS_S3_BUCKET,
                 f"videos/{mentor}/{question}/web.mp4",
+                ExtraArgs={"ContentType": "video/mp4"},
             ),
         ]
         mock_s3.upload_file.assert_has_calls(expected_upload_file_calls)
