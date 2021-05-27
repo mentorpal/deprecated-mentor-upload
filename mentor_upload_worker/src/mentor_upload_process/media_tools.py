@@ -53,7 +53,8 @@ def video_encode_for_mobile(src_file: str, tgt_file: str, target_height=480) -> 
         "quiet",
     ]
     ff = ffmpy.FFmpeg(
-        inputs={src_file: None}, outputs={tgt_file: tuple(i for i in output_command)}
+        inputs={str(src_file): None},
+        outputs={str(tgt_file): tuple(i for i in output_command)},
     )
     ff.run()
 
@@ -99,7 +100,8 @@ def video_encode_for_web(
         "quiet",
     ]
     ff = ffmpy.FFmpeg(
-        inputs={src_file: None}, outputs={tgt_file: tuple(i for i in output_command)}
+        inputs={str(src_file): None},
+        outputs={str(tgt_file): tuple(i for i in output_command)},
     )
     ff.run()
 
@@ -129,68 +131,6 @@ def video_encode_for_web(
 #     ff.run()
 
 
-# def slice_video(
-#     src_file: str,
-#     target_file: str,
-#     time_start: float,
-#     time_end: float,
-#     normalize_audio: bool = True,
-#     normalize_audio_lrt: int = 7,
-# ) -> None:
-#     os.makedirs(os.path.dirname(target_file), exist_ok=True)
-#     if normalize_audio:
-#         subprocess.run(
-#             [
-#                 "ffmpeg-normalize",
-#                 src_file,
-#                 "--output",
-#                 target_file,
-#                 "-lrt",
-#                 "7",
-#                 "-v",
-#                 "-c:a",
-#                 "aac",
-#                 "-c:v",
-#                 "libx264",
-#                 "-ext",
-#                 "mp4",
-#                 "--extra-output-options",
-#                 f"-y -ss {time_start} -to {time_end} -crf 23 -pix_fmt yuv420p -movflags +faststart -profile:v main -level 4.0 -loglevel quiet",
-#             ]
-#         )
-#     else:
-#         output_command = [
-#             "-y",
-#             "-ss",
-#             f"{time_start}",
-#             "-to",
-#             f"{time_end}",
-#             "-c:v",
-#             "libx264",
-#             "-crf",
-#             "23",
-#             "-pix_fmt",
-#             "yuv420p",
-#             "-movflags",
-#             "+faststart",
-#             "-c:a",
-#             "aac",
-#             "-ac",
-#             "1",
-#             "-profile:v",
-#             "main",
-#             "-level",
-#             "4.0",
-#             "-loglevel",
-#             "quiet",
-#         ]
-#         ff = ffmpy.FFmpeg(
-#             inputs={src_file: None},
-#             outputs={target_file: tuple(i for i in output_command)},
-#         )
-#         ff.run()
-
-
 def video_to_audio(input_file, output_file=None, output_audio_encoding="mp3") -> str:
     """
     Converts the .mp4 file to an audio file (.mp3 by default).
@@ -207,6 +147,6 @@ def video_to_audio(input_file, output_file=None, output_audio_encoding="mp3") ->
     input_base, input_ext = os.path.splitext(input_file)
     output_file = output_file or f"{input_base}.{output_audio_encoding}"
     output_command = "-loglevel quiet -y"
-    ff = ffmpy.FFmpeg(inputs={input_file: None}, outputs={output_file: output_command})
+    ff = ffmpy.FFmpeg(inputs={str(input_file): None}, outputs={str(output_file): output_command})
     ff.run()
     return output_file

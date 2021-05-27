@@ -4,8 +4,10 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
+from contextlib import contextmanager
 import json
 from os import path
+from pathlib import Path
 import re
 from typing import List, Tuple
 from unittest.mock import call, patch, Mock
@@ -21,22 +23,32 @@ from mentor_upload_process.api import (
     get_graphql_endpoint,
     AnswerUpdateRequest,
 )
-from mentor_upload_process.process import process_answer_video
+import mentor_upload_process.process
 from .utils import fixture_upload, mock_s3_client
 
 TEST_STATIC_UPLOAD_AWS_S3_BUCKET = "mentorpal-origin"
 
 
-@pytest.fixture()
-def uploads_fixture(monkeypatch) -> str:
-    uploads_path = fixture_upload("")
-    monkeypatch.setenv("UPLOADS", uploads_path)
-    monkeypatch.setenv("STATIC_UPLOAD_AWS_S3_BUCKET", TEST_STATIC_UPLOAD_AWS_S3_BUCKET)
-    monkeypatch.setenv("STATIC_AWS_REGION", "us-east-10000")
-    monkeypatch.setenv("STATIC_AWS_ACCESS_KEY_ID", "fake-access-key-id")
-    monkeypatch.setenv("STATIC_AWS_SECRET_ACCESS_KEY", "fake-access-key-secret")
-
-    return uploads_path
+@contextmanager
+def _test_env(monkeypatch, tmpdir):
+    patcher = patch("mentor_upload_process.process._new_work_dir_name")
+    try:
+        uploads_path = fixture_upload("")
+        monkeypatch.setenv("UPLOADS", uploads_path)
+        monkeypatch.setenv(
+            "STATIC_UPLOAD_AWS_S3_BUCKET", TEST_STATIC_UPLOAD_AWS_S3_BUCKET
+        )
+        monkeypatch.setenv("STATIC_AWS_REGION", "us-east-10000")
+        monkeypatch.setenv("STATIC_AWS_ACCESS_KEY_ID", "fake-access-key-id")
+        monkeypatch.setenv("STATIC_AWS_SECRET_ACCESS_KEY", "fake-access-key-secret")
+        monkeypatch.setenv("STATIC_AWS_SECRET_ACCESS_KEY", "fake-access-key-secret")
+        TRANSCODE_WORK_DIR = tmpdir / "workdir"
+        monkeypatch.setenv("TRANSCODE_WORK_DIR", str(TRANSCODE_WORK_DIR))
+        mock_new_work_dir_name = patcher.start()
+        mock_new_work_dir_name.return_value = "test"
+        yield TRANSCODE_WORK_DIR / "test"
+    finally:
+        patcher.stop()
 
 
 def _expect_gql_answer_update(expected_gql_query: dict) -> None:
@@ -47,7 +59,9 @@ def _expect_gql_answer_update(expected_gql_query: dict) -> None:
     )
 
 
-def _expect_transcode_calls(video_path: str, mock_ffmpeg_cls: Mock) -> None:
+def _expect_transcode_calls(
+    video_path: str, mock_ffmpeg_cls: Mock
+) -> Tuple[str, str, str]:
     """
     There are currently 3 transcode calls that need to happen in the upload process:
 
@@ -124,76 +138,78 @@ def test_transcribes_mentor_answer(
     mock_boto3_client: Mock,
     mock_ffmpeg_cls: Mock,
     mock_init_transcription_service: Mock,
-    uploads_fixture: str,
+    monkeypatch,
+    tmpdir,
 ):
-    mentor = "m1"
-    question = "q1"
-    fake_transcript = "mentor answer for question 1"
-    video_path = "video1.mp4"
-    req = {"mentor": mentor, "question": question, "video_path": video_path}
-    mock_ffmpeg_inst = Mock()
-    mock_ffmpeg_cls.return_value = mock_ffmpeg_inst
-    mock_transcriptions = MockTranscriptions(mock_init_transcription_service, ".")
-    mock_transcriptions.mock_transcribe_result(
-        [
-            MockTranscribeJob(
-                batch_id="b1",
-                request=transcribe.TranscribeJobRequest(
-                    sourceFile=re.sub("mp4$", "mp3", video_path)
-                ),
-                transcript=fake_transcript,
-            )
-        ]
-    )
-    expected_gql_query, expected_media = _mock_gql_answer_update(
-        mentor, question, fake_transcript
-    )
-    mock_s3 = mock_s3_client(mock_boto3_client)
-    assert process_answer_video(req) == {
-        "mentor": mentor,
-        "question": question,
-        "video_path": video_path,
-        "transcript": fake_transcript,
-        "media": expected_media,
-    }
-    video_path = fixture_upload(req.get("video_path", ""))
-    (
-        expected_audio_path,
-        expected_web_video_path,
-        expected_mobile_video_path,
-    ) = _expect_transcode_calls(video_path, mock_ffmpeg_cls)
-    _expect_gql_answer_update(expected_gql_query)
-    expected_upload_file_calls = [
-        call(
-            expected_mobile_video_path,
-            TEST_STATIC_UPLOAD_AWS_S3_BUCKET,
-            f"videos/{mentor}/{question}/mobile.mp4",
-        ),
-        call(
+    with _test_env(monkeypatch, tmpdir) as work_dir:
+        mentor = "m1"
+        question = "q1"
+        fake_transcript = "mentor answer for question 1"
+        video_path = "video1.mp4"
+        req = {"mentor": mentor, "question": question, "video_path": video_path}
+        mock_ffmpeg_inst = Mock()
+        mock_ffmpeg_cls.return_value = mock_ffmpeg_inst
+        mock_transcriptions = MockTranscriptions(mock_init_transcription_service, ".")
+        mock_transcriptions.mock_transcribe_result(
+            [
+                MockTranscribeJob(
+                    batch_id="b1",
+                    request=transcribe.TranscribeJobRequest(
+                        sourceFile=re.sub("mp4$", "mp3", video_path)
+                    ),
+                    transcript=fake_transcript,
+                )
+            ]
+        )
+        expected_gql_query, expected_media = _mock_gql_answer_update(
+            mentor, question, fake_transcript
+        )
+        mock_s3 = mock_s3_client(mock_boto3_client)
+        assert mentor_upload_process.process.process_answer_video(req) == {
+            "mentor": mentor,
+            "question": question,
+            "video_path": video_path,
+            "transcript": fake_transcript,
+            "media": expected_media,
+        }
+        # video_path = fixture_upload(req.get("video_path", ""))
+        (
+            expected_audio_path,
             expected_web_video_path,
-            TEST_STATIC_UPLOAD_AWS_S3_BUCKET,
-            f"videos/{mentor}/{question}/web.mp4",
-        ),
-    ]
-    mock_s3.upload_file.assert_has_calls(expected_upload_file_calls)
+            expected_mobile_video_path,
+        ) = _expect_transcode_calls(str(work_dir / video_path), mock_ffmpeg_cls)
+        _expect_gql_answer_update(expected_gql_query)
+        expected_upload_file_calls = [
+            call(
+                expected_mobile_video_path,
+                TEST_STATIC_UPLOAD_AWS_S3_BUCKET,
+                f"videos/{mentor}/{question}/mobile.mp4",
+            ),
+            call(
+                expected_web_video_path,
+                TEST_STATIC_UPLOAD_AWS_S3_BUCKET,
+                f"videos/{mentor}/{question}/web.mp4",
+            ),
+        ]
+        mock_s3.upload_file.assert_has_calls(expected_upload_file_calls)
 
 
-def test_raises_if_video_path_not_specified(uploads_fixture):
+def test_raises_if_video_path_not_specified():
     req = {"mentor": "m1", "question": "q1"}
     caught_exception = None
     try:
-        process_answer_video(req)
+        mentor_upload_process.process.process_answer_video(req)
     except Exception as err:
         caught_exception = err
     assert caught_exception is not None
     assert str(caught_exception) == "missing required param 'video_path'"
 
 
-def test_raises_if_video_not_found_for_path(uploads_fixture):
+def test_raises_if_video_not_found_for_path():
     req = {"mentor": "m1", "question": "q1", "video_path": "not_exists.mp4"}
     caught_exception = None
     try:
-        process_answer_video(req)
+        mentor_upload_process.process.process_answer_video(req)
     except Exception as err:
         caught_exception = err
     assert caught_exception is not None
