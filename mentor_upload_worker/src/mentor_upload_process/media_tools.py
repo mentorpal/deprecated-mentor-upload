@@ -7,100 +7,101 @@
 import os
 
 import ffmpy
+from pymediainfo import MediaInfo
 
 
-# def find_video_dims(video_file):
-#     media_info = MediaInfo.parse(video_file)
-#     video_tracks = [t for t in media_info.tracks if t.track_type == "Video"]
-#     return (
-#         (video_tracks[0].width, video_tracks[0].height)
-#         if len(video_tracks) >= 1
-#         else (-1, -1)
-#     )
+def find_video_dims(video_file):
+    media_info = MediaInfo.parse(video_file)
+    video_tracks = [t for t in media_info.tracks if t.track_type == "Video"]
+    return (
+        (video_tracks[0].width, video_tracks[0].height)
+        if len(video_tracks) >= 1
+        else (-1, -1)
+    )
 
 
-# def video_encode_for_mobile(src_file: str, tgt_file: str, target_height=480) -> None:
-#     i_w, i_h = find_video_dims(src_file)
-#     o_w, o_h = (target_height, target_height)
-#     crop_w = 0
-#     crop_h = 0
-#     if i_w > i_h:
-#         # for now assumes we want to zoon in slighly on landscape videos
-#         # before cropping to square
-#         crop_h = i_h * 0.25
-#         crop_w = i_w - (i_h - crop_h)
-#     else:
-#         crop_h = crop_h - crop_h
-#     os.makedirs(os.path.dirname(tgt_file), exist_ok=True)
-#     output_command = [
-#         "-y",
-#         "-filter:v",
-#         f"crop=iw-{crop_w:.0f}:ih-{crop_h:.0f},scale={o_w:.0f}:{o_h:.0f}",
-#         "-c:v",
-#         "libx264",
-#         "-crf",
-#         "23",
-#         "-pix_fmt",
-#         "yuv420p",
-#         "-movflags",
-#         "+faststart",
-#         "-c:a",
-#         "aac",
-#         "-ac",
-#         "1",
-#         "-loglevel",
-#         "quiet",
-#     ]
-#     ff = ffmpy.FFmpeg(
-#         inputs={src_file: None}, outputs={tgt_file: tuple(i for i in output_command)}
-#     )
-#     ff.run()
+def video_encode_for_mobile(src_file: str, tgt_file: str, target_height=480) -> None:
+    i_w, i_h = find_video_dims(src_file)
+    o_w, o_h = (target_height, target_height)
+    crop_w = 0
+    crop_h = 0
+    if i_w > i_h:
+        # for now assumes we want to zoom in slightly on landscape videos
+        # before cropping to square
+        crop_h = i_h * 0.25
+        crop_w = i_w - (i_h - crop_h)
+    else:
+        crop_h = crop_h - crop_h
+    os.makedirs(os.path.dirname(tgt_file), exist_ok=True)
+    output_command = [
+        "-y",
+        "-filter:v",
+        f"crop=iw-{crop_w:.0f}:ih-{crop_h:.0f},scale={o_w:.0f}:{o_h:.0f}",
+        "-c:v",
+        "libx264",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "aac",
+        "-ac",
+        "1",
+        "-loglevel",
+        "quiet",
+    ]
+    ff = ffmpy.FFmpeg(
+        inputs={src_file: None}, outputs={tgt_file: tuple(i for i in output_command)}
+    )
+    ff.run()
 
 
-# def video_encode_for_web(
-#     src_file: str, tgt_file: str, max_height=720, target_aspect=1.77777777778
-# ) -> None:
-#     i_w, i_h = find_video_dims(src_file)
-#     crop_w = 0
-#     crop_h = 0
-#     o_w = 0
-#     o_h = 0
-#     i_aspect = float(i_w) / float(i_h)
-#     if i_aspect >= target_aspect:
-#         crop_w = i_w - (i_h * target_aspect)
-#         o_h = round(min(max_height, i_h))
-#     else:
-#         crop_h = i_h - (i_w * (1.0 / target_aspect))
-#         o_h = round(min(max_height, i_w * (1.0 / target_aspect)))
-#     o_w = int(o_h * target_aspect)
-#     if o_w % 2 != 0:
-#         o_w += 1  # ensure width is divisible by 2
-#     if o_h % 2 != 0:
-#         o_h += 1  # ensure height is divisible by 2
-#     os.makedirs(os.path.dirname(tgt_file), exist_ok=True)
-#     output_command = [
-#         "-y",
-#         "-filter:v",
-#         f"crop=iw-{crop_w:.0f}:ih-{crop_h:.0f},scale={o_w:.0f}:{o_h:.0f}",
-#         "-c:v",
-#         "libx264",
-#         "-crf",
-#         "23",
-#         "-pix_fmt",
-#         "yuv420p",
-#         "-movflags",
-#         "+faststart",
-#         "-c:a",
-#         "aac",
-#         "-ac",
-#         "1",
-#         "-loglevel",
-#         "quiet",
-#     ]
-#     ff = ffmpy.FFmpeg(
-#         inputs={src_file: None}, outputs={tgt_file: tuple(i for i in output_command)}
-#     )
-#     ff.run()
+def video_encode_for_web(
+    src_file: str, tgt_file: str, max_height=720, target_aspect=1.77777777778
+) -> None:
+    i_w, i_h = find_video_dims(src_file)
+    crop_w = 0
+    crop_h = 0
+    o_w = 0
+    o_h = 0
+    i_aspect = float(i_w) / float(i_h)
+    if i_aspect >= target_aspect:
+        crop_w = i_w - (i_h * target_aspect)
+        o_h = round(min(max_height, i_h))
+    else:
+        crop_h = i_h - (i_w * (1.0 / target_aspect))
+        o_h = round(min(max_height, i_w * (1.0 / target_aspect)))
+    o_w = int(o_h * target_aspect)
+    if o_w % 2 != 0:
+        o_w += 1  # ensure width is divisible by 2
+    if o_h % 2 != 0:
+        o_h += 1  # ensure height is divisible by 2
+    os.makedirs(os.path.dirname(tgt_file), exist_ok=True)
+    output_command = [
+        "-y",
+        "-filter:v",
+        f"crop=iw-{crop_w:.0f}:ih-{crop_h:.0f},scale={o_w:.0f}:{o_h:.0f}",
+        "-c:v",
+        "libx264",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "aac",
+        "-ac",
+        "1",
+        "-loglevel",
+        "quiet",
+    ]
+    ff = ffmpy.FFmpeg(
+        inputs={src_file: None}, outputs={tgt_file: tuple(i for i in output_command)}
+    )
+    ff.run()
 
 
 # def slice_audio(
