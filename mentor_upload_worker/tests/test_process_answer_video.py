@@ -26,7 +26,7 @@ from mentor_upload_process.api import (
 import mentor_upload_process.process
 from .utils import fixture_upload, mock_s3_client
 
-TEST_STATIC_UPLOAD_AWS_S3_BUCKET = "mentorpal-origin"
+TEST_STATIC_AWS_S3_BUCKET = "mentorpal-origin"
 TEST_STATIC_URL_BASE = "http://static-somedomain.mentorpal.org"
 
 
@@ -38,9 +38,7 @@ def _test_env(video_file: str, monkeypatch, tmpdir):
         makedirs(uploads_path)
         copyfile(fixture_upload(video_file), uploads_path / video_file)
         monkeypatch.setenv("UPLOADS", str(uploads_path))
-        monkeypatch.setenv(
-            "STATIC_UPLOAD_AWS_S3_BUCKET", TEST_STATIC_UPLOAD_AWS_S3_BUCKET
-        )
+        monkeypatch.setenv("STATIC_AWS_S3_BUCKET", TEST_STATIC_AWS_S3_BUCKET)
         monkeypatch.setenv("STATIC_AWS_REGION", "us-east-10000")
         monkeypatch.setenv("STATIC_AWS_ACCESS_KEY_ID", "fake-access-key-id")
         monkeypatch.setenv("STATIC_AWS_SECRET_ACCESS_KEY", "fake-access-key-secret")
@@ -187,12 +185,12 @@ def test_transcribes_mentor_answer(
         expected_upload_file_calls = [
             call(
                 expected_mobile_video_path,
-                TEST_STATIC_UPLOAD_AWS_S3_BUCKET,
+                TEST_STATIC_AWS_S3_BUCKET,
                 f"videos/{mentor}/{question}/mobile.mp4",
             ),
             call(
                 expected_web_video_path,
-                TEST_STATIC_UPLOAD_AWS_S3_BUCKET,
+                TEST_STATIC_AWS_S3_BUCKET,
                 f"videos/{mentor}/{question}/web.mp4",
             ),
         ]

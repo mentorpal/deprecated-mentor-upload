@@ -92,7 +92,7 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
             video_path_base = f"videos/{mentor}/{question}/"
             media = []
             s3 = _create_s3_client()
-            s3_bucket = _require_env("STATIC_UPLOAD_AWS_S3_BUCKET")
+            s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
             for tag, file in [("mobile", video_mobile_file), ("web", video_web_file)]:
                 item_path = f"{video_path_base}{tag}.mp4"
                 media.append(
