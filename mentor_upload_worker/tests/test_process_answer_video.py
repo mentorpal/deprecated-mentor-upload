@@ -7,7 +7,6 @@
 from contextlib import contextmanager
 import json
 from os import path
-from pathlib import Path
 import re
 from typing import List, Tuple
 from unittest.mock import call, patch, Mock
@@ -27,6 +26,7 @@ import mentor_upload_process.process
 from .utils import fixture_upload, mock_s3_client
 
 TEST_STATIC_UPLOAD_AWS_S3_BUCKET = "mentorpal-origin"
+TEST_STATIC_URL_BASE = "http://static-somedomain.mentorpal.org"
 
 
 @contextmanager
@@ -42,11 +42,12 @@ def _test_env(monkeypatch, tmpdir):
         monkeypatch.setenv("STATIC_AWS_ACCESS_KEY_ID", "fake-access-key-id")
         monkeypatch.setenv("STATIC_AWS_SECRET_ACCESS_KEY", "fake-access-key-secret")
         monkeypatch.setenv("STATIC_AWS_SECRET_ACCESS_KEY", "fake-access-key-secret")
-        TRANSCODE_WORK_DIR = tmpdir / "workdir"
-        monkeypatch.setenv("TRANSCODE_WORK_DIR", str(TRANSCODE_WORK_DIR))
+        monkeypatch.setenv("STATIC_URL_BASE", TEST_STATIC_URL_BASE)
+        transcode_work_dir = tmpdir / "workdir"
+        monkeypatch.setenv("TRANSCODE_WORK_DIR", str(transcode_work_dir))
         mock_new_work_dir_name = patcher.start()
         mock_new_work_dir_name.return_value = "test"
-        yield TRANSCODE_WORK_DIR / "test"
+        yield transcode_work_dir / "test"
     finally:
         patcher.stop()
 
@@ -115,21 +116,23 @@ def _mock_gql_answer_update(
                 mentor=mentor,
                 question=question,
                 transcript=transcript,
-                media=[
-                    {
-                        "type": "video",
-                        "tag": "mobile",
-                        "url": f"{base_path}mobile.mp4",
-                    },
-                    {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
-                ],
+                media=media,
             )
         ),
         status=200,
     )
-    return gql_query, media
+    return gql_query, list(
+        map(
+            lambda m: {
+                k: (v if k != "url" else f"{TEST_STATIC_URL_BASE}/{v}")
+                for k, v in m.items()
+            },
+            media,
+        )
+    )
 
 
+@pytest.mark.only
 @responses.activate
 @patch.object(transcribe, "init_transcription_service")
 @patch("ffmpy.FFmpeg")
@@ -172,9 +175,8 @@ def test_transcribes_mentor_answer(
             "transcript": fake_transcript,
             "media": expected_media,
         }
-        # video_path = fixture_upload(req.get("video_path", ""))
         (
-            expected_audio_path,
+            _,
             expected_web_video_path,
             expected_mobile_video_path,
         ) = _expect_transcode_calls(str(work_dir / video_path), mock_ffmpeg_cls)

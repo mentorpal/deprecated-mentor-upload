@@ -8,8 +8,8 @@ from contextlib import contextmanager
 from os import environ, path, makedirs
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Tuple
 from shutil import copyfile, rmtree
+from urllib.parse import urljoin
 
 
 import boto3
@@ -111,4 +111,17 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
                 mentor=mentor, question=question, transcript=transcript, media=media
             )
         )
-        return ProcessAnswerResponse(**req, transcript=transcript, media=media)
+        static_url_base = environ.get("STATIC_URL_BASE", "")
+        return ProcessAnswerResponse(
+            **req,
+            transcript=transcript,
+            media=list(
+                map(
+                    lambda m: {
+                        k: (v if k != "url" else urljoin(static_url_base, v))
+                        for k, v in m.items()
+                    },
+                    media,
+                )
+            ),
+        )

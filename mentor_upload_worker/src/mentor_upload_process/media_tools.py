@@ -147,6 +147,8 @@ def video_to_audio(input_file, output_file=None, output_audio_encoding="mp3") ->
     input_base, input_ext = os.path.splitext(input_file)
     output_file = output_file or f"{input_base}.{output_audio_encoding}"
     output_command = "-loglevel quiet -y"
-    ff = ffmpy.FFmpeg(inputs={str(input_file): None}, outputs={str(output_file): output_command})
+    ff = ffmpy.FFmpeg(
+        inputs={str(input_file): None}, outputs={str(output_file): output_command}
+    )
     ff.run()
     return output_file
