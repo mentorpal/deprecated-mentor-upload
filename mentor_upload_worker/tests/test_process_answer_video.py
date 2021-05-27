@@ -6,8 +6,9 @@
 #
 from contextlib import contextmanager
 import json
-from os import path
+from os import path, makedirs
 import re
+from shutil import copyfile
 from typing import List, Tuple
 from unittest.mock import call, patch, Mock
 
@@ -30,11 +31,13 @@ TEST_STATIC_URL_BASE = "http://static-somedomain.mentorpal.org"
 
 
 @contextmanager
-def _test_env(monkeypatch, tmpdir):
+def _test_env(video_file: str, monkeypatch, tmpdir):
     patcher = patch("mentor_upload_process.process._new_work_dir_name")
     try:
-        uploads_path = fixture_upload("")
-        monkeypatch.setenv("UPLOADS", uploads_path)
+        uploads_path = tmpdir / "uploads"
+        makedirs(uploads_path)
+        copyfile(fixture_upload(video_file), uploads_path / video_file)
+        monkeypatch.setenv("UPLOADS", str(uploads_path))
         monkeypatch.setenv(
             "STATIC_UPLOAD_AWS_S3_BUCKET", TEST_STATIC_UPLOAD_AWS_S3_BUCKET
         )
@@ -144,11 +147,11 @@ def test_transcribes_mentor_answer(
     monkeypatch,
     tmpdir,
 ):
-    with _test_env(monkeypatch, tmpdir) as work_dir:
+    video_path = "video1.mp4"
+    with _test_env(video_path, monkeypatch, tmpdir) as work_dir:
         mentor = "m1"
         question = "q1"
         fake_transcript = "mentor answer for question 1"
-        video_path = "video1.mp4"
         req = {"mentor": mentor, "question": question, "video_path": video_path}
         mock_ffmpeg_inst = Mock()
         mock_ffmpeg_cls.return_value = mock_ffmpeg_inst
