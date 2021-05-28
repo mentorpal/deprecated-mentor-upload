@@ -5,6 +5,7 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from contextlib import contextmanager
+from dataclasses import dataclass
 import json
 from os import path, makedirs
 import re
@@ -13,6 +14,8 @@ from typing import List, Tuple
 from unittest.mock import call, patch, Mock
 
 from callee.operators import Contains
+from freezegun import freeze_time
+import pytest
 import responses
 import transcribe
 from transcribe.mock import MockTranscribeJob, MockTranscriptions
@@ -30,9 +33,11 @@ TEST_STATIC_URL_BASE = "http://static-somedomain.mentorpal.org"
 
 
 @contextmanager
-def _test_env(video_file: str, monkeypatch, tmpdir):
+def _test_env(video_file: str, timestamp: str, monkeypatch, tmpdir):
     patcher = patch("mentor_upload_process.process._new_work_dir_name")
+    freezer = freeze_time(timestamp)
     try:
+        freezer.start()
         uploads_path = tmpdir / "uploads"
         makedirs(uploads_path)
         copyfile(fixture_upload(video_file), uploads_path / video_file)
@@ -50,6 +55,7 @@ def _test_env(video_file: str, monkeypatch, tmpdir):
         yield transcode_work_dir / "test"
     finally:
         patcher.stop()
+        freezer.stop()
 
 
 def _expect_gql_answer_update(expected_gql_query: dict) -> None:
@@ -96,9 +102,9 @@ def _expect_transcode_calls(
 
 
 def _mock_gql_answer_update(
-    mentor: str, question: str, transcript: str
+    mentor: str, question: str, transcript: str, timestamp: str
 ) -> Tuple[dict, List[dict]]:
-    base_path = f"videos/{mentor}/{question}/"
+    base_path = f"videos/{mentor}/{question}/{timestamp}/"
     media = [
         {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
         {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
@@ -132,23 +138,47 @@ def _mock_gql_answer_update(
     )
 
 
+@dataclass
+class _TestProcessExample:
+    mentor: str
+    question: str
+    timestamp: str
+    transcript_fake: str
+    video_name: str
+
+
 @responses.activate
 @patch.object(transcribe, "init_transcription_service")
 @patch("ffmpy.FFmpeg")
 @patch("boto3.client")
-def test_transcribes_mentor_answer(
+@pytest.mark.parametrize(
+    "ex",
+    [
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript_fake="mentor answer for question 1",
+                video_name="video1.mp4",
+            )
+        )
+    ],
+)
+def test_processes_mentor_answer(
     mock_boto3_client: Mock,
     mock_ffmpeg_cls: Mock,
     mock_init_transcription_service: Mock,
     monkeypatch,
     tmpdir,
+    ex: _TestProcessExample,
 ):
-    video_path = "video1.mp4"
-    with _test_env(video_path, monkeypatch, tmpdir) as work_dir:
-        mentor = "m1"
-        question = "q1"
-        fake_transcript = "mentor answer for question 1"
-        req = {"mentor": mentor, "question": question, "video_path": video_path}
+    with _test_env(ex.video_name, ex.timestamp, monkeypatch, tmpdir) as work_dir:
+        req = {
+            "mentor": ex.mentor,
+            "question": ex.question,
+            "video_path": ex.video_name,
+        }
         mock_ffmpeg_inst = Mock()
         mock_ffmpeg_cls.return_value = mock_ffmpeg_inst
         mock_transcriptions = MockTranscriptions(mock_init_transcription_service, ".")
@@ -157,40 +187,40 @@ def test_transcribes_mentor_answer(
                 MockTranscribeJob(
                     batch_id="b1",
                     request=transcribe.TranscribeJobRequest(
-                        sourceFile=re.sub("mp4$", "mp3", video_path)
+                        sourceFile=re.sub("mp4$", "mp3", ex.video_name)
                     ),
-                    transcript=fake_transcript,
+                    transcript=ex.transcript_fake,
                 )
             ]
         )
         expected_gql_query, expected_media = _mock_gql_answer_update(
-            mentor, question, fake_transcript
+            ex.mentor, ex.question, ex.transcript_fake, ex.timestamp
         )
         mock_s3 = mock_s3_client(mock_boto3_client)
         assert mentor_upload_process.process.process_answer_video(req) == {
-            "mentor": mentor,
-            "question": question,
-            "video_path": video_path,
-            "transcript": fake_transcript,
+            "mentor": ex.mentor,
+            "question": ex.question,
+            "video_path": ex.video_name,
+            "transcript": ex.transcript_fake,
             "media": expected_media,
         }
         (
             _,
             expected_web_video_path,
             expected_mobile_video_path,
-        ) = _expect_transcode_calls(str(work_dir / video_path), mock_ffmpeg_cls)
+        ) = _expect_transcode_calls(str(work_dir / ex.video_name), mock_ffmpeg_cls)
         _expect_gql_answer_update(expected_gql_query)
         expected_upload_file_calls = [
             call(
                 expected_mobile_video_path,
                 TEST_STATIC_AWS_S3_BUCKET,
-                f"videos/{mentor}/{question}/mobile.mp4",
+                f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/mobile.mp4",
                 ExtraArgs={"ContentType": "video/mp4"},
             ),
             call(
                 expected_web_video_path,
                 TEST_STATIC_AWS_S3_BUCKET,
-                f"videos/{mentor}/{question}/web.mp4",
+                f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/web.mp4",
                 ExtraArgs={"ContentType": "video/mp4"},
             ),
         ]
