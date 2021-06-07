@@ -1,6 +1,7 @@
 -r requirements.txt
 callee==0.3.1
 coverage==5.5
+freezegun==1.1.0
 pip-upgrader
 pytest==6.2.3
 pytest-env==0.6.2

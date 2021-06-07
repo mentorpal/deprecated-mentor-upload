@@ -5,6 +5,7 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from contextlib import contextmanager
+from datetime import datetime
 from os import environ, path, makedirs, remove
 from pathlib import Path
 from tempfile import mkdtemp
@@ -89,7 +90,7 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
             )
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
-            video_path_base = f"videos/{mentor}/{question}/"
+            video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
             media = []
             s3 = _create_s3_client()
             s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
