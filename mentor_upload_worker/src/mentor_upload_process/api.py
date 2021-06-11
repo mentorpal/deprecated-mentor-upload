@@ -43,6 +43,24 @@ class AnswerUpdateResponse:
     media: List[Media]
 
 
+@dataclass
+class StatusUpdateRequest:
+    mentor: str
+    question: str
+    status: str
+    transcript: str
+    media: List[Media]
+
+
+@dataclass
+class StatusUpdateResponse:
+    mentor: str
+    question: str
+    status: str
+    transcript: str
+    media: List[Media]
+
+
 class GQLQueryBody(TypedDict):
     query: str
 
@@ -62,9 +80,38 @@ def answer_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
     }
 
 
+def status_update_gql(req: StatusUpdateRequest) -> GQLQueryBody:
+    return {
+        "query": """mutation UploadStatus($mentorId: ID!, $questionId: ID!, $status: UploadTaskInputType!) {
+            api {
+                uploadTaskUpdate(mentorId: $mentorId, questionId: $questionId, status: $status)
+            }
+        }""",
+        "variables": {
+            "mentorId": req.mentor,
+            "questionId": req.question,
+            "status": {
+                "uploadStatus": req.status,
+                "transcript": req.transcript,
+                "media": req.media,
+            },
+        },
+    }
+
+
 def update_answer(req: AnswerUpdateRequest) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = answer_update_gql(req)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
+
+
+def update_status(req: StatusUpdateRequest) -> None:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = status_update_gql(req)
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
     res.raise_for_status()
     tdjson = res.json()

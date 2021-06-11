@@ -22,8 +22,10 @@ from transcribe.mock import MockTranscribeJob, MockTranscriptions
 
 from mentor_upload_process.api import (
     answer_update_gql,
+    status_update_gql,
     get_graphql_endpoint,
     AnswerUpdateRequest,
+    StatusUpdateRequest,
 )
 import mentor_upload_process.process
 from .utils import fixture_upload, mock_s3_client
@@ -56,49 +58,6 @@ def _test_env(video_file: str, timestamp: str, monkeypatch, tmpdir):
     finally:
         patcher.stop()
         freezer.stop()
-
-
-def _expect_gql_answer_update(expected_gql_query: dict) -> None:
-    assert len(responses.calls) == 1
-    assert responses.calls[0].request.url == get_graphql_endpoint()
-    assert responses.calls[0].request.body.decode("UTF-8") == json.dumps(
-        expected_gql_query
-    )
-
-
-def _expect_transcode_calls(
-    video_path: str, mock_ffmpeg_cls: Mock
-) -> Tuple[str, str, str]:
-    """
-    There are currently 3 transcode calls that need to happen in the upload process:
-
-     - convert the uploaded video to an audio file (for transcription)
-     - convert the uploaded video to a web-optimized video
-     - convert the uploaded video to a mobile-optimized video
-    """
-    expected_audio_path = re.sub("mp4$", "mp3", video_path)
-    expected_mobile_video_path = path.join(path.split(video_path)[0], "mobile.mp4")
-    expected_web_video_path = path.join(path.split(video_path)[0], "web.mp4")
-    mock_ffmpeg_cls.assert_has_calls(
-        [
-            call(
-                inputs={video_path: None},
-                outputs={expected_audio_path: "-loglevel quiet -y"},
-            ),
-            call().run(),
-            call(
-                inputs={video_path: None},
-                outputs={expected_mobile_video_path: Contains("libx264")},
-            ),
-            call().run(),
-            call(
-                inputs={video_path: None},
-                outputs={expected_web_video_path: Contains("libx264")},
-            ),
-            call().run(),
-        ],
-    )
-    return expected_audio_path, expected_web_video_path, expected_mobile_video_path
 
 
 def _mock_gql_answer_update(
@@ -136,6 +95,84 @@ def _mock_gql_answer_update(
             media,
         )
     )
+
+
+def _mock_gql_status_update(
+    mentor: str, question: str, status: str, transcript: str, timestamp: str = None
+) -> dict:
+    media = []
+    if timestamp is not None:
+        base_path = f"videos/{mentor}/{question}/{timestamp}/"
+        media = [
+            {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
+            {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
+        ]
+    gql_query = status_update_gql(
+        StatusUpdateRequest(
+            mentor=mentor,
+            question=question,
+            status=status,
+            transcript=transcript,
+            media=media,
+        )
+    )
+    responses.add(
+        responses.POST,
+        get_graphql_endpoint(),
+        json=status_update_gql(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                status=status,
+                transcript=transcript,
+                media=media,
+            )
+        ),
+        status=200,
+    )
+    return gql_query
+
+
+def _expect_gql(expected_gql_queries: List[dict]) -> None:
+    assert len(responses.calls) == len(expected_gql_queries)
+    for i, query in enumerate(expected_gql_queries):
+        assert responses.calls[i].request.url == get_graphql_endpoint()
+        assert responses.calls[i].request.body.decode("UTF-8") == json.dumps(query)
+
+
+def _expect_transcode_calls(
+    video_path: str, mock_ffmpeg_cls: Mock
+) -> Tuple[str, str, str]:
+    """
+    There are currently 3 transcode calls that need to happen in the upload process:
+
+     - convert the uploaded video to an audio file (for transcription)
+     - convert the uploaded video to a web-optimized video
+     - convert the uploaded video to a mobile-optimized video
+    """
+    expected_audio_path = re.sub("mp4$", "mp3", video_path)
+    expected_mobile_video_path = path.join(path.split(video_path)[0], "mobile.mp4")
+    expected_web_video_path = path.join(path.split(video_path)[0], "web.mp4")
+    mock_ffmpeg_cls.assert_has_calls(
+        [
+            call(
+                inputs={video_path: None},
+                outputs={expected_audio_path: "-loglevel quiet -y"},
+            ),
+            call().run(),
+            call(
+                inputs={video_path: None},
+                outputs={expected_mobile_video_path: Contains("libx264")},
+            ),
+            call().run(),
+            call(
+                inputs={video_path: None},
+                outputs={expected_web_video_path: Contains("libx264")},
+            ),
+            call().run(),
+        ],
+    )
+    return expected_audio_path, expected_web_video_path, expected_mobile_video_path
 
 
 @dataclass
@@ -193,7 +230,7 @@ def test_processes_mentor_answer(
                 )
             ]
         )
-        expected_gql_query, expected_media = _mock_gql_answer_update(
+        expected_update_answer_gql_query, expected_media = _mock_gql_answer_update(
             ex.mentor, ex.question, ex.transcript_fake, ex.timestamp
         )
         mock_s3 = mock_s3_client(mock_boto3_client)
@@ -209,7 +246,20 @@ def test_processes_mentor_answer(
             expected_web_video_path,
             expected_mobile_video_path,
         ) = _expect_transcode_calls(str(work_dir / ex.video_name), mock_ffmpeg_cls)
-        _expect_gql_answer_update(expected_gql_query)
+        _expect_gql(
+            [
+                _mock_gql_status_update(
+                    ex.mentor, ex.question, "TRANSCRIBE_IN_PROGRESS", ""
+                ),
+                _mock_gql_status_update(
+                    ex.mentor, ex.question, "UPLOAD_IN_PROGRESS", ex.transcript_fake
+                ),
+                _mock_gql_status_update(
+                    ex.mentor, ex.question, "DONE", ex.transcript_fake, ex.timestamp
+                ),
+                expected_update_answer_gql_query,
+            ]
+        )
         expected_upload_file_calls = [
             call(
                 expected_mobile_video_path,
