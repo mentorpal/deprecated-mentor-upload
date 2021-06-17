@@ -20,7 +20,7 @@ import uuid
 
 from . import ProcessAnswerRequest, ProcessAnswerResponse
 from .media_tools import video_encode_for_mobile, video_encode_for_web, video_to_audio
-from .api import update_answer, AnswerUpdateRequest
+from .api import update_answer, update_status, AnswerUpdateRequest, StatusUpdateRequest
 
 
 def upload_path(p: str) -> str:
@@ -76,6 +76,18 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
         raise Exception(f"video not found for path '{video_path}'")
     with _video_work_dir(video_path_full) as context:
         try:
+            mentor = req.get("mentor")
+            question = req.get("question")
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    status="TRANSCRIBE_IN_PROGRESS",
+                    transcript="",
+                    media=[],
+                )
+            )
+            # TODO: should skip the transcribe step if video is an idle
             video_file, work_dir = context
             audio_file = video_to_audio(video_file)
             video_mobile_file = work_dir / "mobile.mp4"
@@ -83,13 +95,21 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
             video_encode_for_mobile(video_file, video_mobile_file)
             video_encode_for_web(video_file, video_web_file)
             transcription_service = transcribe.init_transcription_service()
-            mentor = req.get("mentor")
-            question = req.get("question")
             transcribe_result = transcription_service.transcribe(
                 [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
             )
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
+            # TODO: should we return with error if transcribe fails?
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    status="UPLOAD_IN_PROGRESS",
+                    transcript=transcript,
+                    media=[],
+                )
+            )
             video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
             media = []
             s3 = _create_s3_client()
@@ -109,6 +129,16 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
                     item_path,
                     ExtraArgs={"ContentType": "video/mp4"},
                 )
+            # TODO: is there a way to check if the upload failed?
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    status="DONE",
+                    transcript=transcript,
+                    media=media,
+                )
+            )
             update_answer(
                 AnswerUpdateRequest(
                     mentor=mentor, question=question, transcript=transcript, media=media
