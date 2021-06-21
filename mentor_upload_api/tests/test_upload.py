@@ -5,6 +5,8 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
+from math import isclose
+import subprocess
 from os import path
 from unittest.mock import patch, Mock
 import uuid
@@ -12,6 +14,24 @@ import uuid
 import pytest
 
 from . import Bunch, fixture_path
+
+
+def _get_video_length(filename):
+    result = subprocess.run(
+        [
+            "./ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            filename,
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    return float(result.stdout)
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +81,82 @@ def test_upload(
         path.join(
             tmpdir, f"uploads/fake_uuid-{input_mentor}-{input_question}{root_ext[1]}"
         )
+    )
+
+
+@pytest.mark.parametrize(
+    "upload_domain,input_mentor,input_question,input_video,input_trim,fake_task_id",
+    [
+        (
+            "https://mentor.org",
+            "mentor1",
+            "q1",
+            "video.mp4",
+            {"start": 0, "end": 5},
+            "fake_task_id_1",
+        ),
+        (
+            "http://a.diff.org",
+            "mentor2",
+            "q2",
+            "video.mp4",
+            {"start": 5, "end": 8},
+            "fake_task_id_2",
+        ),
+    ],
+)
+@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch.object(uuid, "uuid4")
+def test_trim(
+    mock_uuid,
+    mock_upload_task,
+    tmpdir,
+    upload_domain,
+    input_mentor,
+    input_question,
+    input_video,
+    input_trim,
+    fake_task_id,
+    client,
+):
+    mock_uuid.return_value = "fake_uuid"
+    mock_task = Bunch(id=fake_task_id)
+    mock_upload_task.apply_async.return_value = mock_task
+    res = client.post(
+        f"{upload_domain}/upload/answer",
+        data={
+            "body": json.dumps(
+                {"mentor": input_mentor, "question": input_question, "trim": input_trim}
+            ),
+            "video": open(path.join(fixture_path("input_videos"), input_video), "rb"),
+        },
+    )
+    assert res.status_code == 200
+    assert res.json == {
+        "data": {
+            "id": fake_task_id,
+            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id}",
+        }
+    }
+    root_ext = path.splitext(input_video)
+    video_path = path.join(
+        tmpdir, f"uploads/fake_uuid-{input_mentor}-{input_question}{root_ext[1]}"
+    )
+    trimmed_video = path.join(
+        tmpdir, f"uploads/trim-fake_uuid-{input_mentor}-{input_question}{root_ext[1]}"
+    )
+    assert path.exists(video_path)
+    assert _get_video_length(video_path) == 13.397271
+    assert path.exists(
+        path.join(
+            tmpdir,
+            trimmed_video,
+        )
+    )
+    assert isclose(
+        _get_video_length(trimmed_video),
+        input_trim.get("end") - input_trim.get("start"),
+        abs_tol=10 ** -1,
     )
 
 

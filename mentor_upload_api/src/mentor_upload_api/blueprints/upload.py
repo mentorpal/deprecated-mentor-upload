@@ -4,7 +4,9 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
+import datetime
 import json
+import subprocess
 from os import environ, path, makedirs
 import uuid
 
@@ -32,12 +34,33 @@ def upload():
         raise Exception("missing required param body")
     mentor = body.get("mentor")
     question = body.get("question")
+    trim = body.get("trim")
     upload_file = request.files["video"]
     root_ext = path.splitext(upload_file.filename)
     file_name = f"{uuid.uuid4()}-{mentor}-{question}{root_ext[1]}"
     file_path = path.join(get_upload_root(), file_name)
     makedirs(get_upload_root(), exist_ok=True)
     upload_file.save(file_path)
+    if trim is not None:
+        file_name_trimmed = f"trim-{file_name}"
+        file_path_trimmed = path.join(get_upload_root(), file_name_trimmed)
+        subprocess.call(
+            [
+                "./ffmpeg",
+                "-i",
+                file_path,
+                "-ss",
+                str(datetime.timedelta(seconds=trim.get("start"))),
+                "-to",
+                str(datetime.timedelta(seconds=trim.get("end"))),
+                "-c:v",
+                "libx264",
+                "-crf",
+                "30",
+                file_path_trimmed,
+            ]
+        )
+        file_name = file_name_trimmed
     req = {"mentor": mentor, "question": question, "video_path": file_name}
     t = mentor_upload_tasks.tasks.process_answer_video.apply_async(args=[req])
     return jsonify(
