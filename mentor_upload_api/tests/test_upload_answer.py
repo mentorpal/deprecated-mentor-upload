@@ -6,32 +6,19 @@
 #
 import json
 from math import isclose
-import subprocess
 from os import path
 from unittest.mock import patch, Mock
 import uuid
 
 import pytest
+from moviepy.editor import VideoFileClip
 
 from .utils import Bunch, fixture_path
 
 
 def _get_video_length(filename):
-    result = subprocess.run(
-        [
-            "./ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            filename,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    return float(result.stdout)
+    clip = VideoFileClip(filename)
+    return clip.duration
 
 
 @pytest.fixture(autouse=True)
