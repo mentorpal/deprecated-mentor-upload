@@ -6,32 +6,19 @@
 #
 import json
 from math import isclose
-import subprocess
 from os import path
 from unittest.mock import patch, Mock
 import uuid
 
 import pytest
+from moviepy.editor import VideoFileClip
 
 from . import Bunch, fixture_path
 
 
 def _get_video_length(filename):
-    result = subprocess.run(
-        [
-            "./ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            filename,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    return float(result.stdout)
+    clip = VideoFileClip(filename)
+    return clip.duration
 
 
 @pytest.fixture(autouse=True)
@@ -146,7 +133,7 @@ def test_trim(
         tmpdir, f"uploads/trim-fake_uuid-{input_mentor}-{input_question}{root_ext[1]}"
     )
     assert path.exists(video_path)
-    assert _get_video_length(video_path) == 13.397271
+    assert isclose(_get_video_length(video_path), 13.4, abs_tol=10 ** -1)
     assert path.exists(
         path.join(
             tmpdir,
