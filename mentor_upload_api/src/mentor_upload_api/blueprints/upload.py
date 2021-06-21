@@ -11,6 +11,7 @@ from os import environ, path, makedirs
 import uuid
 
 from flask import Blueprint, jsonify, request
+import imageio_ffmpeg
 
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
@@ -42,11 +43,12 @@ def upload():
     makedirs(get_upload_root(), exist_ok=True)
     upload_file.save(file_path)
     if trim is not None:
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         file_name_trimmed = f"trim-{file_name}"
         file_path_trimmed = path.join(get_upload_root(), file_name_trimmed)
-        subprocess.call(
+        subprocess.run(
             [
-                "./ffmpeg",
+                ffmpeg,
                 "-i",
                 file_path,
                 "-ss",
