@@ -4,7 +4,6 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-import datetime
 import json
 import subprocess
 from os import environ, path, makedirs
@@ -42,28 +41,12 @@ def upload():
     file_path = path.join(get_upload_root(), file_name)
     makedirs(get_upload_root(), exist_ok=True)
     upload_file.save(file_path)
-    if trim is not None:
-        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-        file_name_trimmed = f"trim-{file_name}"
-        file_path_trimmed = path.join(get_upload_root(), file_name_trimmed)
-        subprocess.run(
-            [
-                ffmpeg,
-                "-i",
-                file_path,
-                "-ss",
-                str(datetime.timedelta(seconds=trim.get("start"))),
-                "-to",
-                str(datetime.timedelta(seconds=trim.get("end"))),
-                "-c:v",
-                "libx264",
-                "-crf",
-                "30",
-                file_path_trimmed,
-            ]
-        )
-        file_name = file_name_trimmed
-    req = {"mentor": mentor, "question": question, "video_path": file_name}
+    req = {
+        "mentor": mentor,
+        "question": question,
+        "video_path": file_name,
+        "trim": trim,
+    }
     t = mentor_upload_tasks.tasks.process_answer_video.apply_async(args=[req])
     return jsonify(
         {

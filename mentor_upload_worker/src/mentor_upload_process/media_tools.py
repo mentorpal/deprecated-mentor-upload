@@ -5,9 +5,35 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import os
+import datetime
 
 import ffmpy
 from pymediainfo import MediaInfo
+
+
+def get_upload_root() -> str:
+    return environ.get("UPLOAD_ROOT") or "./uploads"
+
+
+def trim_video(input_file, output_file, start, end):
+    if not os.path.exists(input_file):
+        raise Exception(f"ERROR: Can't trim, {input_file} doesn't exist")
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    output_command = [
+        "-ss",
+        str(datetime.timedelta(seconds=start)),
+        "-to",
+        str(datetime.timedelta(seconds=end)),
+        "-c:v",
+        "libx264",
+        "-crf",
+        "30",
+    ]
+    ff = ffmpy.FFmpeg(
+        inputs={str(input_file): None},
+        outputs={str(output_file): tuple(i for i in output_command)},
+    )
+    ff.run()
 
 
 def find_video_dims(video_file):

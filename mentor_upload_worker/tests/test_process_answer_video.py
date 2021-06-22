@@ -20,6 +20,7 @@ import responses
 import transcribe
 from transcribe.mock import MockTranscribeJob, MockTranscriptions
 
+from mentor_upload_process import TrimRequest
 from mentor_upload_process.api import (
     answer_update_gql,
     status_update_gql,
@@ -186,9 +187,10 @@ def _expect_transcode_calls(
 class _TestProcessExample:
     mentor: str
     question: str
+    trim: TrimRequest
+    video_name: str
     timestamp: str
     transcript_fake: str
-    video_name: str
 
 
 @responses.activate
@@ -202,11 +204,32 @@ class _TestProcessExample:
             _TestProcessExample(
                 mentor="m1",
                 question="q1",
+                trim=None,
+                timestamp="20120114T032134Z",
+                video_name="video1.mp4",
+                transcript_fake="mentor answer for question 1",
+            )
+        ),
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                trim={"start": 0, "end": 5},
+                video_name="video1.mp4",
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
-                video_name="video1.mp4",
             )
-        )
+        ),
+        # (
+        #     _TestProcessExample(
+        #         mentor="m1",
+        #         question="q1",
+        #         trim={"start": 5, "end": 8},
+        #         video_name="video1.mp4",
+        #         timestamp="20120114T032134Z",
+        #         transcript_fake="mentor answer for question 1",
+        #     )
+        # ),
     ],
 )
 def test_processes_mentor_answer(
@@ -221,6 +244,7 @@ def test_processes_mentor_answer(
         req = {
             "mentor": ex.mentor,
             "question": ex.question,
+            "trim": ex.trim,
             "video_path": ex.video_name,
         }
         mock_ffmpeg_inst = Mock()

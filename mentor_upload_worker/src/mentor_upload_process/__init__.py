@@ -7,6 +7,11 @@
 from typing import TypedDict
 
 
+class TrimRequest(TypedDict):
+    start: float
+    end: float
+
+
 class CancelTaskRequest(TypedDict):
     mentor: str
     question: str
@@ -18,11 +23,11 @@ class CancelTaskResponse(TypedDict):
     question: str
     task_id: str
 
-
 class ProcessAnswerRequest(TypedDict):
     mentor: str
     question: str
     video_path: str
+    trim: TrimRequest
 
 
 class ProcessAnswerResponse(TypedDict):

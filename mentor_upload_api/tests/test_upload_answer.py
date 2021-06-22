@@ -5,20 +5,13 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
-from math import isclose
 from os import path
 from unittest.mock import patch, Mock
 import uuid
 
 import pytest
-from moviepy.editor import VideoFileClip
 
 from .utils import Bunch, fixture_path
-
-
-def _get_video_length(filename):
-    clip = VideoFileClip(filename)
-    return clip.duration
 
 
 @pytest.fixture(autouse=True)
