@@ -13,7 +13,7 @@ from flask import Blueprint, jsonify, request
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
-upload_blueprint = Blueprint("answer", __name__)
+answer_blueprint = Blueprint("answer", __name__)
 
 
 def _to_status_url(root: str, id: str) -> str:
@@ -24,8 +24,8 @@ def get_upload_root() -> str:
     return environ.get("UPLOAD_ROOT") or "./uploads"
 
 
-@upload_blueprint.route("/", methods=["POST"])
-@upload_blueprint.route("", methods=["POST"])
+@answer_blueprint.route("/", methods=["POST"])
+@answer_blueprint.route("", methods=["POST"])
 def upload():
     body = json.loads(request.form.get("body", "{}"))
     if not body:
@@ -50,8 +50,8 @@ def upload():
     )
 
 
-@upload_blueprint.route("/status/<task_id>/", methods=["GET"])
-@upload_blueprint.route("/status/<task_id>", methods=["GET"])
+@answer_blueprint.route("/status/<task_id>/", methods=["GET"])
+@answer_blueprint.route("/status/<task_id>", methods=["GET"])
 def upload_status(task_id: str):
     t = mentor_upload_tasks.tasks.process_answer_video.AsyncResult(task_id)
     return jsonify(

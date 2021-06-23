@@ -11,7 +11,7 @@ import uuid
 
 import pytest
 
-from . import Bunch, fixture_path
+from .utils import Bunch, fixture_path
 
 
 @pytest.fixture(autouse=True)
