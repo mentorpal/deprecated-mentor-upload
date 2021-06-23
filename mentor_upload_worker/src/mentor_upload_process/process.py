@@ -18,7 +18,12 @@ from boto3_type_annotations.s3 import Client as S3Client
 import transcribe
 import uuid
 
-from . import ProcessAnswerRequest, ProcessAnswerResponse
+from . import (
+    CancelTaskRequest,
+    CancelTaskResponse,
+    ProcessAnswerRequest,
+    ProcessAnswerResponse,
+)
 from .media_tools import video_encode_for_mobile, video_encode_for_web, video_to_audio
 from .api import update_answer, update_status, AnswerUpdateRequest, StatusUpdateRequest
 
@@ -67,7 +72,33 @@ def _video_work_dir(source_path: str):
             logging.exception(x)
 
 
-def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
+def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
+    update_status(
+        StatusUpdateRequest(
+            mentor=req.get("mentor"),
+            question=req.get("question"),
+            task_id=req.get("task_id"),
+            status="CANCEL_IN_PROGRESS",
+            transcript="",
+            media=[],
+        )
+    )
+    # TODO: potentially need to cancel s3 upload and aws transcribe if they have already started?
+    update_status(
+        StatusUpdateRequest(
+            mentor=req.get("mentor"),
+            question=req.get("question"),
+            task_id=req.get("task_id"),
+            status="CANCELLED",
+            transcript="",
+            media=[],
+        )
+    )
+
+
+def process_answer_video(
+    req: ProcessAnswerRequest, task_id: str
+) -> ProcessAnswerResponse:
     video_path = req.get("video_path", "")
     if not video_path:
         raise Exception("missing required param 'video_path'")
@@ -82,6 +113,7 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
                 StatusUpdateRequest(
                     mentor=mentor,
                     question=question,
+                    task_id=task_id,
                     status="TRANSCRIBE_IN_PROGRESS",
                     transcript="",
                     media=[],
@@ -105,6 +137,7 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
                 StatusUpdateRequest(
                     mentor=mentor,
                     question=question,
+                    task_id=task_id,
                     status="UPLOAD_IN_PROGRESS",
                     transcript=transcript,
                     media=[],
@@ -134,6 +167,7 @@ def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
                 StatusUpdateRequest(
                     mentor=mentor,
                     question=question,
+                    task_id=task_id,
                     status="DONE",
                     transcript=transcript,
                     media=media,

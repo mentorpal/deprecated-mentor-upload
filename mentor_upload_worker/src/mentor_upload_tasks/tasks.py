@@ -9,7 +9,13 @@ import os
 from celery import Celery
 from dotenv import load_dotenv
 
-from mentor_upload_process import ProcessAnswerRequest, ProcessAnswerResponse, process
+from mentor_upload_process import (
+    CancelTaskRequest,
+    CancelTaskResponse,
+    ProcessAnswerRequest,
+    ProcessAnswerResponse,
+    process,
+)
 
 load_dotenv()  # take environment variables from .env.
 
@@ -27,4 +33,12 @@ celery.conf.update(config)
 
 @celery.task()
 def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
-    return process.process_answer_video(req)
+    task_id = process_answer_video.request.id
+    return process.process_answer_video(req, task_id)
+
+
+@celery.task()
+def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
+    t = process.cancel_task(req)
+    celery.control.revoke(req.get("task_id"), terminate=True)
+    return t

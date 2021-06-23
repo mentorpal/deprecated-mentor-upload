@@ -8,7 +8,7 @@ import os
 
 from celery import Celery
 
-from . import ProcessAnswerRequest
+from . import CancelTaskRequest, ProcessAnswerRequest
 
 config = {
     "broker_url": os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0"),
@@ -24,4 +24,10 @@ celery.conf.update(config)
 
 @celery.task()
 def process_answer_video(req: ProcessAnswerRequest):
+    pass
+
+
+@celery.task()
+def cancel_task(req: CancelTaskRequest):
+    celery.control.revoke(req.get("task_id"), terminate=True)
     pass

@@ -7,6 +7,18 @@
 from typing import TypedDict
 
 
+class CancelTaskRequest(TypedDict):
+    mentor: str
+    question: str
+    task_id: str
+
+
+class CancelTaskResponse(TypedDict):
+    mentor: str
+    question: str
+    task_id: str
+
+
 class ProcessAnswerRequest(TypedDict):
     mentor: str
     question: str

@@ -50,6 +50,20 @@ def upload():
     )
 
 
+@upload_blueprint.route("/cancel/", methods=["POST"])
+@upload_blueprint.route("/cancel", methods=["POST"])
+def cancel():
+    body = json.loads(request.form.get("body", "{}"))
+    if not body:
+        raise Exception("missing required param body")
+    mentor = body.get("mentor")
+    question = body.get("question")
+    task_id = body.get("task")
+    req = {"mentor": mentor, "question": question, "task_id": task_id}
+    t = mentor_upload_tasks.tasks.cancel_task.apply_async(args=[req])
+    return jsonify({"data": {"id": t.id, "cancelledId": task_id}})
+
+
 @upload_blueprint.route("/status/<task_id>/", methods=["GET"])
 @upload_blueprint.route("/status/<task_id>", methods=["GET"])
 def upload_status(task_id: str):

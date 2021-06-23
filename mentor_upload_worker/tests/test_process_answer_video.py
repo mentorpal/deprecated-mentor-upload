@@ -98,7 +98,12 @@ def _mock_gql_answer_update(
 
 
 def _mock_gql_status_update(
-    mentor: str, question: str, status: str, transcript: str, timestamp: str = None
+    mentor: str,
+    question: str,
+    task_id: str,
+    status: str,
+    transcript: str,
+    timestamp: str = None,
 ) -> dict:
     media = []
     if timestamp is not None:
@@ -111,6 +116,7 @@ def _mock_gql_status_update(
         StatusUpdateRequest(
             mentor=mentor,
             question=question,
+            task_id=task_id,
             status=status,
             transcript=transcript,
             media=media,
@@ -123,6 +129,7 @@ def _mock_gql_status_update(
             StatusUpdateRequest(
                 mentor=mentor,
                 question=question,
+                task_id=task_id,
                 status=status,
                 transcript=transcript,
                 media=media,
@@ -234,7 +241,9 @@ def test_processes_mentor_answer(
             ex.mentor, ex.question, ex.transcript_fake, ex.timestamp
         )
         mock_s3 = mock_s3_client(mock_boto3_client)
-        assert mentor_upload_process.process.process_answer_video(req) == {
+        assert mentor_upload_process.process.process_answer_video(
+            req, "fake_task_id"
+        ) == {
             "mentor": ex.mentor,
             "question": ex.question,
             "video_path": ex.video_name,
@@ -249,13 +258,22 @@ def test_processes_mentor_answer(
         _expect_gql(
             [
                 _mock_gql_status_update(
-                    ex.mentor, ex.question, "TRANSCRIBE_IN_PROGRESS", ""
+                    ex.mentor, ex.question, "fake_task_id", "TRANSCRIBE_IN_PROGRESS", ""
                 ),
                 _mock_gql_status_update(
-                    ex.mentor, ex.question, "UPLOAD_IN_PROGRESS", ex.transcript_fake
+                    ex.mentor,
+                    ex.question,
+                    "fake_task_id",
+                    "UPLOAD_IN_PROGRESS",
+                    ex.transcript_fake,
                 ),
                 _mock_gql_status_update(
-                    ex.mentor, ex.question, "DONE", ex.transcript_fake, ex.timestamp
+                    ex.mentor,
+                    ex.question,
+                    "fake_task_id",
+                    "DONE",
+                    ex.transcript_fake,
+                    ex.timestamp,
                 ),
                 expected_update_answer_gql_query,
             ]
@@ -281,7 +299,7 @@ def test_raises_if_video_path_not_specified():
     req = {"mentor": "m1", "question": "q1"}
     caught_exception = None
     try:
-        mentor_upload_process.process.process_answer_video(req)
+        mentor_upload_process.process.process_answer_video(req, "fake_task_id")
     except Exception as err:
         caught_exception = err
     assert caught_exception is not None
@@ -292,7 +310,7 @@ def test_raises_if_video_not_found_for_path():
     req = {"mentor": "m1", "question": "q1", "video_path": "not_exists.mp4"}
     caught_exception = None
     try:
-        mentor_upload_process.process.process_answer_video(req)
+        mentor_upload_process.process.process_answer_video(req, "fake_task_id")
     except Exception as err:
         caught_exception = err
     assert caught_exception is not None
