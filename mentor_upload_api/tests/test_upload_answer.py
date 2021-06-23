@@ -64,6 +64,83 @@ def test_upload(
     )
 
 
+@pytest.mark.parametrize(
+    "upload_domain,input_mentor,input_question,input_video,fake_task_id,fake_cancel_task_id",
+    [
+        (
+            "https://mentor.org",
+            "mentor1",
+            "q1",
+            "video.mp4",
+            "fake_task_id_1",
+            "fake_cancel_task_id_1",
+        ),
+        (
+            "http://a.diff.org",
+            "mentor2",
+            "q2",
+            "video.mp4",
+            "fake_task_id_2",
+            "fake_cancel_task_id_2",
+        ),
+    ],
+)
+@patch("mentor_upload_tasks.tasks.cancel_task")
+@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch.object(uuid, "uuid4")
+def test_cancel(
+    mock_uuid,
+    mock_upload_task,
+    mock_cancel_task,
+    tmpdir,
+    upload_domain,
+    input_mentor,
+    input_question,
+    input_video,
+    fake_task_id,
+    fake_cancel_task_id,
+    client,
+):
+    mock_uuid.return_value = "fake_uuid"
+    mock_task = Bunch(id=fake_task_id)
+    mock_upload_task.apply_async.return_value = mock_task
+    res = client.post(
+        f"{upload_domain}/upload/answer",
+        data={
+            "body": json.dumps({"mentor": input_mentor, "question": input_question}),
+            "video": open(path.join(fixture_path("input_videos"), input_video), "rb"),
+        },
+    )
+    assert res.status_code == 200
+    assert res.json == {
+        "data": {
+            "id": fake_task_id,
+            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id}",
+        }
+    }
+    mock_cancel_task_id = Bunch(id=fake_cancel_task_id)
+    mock_cancel_task.apply_async.return_value = mock_cancel_task_id
+    res = client.post(
+        f"{upload_domain}/upload/answer/cancel",
+        data={
+            "body": json.dumps(
+                {
+                    "mentor": input_mentor,
+                    "question": input_question,
+                    "task": fake_task_id,
+                }
+            )
+        },
+    )
+    assert res.status_code == 200
+    assert res.json == {
+        "data": {
+            "id": fake_cancel_task_id,
+            "cancelledId": fake_task_id,
+        }
+    }
+
+
 # ISSUE: if the upload api doesn't do end-to-end ssl
 # (e.g. if nginx terminates ssl),
 # then upload-api doesn't know that its TRUE

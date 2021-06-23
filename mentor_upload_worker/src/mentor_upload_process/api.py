@@ -48,6 +48,7 @@ class StatusUpdateRequest:
     mentor: str
     question: str
     status: str
+    task_id: str
     transcript: str
     media: List[Media]
 
@@ -57,6 +58,7 @@ class StatusUpdateResponse:
     mentor: str
     question: str
     status: str
+    task_id: str
     transcript: str
     media: List[Media]
 
@@ -91,6 +93,7 @@ def status_update_gql(req: StatusUpdateRequest) -> GQLQueryBody:
             "mentorId": req.mentor,
             "questionId": req.question,
             "status": {
+                "taskId": req.task_id,
                 "uploadStatus": req.status,
                 "transcript": req.transcript,
                 "media": req.media,
