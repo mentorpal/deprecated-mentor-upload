@@ -53,7 +53,7 @@ def upload():
 @answer_blueprint.route("/cancel/", methods=["POST"])
 @answer_blueprint.route("/cancel", methods=["POST"])
 def cancel():
-    body = json.loads(request.form.get("body", "{}"))
+    body = request.json
     if not body:
         raise Exception("missing required param body")
     mentor = body.get("mentor")
