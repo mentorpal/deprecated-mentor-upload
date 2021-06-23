@@ -34,7 +34,11 @@ def create_app():
     from mentor_upload_api.blueprints.ping import ping_blueprint
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
-    from mentor_upload_api.blueprints.upload import upload_blueprint
+    from mentor_upload_api.blueprints.upload.answer import answer_blueprint
 
-    app.register_blueprint(upload_blueprint, url_prefix="/upload/answer")
+    app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
+
+    from mentor_upload_api.blueprints.upload.thumbnail import thumbnail_blueprint
+
+    app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")
     return app
