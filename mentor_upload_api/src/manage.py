@@ -6,4 +6,9 @@
 #
 from mentor_upload_api import create_app
 
-app = create_app()
+try:
+    app = create_app()
+except Exception as x:
+    import logging
+
+    logging.exception(x)
