@@ -1,9 +1,12 @@
 -r requirements.txt
-coverage==5.3
+callee==0.3.1
+coverage==5.5
+freezegun==1.1.0
 pip-upgrader
-pytest==6.1.1
-pytest-mock==3.3.1
+pytest==6.2.4
+pytest-mock==3.6.1
 pytest-env==0.6.2
-pytest-flask==1.0.0
-requests==2.24.0
-responses==0.12.1
+pytest-flask==1.2.0
+pytest-only==1.2.2
+requests==2.25.1
+responses==0.13.3
