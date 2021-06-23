@@ -34,7 +34,7 @@ def thumbnail_update_gql(req: MentorThumbnailUpdateRequest) -> GQLQueryBody:
     return {
         "query": """mutation MentorThumbnailUpdate($mentorId: ID!, $thumbnail: String!) {
             api {
-                uploadAnswer(mentorId: $mentorId, thumbnail: $thumbnail)
+                mentorThumbnailUpdate(mentorId: $mentorId, thumbnail: $thumbnail)
             }
         }""",
         "variables": {"mentorId": req.mentor, "thumbnail": req.thumbnail},

@@ -4,10 +4,14 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-from logging.config import dictConfig
+from dotenv import load_dotenv
 
-from flask import Flask
-from flask_cors import CORS
+load_dotenv()  # take environment variables from .env.
+
+from logging.config import dictConfig  # NOQA E402
+
+from flask import Flask  # NOQA E402
+from flask_cors import CORS  # NOQA E402
 
 
 def create_app():
