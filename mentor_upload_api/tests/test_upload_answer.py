@@ -122,14 +122,10 @@ def test_cancel(
     mock_cancel_task.apply_async.return_value = mock_cancel_task_id
     res = client.post(
         f"{upload_domain}/upload/answer/cancel",
-        data={
-            "body": json.dumps(
-                {
-                    "mentor": input_mentor,
-                    "question": input_question,
-                    "task": fake_task_id,
-                }
-            )
+        json={
+            "mentor": input_mentor,
+            "question": input_question,
+            "task": fake_task_id,
         },
     )
     assert res.status_code == 200
