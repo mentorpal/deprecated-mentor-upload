@@ -5,12 +5,10 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
-import subprocess
 from os import environ, path, makedirs
 import uuid
 
 from flask import Blueprint, jsonify, request
-import imageio_ffmpeg
 
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks

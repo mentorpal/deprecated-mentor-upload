@@ -11,10 +11,6 @@ import ffmpy
 from pymediainfo import MediaInfo
 
 
-def get_upload_root() -> str:
-    return environ.get("UPLOAD_ROOT") or "./uploads"
-
-
 def trim_video(input_file, output_file, start, end):
     if not os.path.exists(input_file):
         raise Exception(f"ERROR: Can't trim, {input_file} doesn't exist")

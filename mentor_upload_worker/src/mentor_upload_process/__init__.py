@@ -23,6 +23,7 @@ class CancelTaskResponse(TypedDict):
     question: str
     task_id: str
 
+
 class ProcessAnswerRequest(TypedDict):
     mentor: str
     question: str

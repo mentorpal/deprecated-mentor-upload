@@ -122,6 +122,7 @@ def process_answer_video(
                     StatusUpdateRequest(
                         mentor=mentor,
                         question=question,
+                        task_id=task_id,
                         status="TRIM_IN_PROGRESS",
                         transcript="",
                         media=[],
@@ -152,7 +153,6 @@ def process_answer_video(
             )
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
-            # TODO: should we return with error if transcribe fails?
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -182,7 +182,6 @@ def process_answer_video(
                     item_path,
                     ExtraArgs={"ContentType": "video/mp4"},
                 )
-            # TODO: is there a way to check if the upload failed?
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -211,6 +210,17 @@ def process_answer_video(
                         media,
                     )
                 ),
+            )
+        except Exception:
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    status="UPLOAD_FAILED",
+                    transcript="",
+                    media=[],
+                )
             )
         finally:
             try:

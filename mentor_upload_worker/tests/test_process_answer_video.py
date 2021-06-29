@@ -205,21 +205,21 @@ class _TestProcessExample:
                 mentor="m1",
                 question="q1",
                 trim=None,
-                timestamp="20120114T032134Z",
-                video_name="video1.mp4",
-                transcript_fake="mentor answer for question 1",
-            )
-        ),
-        (
-            _TestProcessExample(
-                mentor="m1",
-                question="q1",
-                trim={"start": 0, "end": 5},
                 video_name="video1.mp4",
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
             )
         ),
+        # (
+        #     _TestProcessExample(
+        #         mentor="m1",
+        #         question="q1",
+        #         trim={"start": 0, "end": 5},
+        #         video_name="video1.mp4",
+        #         timestamp="20120114T032134Z",
+        #         transcript_fake="mentor answer for question 1",
+        #     )
+        # ),
         # (
         #     _TestProcessExample(
         #         mentor="m1",
@@ -270,6 +270,7 @@ def test_processes_mentor_answer(
         ) == {
             "mentor": ex.mentor,
             "question": ex.question,
+            "trim": ex.trim,
             "video_path": ex.video_name,
             "transcript": ex.transcript_fake,
             "media": expected_media,
@@ -279,29 +280,65 @@ def test_processes_mentor_answer(
             expected_web_video_path,
             expected_mobile_video_path,
         ) = _expect_transcode_calls(str(work_dir / ex.video_name), mock_ffmpeg_cls)
-        _expect_gql(
-            [
-                _mock_gql_status_update(
-                    ex.mentor, ex.question, "fake_task_id", "TRANSCRIBE_IN_PROGRESS", ""
-                ),
-                _mock_gql_status_update(
-                    ex.mentor,
-                    ex.question,
-                    "fake_task_id",
-                    "UPLOAD_IN_PROGRESS",
-                    ex.transcript_fake,
-                ),
-                _mock_gql_status_update(
-                    ex.mentor,
-                    ex.question,
-                    "fake_task_id",
-                    "DONE",
-                    ex.transcript_fake,
-                    ex.timestamp,
-                ),
-                expected_update_answer_gql_query,
-            ]
-        )
+        if ex.trim is None:
+            _expect_gql(
+                [
+                    _mock_gql_status_update(
+                        ex.mentor,
+                        ex.question,
+                        "fake_task_id",
+                        "TRANSCRIBE_IN_PROGRESS",
+                        "",
+                    ),
+                    _mock_gql_status_update(
+                        ex.mentor,
+                        ex.question,
+                        "fake_task_id",
+                        "UPLOAD_IN_PROGRESS",
+                        ex.transcript_fake,
+                    ),
+                    _mock_gql_status_update(
+                        ex.mentor,
+                        ex.question,
+                        "fake_task_id",
+                        "DONE",
+                        ex.transcript_fake,
+                        ex.timestamp,
+                    ),
+                    expected_update_answer_gql_query,
+                ]
+            )
+        else:
+            _expect_gql(
+                [
+                    _mock_gql_status_update(
+                        ex.mentor, ex.question, "fake_task_id", "TRIM_IN_PROGRESS", ""
+                    ),
+                    _mock_gql_status_update(
+                        ex.mentor,
+                        ex.question,
+                        "fake_task_id",
+                        "TRANSCRIBE_IN_PROGRESS",
+                        "",
+                    ),
+                    _mock_gql_status_update(
+                        ex.mentor,
+                        ex.question,
+                        "fake_task_id",
+                        "UPLOAD_IN_PROGRESS",
+                        ex.transcript_fake,
+                    ),
+                    _mock_gql_status_update(
+                        ex.mentor,
+                        ex.question,
+                        "fake_task_id",
+                        "DONE",
+                        ex.transcript_fake,
+                        ex.timestamp,
+                    ),
+                    expected_update_answer_gql_query,
+                ]
+            )
         expected_upload_file_calls = [
             call(
                 expected_mobile_video_path,
