@@ -29,6 +29,7 @@ from .media_tools import (
     video_encode_for_mobile,
     video_encode_for_web,
     video_to_audio,
+    transcript_to_vtt,
 )
 from .api import update_answer, update_status, AnswerUpdateRequest, StatusUpdateRequest
 
@@ -155,6 +156,8 @@ def process_answer_video(
             )
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
+            vtt_file = work_dir / "subtitles.vtt"
+            transcript_to_vtt(video_file, vtt_file, transcript)
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -169,11 +172,15 @@ def process_answer_video(
             media = []
             s3 = _create_s3_client()
             s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
-            for tag, file in [("mobile", video_mobile_file), ("web", video_web_file)]:
-                item_path = f"{video_path_base}{tag}.mp4"
+            for media_type, tag, file_name, content_type, file in [
+                ("video", "mobile", "mobile.mp4", "video/mp4", video_mobile_file),
+                ("video", "web", "web.mp4", "video/mp4", video_web_file),
+                ("subtitles", "en", "en.vtt", "text/vtt", vtt_file),
+            ]:
+                item_path = f"{video_path_base}{file_name}"
                 media.append(
                     {
-                        "type": "video",
+                        "type": media_type,
                         "tag": tag,
                         "url": item_path,
                     }
@@ -182,7 +189,7 @@ def process_answer_video(
                     str(file),
                     s3_bucket,
                     item_path,
-                    ExtraArgs={"ContentType": "video/mp4"},
+                    ExtraArgs={"ContentType": content_type},
                 )
             update_status(
                 StatusUpdateRequest(
