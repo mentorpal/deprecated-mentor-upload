@@ -25,7 +25,7 @@ from . import (
     ProcessAnswerResponse,
 )
 from .media_tools import (
-    trim_video,
+    video_trim,
     video_encode_for_mobile,
     video_encode_for_web,
     video_to_audio,
@@ -117,7 +117,7 @@ def process_answer_video(
             trim = req.get("trim", None)
             video_file, work_dir = context
             # TODO: should also be able to trim existing video (get from s3)
-            if trim is not None:
+            if trim:
                 update_status(
                     StatusUpdateRequest(
                         mentor=mentor,
@@ -129,8 +129,10 @@ def process_answer_video(
                     )
                 )
                 trim_file = work_dir / "trim.mp4"
-                trim_video(video_file, trim_file, trim.get("start"), trim.get("end"))
-                video_file = trim_file
+                video_trim(video_file, trim_file, trim.get("start"), trim.get("end"))
+                from shutil import copyfile
+
+                copyfile(trim_file, video_file)
             # TODO: should skip the transcribe step if video is an idle
             update_status(
                 StatusUpdateRequest(
@@ -211,7 +213,10 @@ def process_answer_video(
                     )
                 ),
             )
-        except Exception:
+        except Exception as x:
+            import logging
+
+            logging.exception(x)
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -222,6 +227,7 @@ def process_answer_video(
                     media=[],
                 )
             )
+
         finally:
             try:
                 #  We are deleting the uploaded video file from a shared network mount here
