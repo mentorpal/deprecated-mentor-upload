@@ -190,7 +190,7 @@ def video_to_audio(
     return output_file
 
 
-def video_duration(video_file) -> float:
+def video_duration(video_file: str) -> float:
     if not os.path.exists(video_file):
         raise Exception(f"ERROR: {video_file} doesn't exist")
     output_command = [
@@ -208,11 +208,13 @@ def video_duration(video_file) -> float:
     return float(ffprobe[0].decode("utf-8"))
 
 
-def find(s, ch):  # gives indexes of all of the spaces so we don't split words apart
+def find(
+    s: str, ch: str
+):  # gives indexes of all of the spaces so we don't split words apart
     return [i for i, ltr in enumerate(s) if ltr == ch]
 
 
-def transcript_to_vtt(video_file, vtt_file, transcript: str) -> str:
+def transcript_to_vtt(video_file: str, vtt_file: str, transcript: str) -> str:
     if not os.path.exists(video_file):
         raise Exception(f"ERROR: Can't generate vtt, {video_file} doesn't exist")
     duration = video_duration(video_file)
