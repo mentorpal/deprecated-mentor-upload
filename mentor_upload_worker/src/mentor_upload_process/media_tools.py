@@ -6,6 +6,8 @@
 #
 import os
 from typing import Optional, Tuple, Union
+import math
+import subprocess
 
 import ffmpy
 from pymediainfo import MediaInfo
@@ -186,3 +188,63 @@ def video_to_audio(
     )
     ff.run()
     return output_file
+
+
+def video_duration(video_file: str) -> float:
+    if not os.path.exists(video_file):
+        raise Exception(f"ERROR: {video_file} doesn't exist")
+    output_command = [
+        "-show_entries",
+        "format=duration",
+        "-v",
+        "quiet",
+        "-of",
+        'csv="p=0"',
+    ]
+    ffprobe = ffmpy.FFprobe(
+        global_options=output_command,
+        inputs={str(video_file): None},
+    ).run(stdout=subprocess.PIPE)
+    return float(ffprobe[0].decode("utf-8"))
+
+
+def find(
+    s: str, ch: str
+):  # gives indexes of all of the spaces so we don't split words apart
+    return [i for i, ltr in enumerate(s) if ltr == ch]
+
+
+def transcript_to_vtt(video_file: str, vtt_file: str, transcript: str) -> str:
+    if not os.path.exists(video_file):
+        raise Exception(f"ERROR: Can't generate vtt, {video_file} doesn't exist")
+    duration = video_duration(video_file)
+    piece_length = 68
+    word_indexes = find(transcript, " ")
+    split_index = [0]
+    for k in range(1, len(word_indexes)):
+        for el in range(1, len(word_indexes)):
+            if word_indexes[el] > piece_length * k:
+                split_index.append(word_indexes[el])
+                break
+    split_index.append(len(transcript))
+    amount_of_chunks = math.ceil(len(transcript) / piece_length)
+    vtt_str = "WEBVTT FILE:\n\n"
+    for j in range(len(split_index) - 1):  # this uses a constant piece length
+        seconds_start = round((duration / amount_of_chunks) * j, 2) + 0.85
+        seconds_end = round((duration / amount_of_chunks) * (j + 1), 2) + 0.85
+        output_start = (
+            str(math.floor(seconds_start / 60)).zfill(2)
+            + ":"
+            + ("%.3f" % (seconds_start % 60)).zfill(6)
+        )
+        output_end = (
+            str(math.floor(seconds_end / 60)).zfill(2)
+            + ":"
+            + ("%.3f" % (seconds_end % 60)).zfill(6)
+        )
+        vtt_str += f"00:{output_start} --> 00:{output_end}\n"
+        vtt_str += f"{transcript[split_index[j] : split_index[j + 1]]}\n\n"
+    os.makedirs(os.path.dirname(vtt_file), exist_ok=True)
+    with open(vtt_file, "w") as f:
+        f.write(vtt_str)
+    return vtt_str

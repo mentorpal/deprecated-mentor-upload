@@ -81,6 +81,7 @@ def _mock_gql_answer_update(
     media = [
         {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
         {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
+        {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"},
     ]
     gql_query = answer_update_gql(
         AnswerUpdateRequest(
@@ -125,6 +126,7 @@ def _mock_gql_status_update(
         media = [
             {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
             {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
+            {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"},
         ]
     gql_query = status_update_gql(
         StatusUpdateRequest(
@@ -166,7 +168,7 @@ def _expect_transcode_calls(
     mock_ffmpeg_cls: Mock,
     video_dims: Tuple[int, int],
     trim: Dict[str, int] = {},
-) -> Tuple[str, str, str]:
+) -> Tuple[str, str, str, str, str]:
     """
     There are currently 3 transcode calls that need to happen in the upload process:
 
@@ -175,6 +177,10 @@ def _expect_transcode_calls(
      - convert the uploaded video to a mobile-optimized video
     """
     expected_audio_path = re.sub("mp4$", "mp3", video_path)
+    expected_vtt_path = path.join(path.split(video_path)[0], "subtitles.vtt")
+    expected_trim_path = (
+        path.join(path.split(video_path)[0], "trim.mp4") if trim else ""
+    )
     expected_mobile_video_path = path.join(path.split(video_path)[0], "mobile.mp4")
     expected_web_video_path = path.join(path.split(video_path)[0], "web.mp4")
     expected_trim_path = path.join(path.split(video_path)[0], "trim.mp4")
@@ -216,7 +222,13 @@ def _expect_transcode_calls(
             ),
         ],
     )
-    return expected_audio_path, expected_web_video_path, expected_mobile_video_path
+    return (
+        expected_audio_path,
+        expected_vtt_path,
+        expected_trim_path,
+        expected_web_video_path,
+        expected_mobile_video_path,
+    )
 
 
 @dataclass
@@ -228,9 +240,11 @@ class _TestProcessExample:
     trim: TrimRequest
     video_dims: Tuple[int, int]
     video_name: str
+    video_duration_fake: float
 
 
 @responses.activate
+@patch("mentor_upload_process.media_tools.video_duration")
 @patch.object(transcribe, "init_transcription_service")
 @patch("ffmpy.FFmpeg")
 @patch("boto3.client")
@@ -246,6 +260,7 @@ class _TestProcessExample:
                 trim=None,
                 video_dims=(400, 400),
                 video_name="video1.mp4",
+                video_duration_fake=13.5,
             )
         ),
         (
@@ -257,6 +272,7 @@ class _TestProcessExample:
                 trim={"start": 0.0, "end": 5.0},
                 video_dims=(1280, 720),
                 video_name="video1.mp4",
+                video_duration_fake=13.5,
             )
         ),
         (
@@ -268,6 +284,7 @@ class _TestProcessExample:
                 trim={"start": 5.3, "end": 8.921},
                 video_dims=(480, 640),
                 video_name="video1.mp4",
+                video_duration_fake=13.5,
             )
         ),
     ],
@@ -276,6 +293,7 @@ def test_processes_mentor_answer(
     mock_boto3_client: Mock,
     mock_ffmpeg_cls: Mock,
     mock_init_transcription_service: Mock,
+    mock_video_duration: Mock,
     monkeypatch,
     tmpdir,
     ex: _TestProcessExample,
@@ -315,6 +333,7 @@ def test_processes_mentor_answer(
                 )
             ]
         )
+        mock_video_duration.return_value = ex.video_duration_fake
         expected_update_answer_gql_query, expected_media = _mock_gql_answer_update(
             ex.mentor, ex.question, ex.transcript_fake, ex.timestamp
         )
@@ -330,7 +349,9 @@ def test_processes_mentor_answer(
             "media": expected_media,
         }
         (
-            _,
+            expected_audio_path,
+            expected_vtt_path,
+            expected_trim_path,
             expected_web_video_path,
             expected_mobile_video_path,
         ) = _expect_transcode_calls(
@@ -387,6 +408,12 @@ def test_processes_mentor_answer(
                 TEST_STATIC_AWS_S3_BUCKET,
                 f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/web.mp4",
                 ExtraArgs={"ContentType": "video/mp4"},
+            ),
+            call(
+                expected_vtt_path,
+                TEST_STATIC_AWS_S3_BUCKET,
+                f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/en.vtt",
+                ExtraArgs={"ContentType": "text/vtt"},
             ),
         ]
         mock_s3.upload_file.assert_has_calls(expected_upload_file_calls)
