@@ -32,13 +32,19 @@ def upload():
         raise Exception("missing required param body")
     mentor = body.get("mentor")
     question = body.get("question")
+    trim = body.get("trim")
     upload_file = request.files["video"]
     root_ext = path.splitext(upload_file.filename)
     file_name = f"{uuid.uuid4()}-{mentor}-{question}{root_ext[1]}"
     file_path = path.join(get_upload_root(), file_name)
     makedirs(get_upload_root(), exist_ok=True)
     upload_file.save(file_path)
-    req = {"mentor": mentor, "question": question, "video_path": file_name}
+    req = {
+        "mentor": mentor,
+        "question": question,
+        "video_path": file_name,
+        "trim": trim,
+    }
     t = mentor_upload_tasks.tasks.process_answer_video.apply_async(args=[req])
     return jsonify(
         {

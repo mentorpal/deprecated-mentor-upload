@@ -24,7 +24,12 @@ from . import (
     ProcessAnswerRequest,
     ProcessAnswerResponse,
 )
-from .media_tools import video_encode_for_mobile, video_encode_for_web, video_to_audio
+from .media_tools import (
+    video_trim,
+    video_encode_for_mobile,
+    video_encode_for_web,
+    video_to_audio,
+)
 from .api import update_answer, update_status, AnswerUpdateRequest, StatusUpdateRequest
 
 
@@ -109,6 +114,26 @@ def process_answer_video(
         try:
             mentor = req.get("mentor")
             question = req.get("question")
+            trim = req.get("trim", None)
+            video_file, work_dir = context
+            # TODO: should also be able to trim existing video (get from s3)
+            if trim:
+                update_status(
+                    StatusUpdateRequest(
+                        mentor=mentor,
+                        question=question,
+                        task_id=task_id,
+                        status="TRIM_IN_PROGRESS",
+                        transcript="",
+                        media=[],
+                    )
+                )
+                trim_file = work_dir / "trim.mp4"
+                video_trim(video_file, trim_file, trim.get("start"), trim.get("end"))
+                from shutil import copyfile
+
+                copyfile(trim_file, video_file)
+            # TODO: should skip the transcribe step if video is an idle
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -119,8 +144,6 @@ def process_answer_video(
                     media=[],
                 )
             )
-            # TODO: should skip the transcribe step if video is an idle
-            video_file, work_dir = context
             audio_file = video_to_audio(video_file)
             video_mobile_file = work_dir / "mobile.mp4"
             video_web_file = work_dir / "web.mp4"
@@ -132,7 +155,6 @@ def process_answer_video(
             )
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
-            # TODO: should we return with error if transcribe fails?
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -162,7 +184,6 @@ def process_answer_video(
                     item_path,
                     ExtraArgs={"ContentType": "video/mp4"},
                 )
-            # TODO: is there a way to check if the upload failed?
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -192,6 +213,21 @@ def process_answer_video(
                     )
                 ),
             )
+        except Exception as x:
+            import logging
+
+            logging.exception(x)
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    status="UPLOAD_FAILED",
+                    transcript="",
+                    media=[],
+                )
+            )
+
         finally:
             try:
                 #  We are deleting the uploaded video file from a shared network mount here
