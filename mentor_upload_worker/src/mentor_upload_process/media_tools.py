@@ -12,6 +12,17 @@ import ffmpy
 from pymediainfo import MediaInfo
 
 
+def find_duration(audio_or_video_file: str) -> float:
+    media_info = MediaInfo.parse(audio_or_video_file)
+    for t in media_info.tracks:
+        if t.track_type in ["Video", "Audio"]:
+            try:
+                return float(t.duration)
+            except Exception:
+                pass
+    return -1.0
+
+
 def find_video_dims(video_file: str) -> Tuple[int, int]:
     media_info = MediaInfo.parse(video_file)
     video_tracks = [t for t in media_info.tracks if t.track_type == "Video"]
@@ -20,14 +31,6 @@ def find_video_dims(video_file: str) -> Tuple[int, int]:
         if len(video_tracks) >= 1
         else (-1, -1)
     )
-
-
-def find_video_duration(video_file: str) -> float:
-    media_info = MediaInfo.parse(video_file)
-    for t in media_info.tracks:
-        if t.track_type in ["Video", "Audio"]:
-            return t.duration
-    return 0
 
 
 def format_secs(secs: Union[float, int, str]) -> str:
@@ -203,14 +206,16 @@ def find(
     return [i for i, ltr in enumerate(s) if ltr == ch]
 
 
-def transcript_to_vtt(video_file: str, vtt_file: str, transcript: str) -> str:
-    if not os.path.exists(video_file):
-        raise Exception(f"ERROR: Can't generate vtt, {video_file} doesn't exist")
-    duration = find_video_duration(video_file)
-    if duration == 0:
+def transcript_to_vtt(audio_or_video_file: str, vtt_file: str, transcript: str) -> str:
+    if not os.path.exists(audio_or_video_file):
+        raise Exception(
+            f"ERROR: Can't generate vtt, {audio_or_video_file} doesn't exist"
+        )
+    duration = find_duration(audio_or_video_file)
+    if duration <= 0:
         import logging
 
-        logging.warning(f"video duration for {video_file} returned 0")
+        logging.warning(f"video duration for {audio_or_video_file} returned 0")
         return ""
     piece_length = 68
     word_indexes = find(transcript, " ")

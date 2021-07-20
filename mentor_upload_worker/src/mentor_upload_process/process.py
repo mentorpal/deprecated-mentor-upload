@@ -10,6 +10,7 @@ from os import environ, path, makedirs, remove
 from pathlib import Path
 from tempfile import mkdtemp
 from shutil import copyfile, rmtree
+from typing import List, Tuple
 from urllib.parse import urljoin
 
 
@@ -145,25 +146,39 @@ def process_answer_video(
                     media=[],
                 )
             )
+            MediaUpload = Tuple[  # noqa: N806
+                str, str, str, str, str
+            ]  # media_type, tag, file_name, content_type, file
+            media_uploads: List[MediaUpload] = []
             audio_file = video_to_audio(video_file)
             video_mobile_file = work_dir / "mobile.mp4"
-            video_web_file = work_dir / "web.mp4"
             video_encode_for_mobile(video_file, video_mobile_file)
+            media_uploads.append(
+                ("video", "mobile", "mobile.mp4", "video/mp4", video_mobile_file)
+            )
+            video_web_file = work_dir / "web.mp4"
             video_encode_for_web(video_file, video_web_file)
+            media_uploads.append(
+                ("video", "web", "web.mp4", "video/mp4", video_web_file)
+            )
             transcription_service = transcribe.init_transcription_service()
             transcribe_result = transcription_service.transcribe(
                 [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
             )
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
-            vtt_file = work_dir / "subtitles.vtt"
-            try:
-                transcript_to_vtt(video_file, vtt_file, transcript)
-            except Exception as vtt_err:
-                import logging
+            if transcript:
+                try:
+                    vtt_file = work_dir / "subtitles.vtt"
+                    transcript_to_vtt(audio_file, vtt_file, transcript)
+                    media_uploads.append(
+                        ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
+                    )
+                except Exception as vtt_err:
+                    import logging
 
-                logging.error(f"Failed to create vtt file")
-                logging.exception(vtt_err)
+                    logging.error(f"Failed to create vtt file at {vtt_file}")
+                    logging.exception(vtt_err)
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -178,11 +193,7 @@ def process_answer_video(
             media = []
             s3 = _create_s3_client()
             s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
-            for media_type, tag, file_name, content_type, file in [
-                ("video", "mobile", "mobile.mp4", "video/mp4", video_mobile_file),
-                ("video", "web", "web.mp4", "video/mp4", video_web_file),
-                ("subtitles", "en", "en.vtt", "text/vtt", vtt_file),
-            ]:
+            for media_type, tag, file_name, content_type, file in media_uploads:
                 item_path = f"{video_path_base}{file_name}"
                 media.append(
                     {
