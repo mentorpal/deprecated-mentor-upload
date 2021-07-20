@@ -7,13 +7,12 @@
 import os
 from typing import Optional, Tuple, Union
 import math
-import subprocess
 
 import ffmpy
 from pymediainfo import MediaInfo
 
 
-def find_video_dims(video_file) -> Tuple[int, int]:
+def find_video_dims(video_file: str) -> Tuple[int, int]:
     media_info = MediaInfo.parse(video_file)
     video_tracks = [t for t in media_info.tracks if t.track_type == "Video"]
     return (
@@ -21,6 +20,14 @@ def find_video_dims(video_file) -> Tuple[int, int]:
         if len(video_tracks) >= 1
         else (-1, -1)
     )
+
+
+def find_video_duration(video_file: str) -> float:
+    media_info = MediaInfo.parse(video_file)
+    for t in media_info.tracks:
+        if t.track_type in ["Video", "Audio"]:
+            return t.duration
+    return 0
 
 
 def format_secs(secs: Union[float, int, str]) -> str:
@@ -123,19 +130,6 @@ def output_args_video_to_audio() -> Tuple[str, ...]:
     return ("-loglevel", "quiet", "-y")
 
 
-def video_trim(
-    input_file: str, output_file: str, start_secs: float, end_secs: float
-) -> None:
-    if not os.path.exists(input_file):
-        raise Exception(f"ERROR: Can't trim, {input_file} doesn't exist")
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-    ff = ffmpy.FFmpeg(
-        inputs={str(input_file): None},
-        outputs={str(output_file): output_args_trim_video(start_secs, end_secs)},
-    )
-    ff.run()
-
-
 def video_encode_for_mobile(src_file: str, tgt_file: str, target_height=480) -> None:
     os.makedirs(os.path.dirname(tgt_file), exist_ok=True)
     ff = ffmpy.FFmpeg(
@@ -190,22 +184,17 @@ def video_to_audio(
     return output_file
 
 
-def video_duration(video_file: str) -> float:
-    if not os.path.exists(video_file):
-        raise Exception(f"ERROR: {video_file} doesn't exist")
-    output_command = [
-        "-show_entries",
-        "format=duration",
-        "-v",
-        "quiet",
-        "-of",
-        'csv="p=0"',
-    ]
-    ffprobe = ffmpy.FFprobe(
-        global_options=output_command,
-        inputs={str(video_file): None},
-    ).run(stdout=subprocess.PIPE)
-    return float(ffprobe[0].decode("utf-8"))
+def video_trim(
+    input_file: str, output_file: str, start_secs: float, end_secs: float
+) -> None:
+    if not os.path.exists(input_file):
+        raise Exception(f"ERROR: Can't trim, {input_file} doesn't exist")
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    ff = ffmpy.FFmpeg(
+        inputs={str(input_file): None},
+        outputs={str(output_file): output_args_trim_video(start_secs, end_secs)},
+    )
+    ff.run()
 
 
 def find(
@@ -217,7 +206,12 @@ def find(
 def transcript_to_vtt(video_file: str, vtt_file: str, transcript: str) -> str:
     if not os.path.exists(video_file):
         raise Exception(f"ERROR: Can't generate vtt, {video_file} doesn't exist")
-    duration = video_duration(video_file)
+    duration = find_video_duration(video_file)
+    if duration == 0:
+        import logging
+
+        logging.warning(f"video duration for {video_file} returned 0")
+        return ""
     piece_length = 68
     word_indexes = find(transcript, " ")
     split_index = [0]

@@ -157,7 +157,13 @@ def process_answer_video(
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
             vtt_file = work_dir / "subtitles.vtt"
-            transcript_to_vtt(video_file, vtt_file, transcript)
+            try:
+                transcript_to_vtt(video_file, vtt_file, transcript)
+            except Exception as vtt_err:
+                import logging
+
+                logging.error(f"Failed to create vtt file")
+                logging.exception(vtt_err)
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
