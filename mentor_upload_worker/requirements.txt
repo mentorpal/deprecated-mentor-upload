@@ -4,6 +4,6 @@ celery==5.1.2
 ffmpy==0.3.0
 pymediainfo==5.1.0
 python-dotenv==0.18.0
-py_transcribe_aws==1.4.2-alpha.1
+py_transcribe_aws==1.4.2
 redis==3.5.3
 requests==2.26.0
