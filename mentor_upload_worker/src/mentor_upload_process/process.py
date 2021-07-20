@@ -162,7 +162,7 @@ def process_answer_video(
             except Exception as vtt_err:
                 import logging
 
-                logging.error(f"Failed to create vtt file")
+                logging.error(f"Failed to create vtt file at {vtt_file}")
                 logging.exception(vtt_err)
             update_status(
                 StatusUpdateRequest(
