@@ -244,7 +244,7 @@ class _TestProcessExample:
 
 
 @responses.activate
-@patch("mentor_upload_process.media_tools.video_duration")
+@patch("mentor_upload_process.media_tools.find_duration")
 @patch.object(transcribe, "init_transcription_service")
 @patch("ffmpy.FFmpeg")
 @patch("boto3.client")
