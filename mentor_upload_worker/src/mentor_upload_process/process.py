@@ -167,7 +167,7 @@ def process_answer_video(
             )
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
-            if transcript:
+            if transcript and len(transcript) > 0:
                 try:
                     vtt_file = work_dir / "subtitles.vtt"
                     transcript_to_vtt(audio_file, vtt_file, transcript)
