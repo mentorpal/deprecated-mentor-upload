@@ -27,6 +27,7 @@ class CancelTaskResponse(TypedDict):
 class ProcessAnswerRequest(TypedDict):
     mentor: str
     question: str
+    is_idle_video: bool
     video_path: str
     trim: TrimRequest
 

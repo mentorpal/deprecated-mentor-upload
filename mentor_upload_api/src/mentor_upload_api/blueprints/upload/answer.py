@@ -33,6 +33,7 @@ def upload():
     mentor = body.get("mentor")
     question = body.get("question")
     trim = body.get("trim")
+    is_idle_video = body.get("is_idle_video")
     upload_file = request.files["video"]
     root_ext = path.splitext(upload_file.filename)
     file_name = f"{uuid.uuid4()}-{mentor}-{question}{root_ext[1]}"
@@ -44,6 +45,7 @@ def upload():
         "question": question,
         "video_path": file_name,
         "trim": trim,
+        "is_idle_video": is_idle_video,
     }
     t = mentor_upload_tasks.tasks.process_answer_video.apply_async(args=[req])
     return jsonify(
