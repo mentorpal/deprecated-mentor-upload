@@ -75,14 +75,15 @@ def _test_env(
 
 
 def _mock_gql_answer_update(
-    mentor: str, question: str, transcript: str, timestamp: str
+    mentor: str, question: str, transcript: str, timestamp: str, is_idle_video: bool
 ) -> Tuple[dict, List[dict]]:
     base_path = f"videos/{mentor}/{question}/{timestamp}/"
     media = [
         {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
         {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
-        {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"},
     ]
+    if not is_idle_video:
+        media.append({"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"})
     gql_query = answer_update_gql(
         AnswerUpdateRequest(
             mentor=mentor, question=question, transcript=transcript, media=media
@@ -115,6 +116,7 @@ def _mock_gql_answer_update(
 def _mock_gql_status_update(
     mentor: str,
     question: str,
+    is_idle_video: bool,
     task_id: str,
     status: str,
     transcript: str,
@@ -126,8 +128,11 @@ def _mock_gql_status_update(
         media = [
             {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
             {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
-            {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"},
         ]
+        if not is_idle_video:
+            media.append(
+                {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"}
+            )
     gql_query = status_update_gql(
         StatusUpdateRequest(
             mentor=mentor,
@@ -235,6 +240,7 @@ def _expect_transcode_calls(
 class _TestProcessExample:
     mentor: str
     question: str
+    is_idle_video: bool
     timestamp: str
     transcript_fake: str
     trim: TrimRequest
@@ -255,6 +261,7 @@ class _TestProcessExample:
             _TestProcessExample(
                 mentor="m1",
                 question="q1",
+                is_idle_video=False,
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
                 trim=None,
@@ -267,6 +274,7 @@ class _TestProcessExample:
             _TestProcessExample(
                 mentor="m1",
                 question="q1",
+                is_idle_video=False,
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
                 trim={"start": 0.0, "end": 5.0},
@@ -279,8 +287,22 @@ class _TestProcessExample:
             _TestProcessExample(
                 mentor="m1",
                 question="q1",
+                is_idle_video=False,
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
+                trim={"start": 5.3, "end": 8.921},
+                video_dims=(480, 640),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                is_idle_video=True,
+                timestamp="20120114T032134Z",
+                transcript_fake="",
                 trim={"start": 5.3, "end": 8.921},
                 video_dims=(480, 640),
                 video_name="video1.mp4",
@@ -304,6 +326,7 @@ def test_processes_mentor_answer(
         req = {
             "mentor": ex.mentor,
             "question": ex.question,
+            "is_idle_video": ex.is_idle_video,
             "trim": ex.trim,
             "video_path": ex.video_name,
         }
@@ -335,7 +358,7 @@ def test_processes_mentor_answer(
         )
         mock_video_duration.return_value = ex.video_duration_fake
         expected_update_answer_gql_query, expected_media = _mock_gql_answer_update(
-            ex.mentor, ex.question, ex.transcript_fake, ex.timestamp
+            ex.mentor, ex.question, ex.transcript_fake, ex.timestamp, ex.is_idle_video
         )
         mock_s3 = mock_s3_client(mock_boto3_client)
         from mentor_upload_process.process import process_answer_video
@@ -343,6 +366,7 @@ def test_processes_mentor_answer(
         assert process_answer_video(req, "fake_task_id") == {
             "mentor": ex.mentor,
             "question": ex.question,
+            "is_idle_video": ex.is_idle_video,
             "trim": ex.trim,
             "video_path": ex.video_name,
             "transcript": ex.transcript_fake,
@@ -364,23 +388,36 @@ def test_processes_mentor_answer(
             (
                 [
                     _mock_gql_status_update(
-                        ex.mentor, ex.question, "fake_task_id", "TRIM_IN_PROGRESS", ""
+                        ex.mentor,
+                        ex.question,
+                        ex.is_idle_video,
+                        "fake_task_id",
+                        "TRIM_IN_PROGRESS",
+                        "",
                     )
                 ]
                 if ex.trim
+                else []
+            )
+            + (
+                [
+                    _mock_gql_status_update(
+                        ex.mentor,
+                        ex.question,
+                        ex.is_idle_video,
+                        "fake_task_id",
+                        "TRANSCRIBE_IN_PROGRESS",
+                        "",
+                    ),
+                ]
+                if not ex.is_idle_video
                 else []
             )
             + [
                 _mock_gql_status_update(
                     ex.mentor,
                     ex.question,
-                    "fake_task_id",
-                    "TRANSCRIBE_IN_PROGRESS",
-                    "",
-                ),
-                _mock_gql_status_update(
-                    ex.mentor,
-                    ex.question,
+                    ex.is_idle_video,
                     "fake_task_id",
                     "UPLOAD_IN_PROGRESS",
                     ex.transcript_fake,
@@ -388,6 +425,7 @@ def test_processes_mentor_answer(
                 _mock_gql_status_update(
                     ex.mentor,
                     ex.question,
+                    ex.is_idle_video,
                     "fake_task_id",
                     "DONE",
                     ex.transcript_fake,
@@ -409,13 +447,18 @@ def test_processes_mentor_answer(
                 f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/web.mp4",
                 ExtraArgs={"ContentType": "video/mp4"},
             ),
-            call(
-                expected_vtt_path,
-                TEST_STATIC_AWS_S3_BUCKET,
-                f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/en.vtt",
-                ExtraArgs={"ContentType": "text/vtt"},
-            ),
-        ]
+        ] + (
+            [
+                call(
+                    expected_vtt_path,
+                    TEST_STATIC_AWS_S3_BUCKET,
+                    f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/en.vtt",
+                    ExtraArgs={"ContentType": "text/vtt"},
+                ),
+            ]
+            if not ex.is_idle_video
+            else []
+        )
         mock_s3.upload_file.assert_has_calls(expected_upload_file_calls)
 
 

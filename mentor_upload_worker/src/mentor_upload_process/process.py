@@ -116,6 +116,7 @@ def process_answer_video(
         try:
             mentor = req.get("mentor")
             question = req.get("question")
+            is_idle_video = req.get("is_idle_video")
             trim = req.get("trim", None)
             video_file, work_dir = context
             # TODO: should also be able to trim existing video (get from s3)
@@ -136,16 +137,6 @@ def process_answer_video(
 
                 copyfile(trim_file, video_file)
             # TODO: should skip the transcribe step if video is an idle
-            update_status(
-                StatusUpdateRequest(
-                    mentor=mentor,
-                    question=question,
-                    task_id=task_id,
-                    status="TRANSCRIBE_IN_PROGRESS",
-                    transcript="",
-                    media=[],
-                )
-            )
             MediaUpload = Tuple[  # noqa: N806
                 str, str, str, str, str
             ]  # media_type, tag, file_name, content_type, file
@@ -161,24 +152,36 @@ def process_answer_video(
             media_uploads.append(
                 ("video", "web", "web.mp4", "video/mp4", video_web_file)
             )
-            transcription_service = transcribe.init_transcription_service()
-            transcribe_result = transcription_service.transcribe(
-                [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
-            )
-            job_result = transcribe_result.first()
-            transcript = job_result.transcript if job_result else ""
-            if transcript:
-                try:
-                    vtt_file = work_dir / "subtitles.vtt"
-                    transcript_to_vtt(audio_file, vtt_file, transcript)
-                    media_uploads.append(
-                        ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
+            transcript = ""
+            if not is_idle_video:
+                update_status(
+                    StatusUpdateRequest(
+                        mentor=mentor,
+                        question=question,
+                        task_id=task_id,
+                        status="TRANSCRIBE_IN_PROGRESS",
+                        transcript="",
+                        media=[],
                     )
-                except Exception as vtt_err:
-                    import logging
+                )
+                transcription_service = transcribe.init_transcription_service()
+                transcribe_result = transcription_service.transcribe(
+                    [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
+                )
+                job_result = transcribe_result.first()
+                transcript = job_result.transcript if job_result else ""
+                if transcript:
+                    try:
+                        vtt_file = work_dir / "subtitles.vtt"
+                        transcript_to_vtt(audio_file, vtt_file, transcript)
+                        media_uploads.append(
+                            ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
+                        )
+                    except Exception as vtt_err:
+                        import logging
 
-                    logging.error(f"Failed to create vtt file at {vtt_file}")
-                    logging.exception(vtt_err)
+                        logging.error(f"Failed to create vtt file at {vtt_file}")
+                        logging.exception(vtt_err)
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
