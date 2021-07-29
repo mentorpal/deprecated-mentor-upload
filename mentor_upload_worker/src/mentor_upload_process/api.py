@@ -102,6 +102,19 @@ def status_update_gql(req: StatusUpdateRequest) -> GQLQueryBody:
     }
 
 
+def fetch_question_name_gql(question_id: str) -> GQLQueryBody:
+    return {
+        "query": """query Question($id: ID!) {
+            question(id: $id){
+                name
+            }
+        }""",
+        "variables": {
+            "id": question_id,
+        },
+    }
+
+
 def update_answer(req: AnswerUpdateRequest) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = answer_update_gql(req)
@@ -120,3 +133,20 @@ def update_status(req: StatusUpdateRequest) -> None:
     tdjson = res.json()
     if "errors" in tdjson:
         raise Exception(json.dumps(tdjson.get("errors")))
+
+
+def fetch_question_name(question_id: str) -> str:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = fetch_question_name_gql(question_id)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
+    if (
+        "data" not in tdjson
+        or "question" not in tdjson["data"]
+        or "name" not in tdjson["data"]["question"]
+    ):
+        raise Exception(f"query: {body} did not return proper data format")
+    return tdjson["data"]["question"]["name"]

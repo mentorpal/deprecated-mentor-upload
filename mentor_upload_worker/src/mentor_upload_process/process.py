@@ -32,7 +32,13 @@ from .media_tools import (
     video_to_audio,
     transcript_to_vtt,
 )
-from .api import update_answer, update_status, AnswerUpdateRequest, StatusUpdateRequest
+from .api import (
+    update_answer,
+    update_status,
+    AnswerUpdateRequest,
+    StatusUpdateRequest,
+    fetch_question_name,
+)
 
 
 def upload_path(p: str) -> str:
@@ -103,6 +109,11 @@ def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
     )
 
 
+def is_idle_question(question_id: str) -> bool:
+    name = fetch_question_name(question_id)
+    return name == "_IDLE_"
+
+
 def process_answer_video(
     req: ProcessAnswerRequest, task_id: str
 ) -> ProcessAnswerResponse:
@@ -117,6 +128,7 @@ def process_answer_video(
             mentor = req.get("mentor")
             question = req.get("question")
             trim = req.get("trim", None)
+            is_idle = is_idle_question(question)
             video_file, work_dir = context
             # TODO: should also be able to trim existing video (get from s3)
             if trim:
@@ -135,17 +147,6 @@ def process_answer_video(
                 from shutil import copyfile
 
                 copyfile(trim_file, video_file)
-            # TODO: should skip the transcribe step if video is an idle
-            update_status(
-                StatusUpdateRequest(
-                    mentor=mentor,
-                    question=question,
-                    task_id=task_id,
-                    status="TRANSCRIBE_IN_PROGRESS",
-                    transcript="",
-                    media=[],
-                )
-            )
             MediaUpload = Tuple[  # noqa: N806
                 str, str, str, str, str
             ]  # media_type, tag, file_name, content_type, file
@@ -161,24 +162,36 @@ def process_answer_video(
             media_uploads.append(
                 ("video", "web", "web.mp4", "video/mp4", video_web_file)
             )
-            transcription_service = transcribe.init_transcription_service()
-            transcribe_result = transcription_service.transcribe(
-                [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
-            )
-            job_result = transcribe_result.first()
-            transcript = job_result.transcript if job_result else ""
-            if transcript:
-                try:
-                    vtt_file = work_dir / "subtitles.vtt"
-                    transcript_to_vtt(audio_file, vtt_file, transcript)
-                    media_uploads.append(
-                        ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
+            transcript = ""
+            if not is_idle:
+                update_status(
+                    StatusUpdateRequest(
+                        mentor=mentor,
+                        question=question,
+                        task_id=task_id,
+                        status="TRANSCRIBE_IN_PROGRESS",
+                        transcript="",
+                        media=[],
                     )
-                except Exception as vtt_err:
-                    import logging
+                )
+                transcription_service = transcribe.init_transcription_service()
+                transcribe_result = transcription_service.transcribe(
+                    [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
+                )
+                job_result = transcribe_result.first()
+                transcript = job_result.transcript if job_result else ""
+                if transcript:
+                    try:
+                        vtt_file = work_dir / "subtitles.vtt"
+                        transcript_to_vtt(audio_file, vtt_file, transcript)
+                        media_uploads.append(
+                            ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
+                        )
+                    except Exception as vtt_err:
+                        import logging
 
-                    logging.error(f"Failed to create vtt file at {vtt_file}")
-                    logging.exception(vtt_err)
+                        logging.error(f"Failed to create vtt file at {vtt_file}")
+                        logging.exception(vtt_err)
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
