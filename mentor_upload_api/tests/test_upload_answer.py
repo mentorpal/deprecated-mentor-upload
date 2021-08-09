@@ -5,13 +5,52 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
+from typing import List
+from mentor_upload_api.api import (
+    StatusUpdateRequest,
+    get_graphql_endpoint,
+    status_update_gql,
+)
 from os import path
 from unittest.mock import patch, Mock
+import responses
 import uuid
 
 import pytest
 
 from .utils import Bunch, fixture_path
+
+
+def _mock_gql_status_update(
+    mentor: str,
+    question: str,
+    task_id: str,
+    status: str,
+) -> dict:
+    gql_query = status_update_gql(
+        StatusUpdateRequest(
+            mentor=mentor,
+            question=question,
+            task_id=task_id,
+            status=status,
+            transcript="",
+            media=[],
+        )
+    )
+    responses.add(
+        responses.POST,
+        get_graphql_endpoint(),
+        json=gql_query,
+        status=200,
+    )
+    return gql_query
+
+
+def _expect_gql(expected_gql_queries: List[dict]) -> None:
+    assert len(responses.calls) == len(expected_gql_queries)
+    for i, query in enumerate(expected_gql_queries):
+        assert responses.calls[i].request.url == get_graphql_endpoint()
+        assert responses.calls[i].request.body.decode("UTF-8") == json.dumps(query)
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +65,7 @@ def python_path_env(monkeypatch, tmpdir):
         ("http://a.diff.org", "mentor2", "q2", "video.mp4", "fake_task_id_2"),
     ],
 )
+@responses.activate
 @patch("mentor_upload_tasks.tasks.process_answer_video")
 @patch.object(uuid, "uuid4")
 def test_upload(
@@ -42,6 +82,12 @@ def test_upload(
     mock_uuid.return_value = "fake_uuid"
     mock_task = Bunch(id=fake_task_id)
     mock_upload_task.apply_async.return_value = mock_task
+    expected_status_update_query = _mock_gql_status_update(
+        mentor=input_mentor,
+        question=input_question,
+        task_id=fake_task_id,
+        status="QUEUING",
+    )
     res = client.post(
         f"{upload_domain}/upload/answer",
         data={
@@ -49,6 +95,7 @@ def test_upload(
             "video": open(path.join(fixture_path("input_videos"), input_video), "rb"),
         },
     )
+    _expect_gql([expected_status_update_query])
     assert res.status_code == 200
     assert res.json == {
         "data": {
@@ -85,6 +132,7 @@ def test_upload(
         ),
     ],
 )
+@responses.activate
 @patch("mentor_upload_tasks.tasks.cancel_task")
 @patch("mentor_upload_tasks.tasks.process_answer_video")
 @patch.object(uuid, "uuid4")
@@ -104,6 +152,12 @@ def test_cancel(
     mock_uuid.return_value = "fake_uuid"
     mock_task = Bunch(id=fake_task_id)
     mock_upload_task.apply_async.return_value = mock_task
+    expected_status_update_query = _mock_gql_status_update(
+        mentor=input_mentor,
+        question=input_question,
+        task_id=fake_task_id,
+        status="QUEUING",
+    )
     res = client.post(
         f"{upload_domain}/upload/answer",
         data={
@@ -111,6 +165,7 @@ def test_cancel(
             "video": open(path.join(fixture_path("input_videos"), input_video), "rb"),
         },
     )
+    _expect_gql([expected_status_update_query])
     assert res.status_code == 200
     assert res.json == {
         "data": {
@@ -151,6 +206,7 @@ def test_cancel(
         ("http://mentor.org", "on", "https://mentor.org"),
     ],
 )
+@responses.activate
 @patch("mentor_upload_tasks.tasks.process_answer_video")
 def test_env_fixes_ssl_status_url(
     mock_upload_task: Mock,
@@ -168,6 +224,12 @@ def test_env_fixes_ssl_status_url(
         monkeypatch.setenv("STATUS_URL_FORCE_HTTPS", env_val)
     mock_task = Bunch(id=fake_task_id)
     mock_upload_task.apply_async.return_value = mock_task
+    expected_status_update_query = _mock_gql_status_update(
+        mentor=fake_mentor_id,
+        question=fake_question_id,
+        task_id=fake_task_id,
+        status="QUEUING",
+    )
     res = client.post(
         f"{request_root}/upload/answer",
         data={
@@ -177,6 +239,7 @@ def test_env_fixes_ssl_status_url(
             "video": fake_video,
         },
     )
+    _expect_gql([expected_status_update_query])
     assert res.status_code == 200
     assert res.json == {
         "data": {

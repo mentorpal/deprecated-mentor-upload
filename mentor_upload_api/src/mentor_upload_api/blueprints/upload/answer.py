@@ -10,6 +10,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
+from ...api import StatusUpdateRequest, update_status
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
@@ -46,6 +47,16 @@ def upload():
         "trim": trim,
     }
     t = mentor_upload_tasks.tasks.process_answer_video.apply_async(args=[req])
+    update_status(
+        StatusUpdateRequest(
+            mentor=mentor,
+            question=question,
+            task_id=t.id,
+            status="QUEUING",
+            transcript="",
+            media=[],
+        )
+    )
     return jsonify(
         {
             "data": {

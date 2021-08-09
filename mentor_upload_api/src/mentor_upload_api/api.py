@@ -7,7 +7,7 @@
 from dataclasses import dataclass
 import json
 from os import environ
-from typing import TypedDict
+from typing import TypedDict, List
 
 import requests
 
@@ -30,6 +30,23 @@ class GQLQueryBody(TypedDict):
     query: str
 
 
+@dataclass
+class Media:
+    type: str
+    tag: str
+    url: str
+
+
+@dataclass
+class StatusUpdateRequest:
+    mentor: str
+    question: str
+    status: str
+    task_id: str
+    transcript: str
+    media: List[Media]
+
+
 def thumbnail_update_gql(req: MentorThumbnailUpdateRequest) -> GQLQueryBody:
     return {
         "query": """mutation MentorThumbnailUpdate($mentorId: ID!, $thumbnail: String!) {
@@ -39,6 +56,36 @@ def thumbnail_update_gql(req: MentorThumbnailUpdateRequest) -> GQLQueryBody:
         }""",
         "variables": {"mentorId": req.mentor, "thumbnail": req.thumbnail},
     }
+
+
+def status_update_gql(req: StatusUpdateRequest) -> GQLQueryBody:
+    return {
+        "query": """mutation UploadStatus($mentorId: ID!, $questionId: ID!, $status: UploadTaskInputType!) {
+            api {
+                uploadTaskUpdate(mentorId: $mentorId, questionId: $questionId, status: $status)
+            }
+        }""",
+        "variables": {
+            "mentorId": req.mentor,
+            "questionId": req.question,
+            "status": {
+                "taskId": req.task_id,
+                "uploadStatus": req.status,
+                "transcript": req.transcript,
+                "media": req.media,
+            },
+        },
+    }
+
+
+def update_status(req: StatusUpdateRequest) -> None:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = status_update_gql(req)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
 
 
 def mentor_thumbnail_update(req: MentorThumbnailUpdateRequest) -> None:
