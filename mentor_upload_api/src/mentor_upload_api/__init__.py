@@ -41,7 +41,9 @@ def create_app():
     from mentor_upload_api.blueprints.upload.answer import answer_blueprint
 
     app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
+    from mentor_upload_api.blueprints.upload.transfer import transfer_blueprint
 
+    app.register_blueprint(transfer_blueprint, url_prefix="/upload/transfer")
     from mentor_upload_api.blueprints.upload.thumbnail import thumbnail_blueprint
 
     app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")

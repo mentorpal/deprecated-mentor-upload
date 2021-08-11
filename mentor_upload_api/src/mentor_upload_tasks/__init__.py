@@ -12,18 +12,6 @@ class TrimRequest(TypedDict):
     end: float
 
 
-class CancelTaskRequest(TypedDict):
-    mentor: str
-    question: str
-    task_id: str
-
-
-class CancelTaskResponse(TypedDict):
-    mentor: str
-    question: str
-    task_id: str
-
-
 class ProcessAnswerRequest(TypedDict):
     mentor: str
     question: str
@@ -31,7 +19,18 @@ class ProcessAnswerRequest(TypedDict):
     trim: TrimRequest
 
 
-class ProcessAnswerResponse(TypedDict):
+class ProcessTransferRequest(TypedDict):
+    mentor: str
+    question: str
+
+
+class UpdateTranscriptRequest(TypedDict):
     mentor: str
     question: str
     transcript: str
+
+
+class CancelTaskRequest(TypedDict):
+    mentor: str
+    question: str
+    task_id: str
