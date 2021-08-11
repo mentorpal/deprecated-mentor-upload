@@ -154,7 +154,7 @@ def _mock_is_idle_question_(question_id: str) -> dict:
         get_graphql_endpoint(),
         json={"data": {"question": {"name": "_IDLE_"}}}
         if question_id == "q1_idle"
-        else {"data": {"question": {"name": "NONE"}}},
+        else {"data": {"question": {"name": ""}}},
         status=200,
     )
     return gql_query
