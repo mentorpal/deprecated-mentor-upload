@@ -25,7 +25,7 @@ class Media:
     type: str
     tag: str
     url: str
-    needsTransfer: bool
+    needsTransfer: bool  # noqa: N815
 
 
 @dataclass

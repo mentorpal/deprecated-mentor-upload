@@ -26,7 +26,6 @@ from . import (
     ProcessAnswerRequest,
     ProcessAnswerResponse,
     ProcessTransferRequest,
-    UpdateTranscriptRequest,
 )
 from .media_tools import (
     video_trim,
