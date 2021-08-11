@@ -25,6 +25,7 @@ class Media:
     type: str
     tag: str
     url: str
+    needsTransfer: bool
 
 
 @dataclass
@@ -63,8 +64,37 @@ class StatusUpdateResponse:
     media: List[Media]
 
 
+@dataclass
+class MediaUpdateRequest:
+    mentor: str
+    question: str
+    media: Media
+
+
 class GQLQueryBody(TypedDict):
     query: str
+
+
+def answer_query_gql(mentor: str, question: str) -> GQLQueryBody:
+    return {
+        "query": """query Answer($mentor: ID!, $question: ID!) {
+            answer(mentor: $mentor, question: $question) {
+                _id
+                transcript
+                hasUntransferredMedia
+                media {
+                    type
+                    tag
+                    url
+                    needsTransfer
+                }
+            }
+        }""",
+        "variables": {
+            "mentor": mentor,
+            "question": question,
+        },
+    }
 
 
 def answer_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
@@ -115,6 +145,32 @@ def fetch_question_name_gql(question_id: str) -> GQLQueryBody:
     }
 
 
+def media_update_gql(req: MediaUpdateRequest) -> GQLQueryBody:
+    return {
+        "query": """mutation UpdateMedia($mentorId: ID!, $questionId: ID!, $media: AnswerMediaInputType!) {
+            api {
+                updateMedia(mentorId: $mentorId, questionId: $questionId, media: $media)
+            }
+        }""",
+        "variables": {
+            "mentorId": req.mentor,
+            "questionId": req.question,
+            "media": req.media,
+        },
+    }
+
+
+def fetch_answer(mentor: str, question: str) -> dict:
+    body = answer_query_gql(mentor, question)
+    res = requests.post(get_graphql_endpoint(), json=body)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
+    data = tdjson["data"]["answer"]
+    return data
+
+
 def update_answer(req: AnswerUpdateRequest) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = answer_update_gql(req)
@@ -150,3 +206,13 @@ def fetch_question_name(question_id: str) -> str:
     ):
         raise Exception(f"query: {body} did not return proper data format")
     return tdjson["data"]["question"]["name"]
+
+
+def update_media(req: MediaUpdateRequest) -> None:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = media_update_gql(req)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
