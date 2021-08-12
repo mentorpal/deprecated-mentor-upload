@@ -243,9 +243,6 @@ def transcript_to_vtt(audio_or_video_file: str, vtt_file: str, transcript: str) 
         )
         vtt_str += f"00:{output_start} --> 00:{output_end}\n"
         vtt_str += f"{transcript[split_index[j] : split_index[j + 1]]}\n\n"
-    import logging
-
-    logging.warning(vtt_file)
     os.makedirs(os.path.dirname(vtt_file), exist_ok=True)
     with open(vtt_file, "w") as f:
         f.write(vtt_str)
