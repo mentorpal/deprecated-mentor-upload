@@ -187,7 +187,7 @@ def process_answer_video(
                 if transcript:
                     try:
                         vtt_file = work_dir / "subtitles.vtt"
-                        transcript_to_vtt(video_file, vtt_file, transcript)
+                        transcript_to_vtt(video_web_file, vtt_file, transcript)
                         media_uploads.append(
                             ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
                         )
