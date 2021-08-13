@@ -147,9 +147,9 @@ def fetch_question_name_gql(question_id: str) -> GQLQueryBody:
 
 def media_update_gql(req: MediaUpdateRequest) -> GQLQueryBody:
     return {
-        "query": """mutation UpdateMedia($mentorId: ID!, $questionId: ID!, $media: AnswerMediaInputType!) {
+        "query": """mutation MediaUpdate($mentorId: ID!, $questionId: ID!, $media: AnswerMediaInputType!) {
             api {
-                updateMedia(mentorId: $mentorId, questionId: $questionId, media: $media)
+                mediaUpdate(mentorId: $mentorId, questionId: $questionId, media: $media)
             }
         }""",
         "variables": {
