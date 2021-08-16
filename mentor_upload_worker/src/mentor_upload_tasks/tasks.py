@@ -16,6 +16,7 @@ from mentor_upload_process import (  # NOQA
     CancelTaskResponse,
     ProcessAnswerRequest,
     ProcessAnswerResponse,
+    ProcessTransferRequest,
     process,
 )
 
@@ -35,6 +36,12 @@ celery.conf.update(config)
 def process_answer_video(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
     task_id = process_answer_video.request.id
     return process.process_answer_video(req, task_id)
+
+
+@celery.task()
+def process_transfer_video(req: ProcessTransferRequest):
+    task_id = process_transfer_video.request.id
+    return process.process_transfer_video(req, task_id)
 
 
 @celery.task()

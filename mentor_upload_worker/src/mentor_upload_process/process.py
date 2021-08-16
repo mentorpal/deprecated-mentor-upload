@@ -12,6 +12,7 @@ from tempfile import mkdtemp
 from shutil import copyfile, rmtree
 from typing import List, Tuple
 from urllib.parse import urljoin
+import urllib.request
 
 
 import boto3
@@ -24,6 +25,7 @@ from . import (
     CancelTaskResponse,
     ProcessAnswerRequest,
     ProcessAnswerResponse,
+    ProcessTransferRequest,
 )
 from .media_tools import (
     video_trim,
@@ -33,11 +35,14 @@ from .media_tools import (
     transcript_to_vtt,
 )
 from .api import (
+    fetch_answer,
+    fetch_question_name,
     update_answer,
     update_status,
+    update_media,
     AnswerUpdateRequest,
     StatusUpdateRequest,
-    fetch_question_name,
+    MediaUpdateRequest,
 )
 
 
@@ -130,7 +135,6 @@ def process_answer_video(
             trim = req.get("trim", None)
             is_idle = is_idle_question(question)
             video_file, work_dir = context
-            # TODO: should also be able to trim existing video (get from s3)
             if trim:
                 update_status(
                     StatusUpdateRequest(
@@ -183,7 +187,7 @@ def process_answer_video(
                 if transcript:
                     try:
                         vtt_file = work_dir / "subtitles.vtt"
-                        transcript_to_vtt(audio_file, vtt_file, transcript)
+                        transcript_to_vtt(video_web_file, vtt_file, transcript)
                         media_uploads.append(
                             ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
                         )
@@ -207,20 +211,25 @@ def process_answer_video(
             s3 = _create_s3_client()
             s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
             for media_type, tag, file_name, content_type, file in media_uploads:
-                item_path = f"{video_path_base}{file_name}"
-                media.append(
-                    {
-                        "type": media_type,
-                        "tag": tag,
-                        "url": item_path,
-                    }
-                )
-                s3.upload_file(
-                    str(file),
-                    s3_bucket,
-                    item_path,
-                    ExtraArgs={"ContentType": content_type},
-                )
+                if path.isfile(file):
+                    item_path = f"{video_path_base}{file_name}"
+                    media.append(
+                        {
+                            "type": media_type,
+                            "tag": tag,
+                            "url": item_path,
+                        }
+                    )
+                    s3.upload_file(
+                        str(file),
+                        s3_bucket,
+                        item_path,
+                        ExtraArgs={"ContentType": content_type},
+                    )
+                else:
+                    import logging
+
+                    logging.error(f"Failed to find file at {file}")
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -264,7 +273,6 @@ def process_answer_video(
                     media=[],
                 )
             )
-
         finally:
             try:
                 #  We are deleting the uploaded video file from a shared network mount here
@@ -278,3 +286,87 @@ def process_answer_video(
                     f"failed to delete uploaded video file '{video_path_full}'"
                 )
                 logging.exception(x)
+
+
+def process_transfer_video(req: ProcessTransferRequest, task_id: str):
+    mentor = req.get("mentor")
+    question = req.get("question")
+    answer = fetch_answer(mentor, question)
+    transcript = answer.get("transcript", "")
+    media = answer.get("media", [])
+    if not answer.get("hasUntransferredMedia", False):
+        return
+    update_status(
+        StatusUpdateRequest(
+            mentor=mentor,
+            question=question,
+            task_id=task_id,
+            status="TRANSFER_IN_PROGRESS",
+            transcript=transcript,
+            media=media,
+        )
+    )
+    for m in media:
+        if m.get("needsTransfer", False):
+            typ = m.get("type", "")
+            tag = m.get("tag", "")
+            root_ext = "vtt" if typ == "subtitles" else "mp4"
+            file_path, headers = urllib.request.urlretrieve(m.get("url", ""))
+            try:
+                item_path = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/{tag}.{root_ext}"
+                s3 = _create_s3_client()
+                s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
+                content_type = "text/vtt" if typ == "subtitles" else "video/mp4"
+                s3.upload_file(
+                    file_path,
+                    s3_bucket,
+                    item_path,
+                    ExtraArgs={"ContentType": content_type},
+                )
+                m["needsTransfer"] = False
+                m["url"] = item_path
+                update_status(
+                    StatusUpdateRequest(
+                        mentor=mentor,
+                        question=question,
+                        task_id=task_id,
+                        status="TRANSFER_IN_PROGRESS",
+                        transcript=transcript,
+                        media=media,
+                    )
+                )
+                update_media(
+                    MediaUpdateRequest(mentor=mentor, question=question, media=m)
+                )
+            except Exception as x:
+                import logging
+
+                logging.exception(x)
+                update_status(
+                    StatusUpdateRequest(
+                        mentor=mentor,
+                        question=question,
+                        task_id=task_id,
+                        status="TRANSFER_FAILED",
+                        transcript=transcript,
+                        media=media,
+                    )
+                )
+            finally:
+                try:
+                    remove(file_path)
+                except Exception as x:
+                    import logging
+
+                    logging.error(f"failed to delete file '{file_path}'")
+                    logging.exception(x)
+    update_status(
+        StatusUpdateRequest(
+            mentor=mentor,
+            question=question,
+            task_id=task_id,
+            status="DONE",
+            transcript=transcript,
+            media=media,
+        )
+    )
