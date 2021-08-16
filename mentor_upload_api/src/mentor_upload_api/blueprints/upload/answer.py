@@ -9,8 +9,10 @@ from os import environ, path, makedirs
 import uuid
 
 from flask import Blueprint, jsonify, request
-
-from ...api import StatusUpdateRequest, update_status
+from mentor_upload_api.api import (
+    StatusUpdateRequest,
+    update_status,
+)
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
