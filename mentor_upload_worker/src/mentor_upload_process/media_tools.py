@@ -101,7 +101,6 @@ def output_args_video_encode_for_web(
         crop_w = i_w - (i_h * target_aspect)
         o_h = round(min(max_height, i_h))
     else:
-        crop_h = i_h - (i_w * (1.0 / target_aspect))
         o_h = round(min(max_height, i_w * (1.0 / target_aspect)))
     o_w = int(o_h * target_aspect)
     if o_w % 2 != 0:
