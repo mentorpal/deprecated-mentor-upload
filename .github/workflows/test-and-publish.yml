@@ -52,20 +52,20 @@ jobs:
       - name: docker login
         run: docker login -u ${{ secrets.DOCKER_LOGIN }} -p ${{ secrets.DOCKER_PASSWORD }}
       - name: docker build worker
-        run: cd mentor_upload_worker && DOCKER_IMAGE=uscictdocker/mentor-upload-worker:${{ steps.tag.outputs.image_tag }} make docker-build
+        run: cd mentor_upload_worker && DOCKER_IMAGE=mentorpal/mentor-upload-worker:${{ steps.tag.outputs.image_tag }} make docker-build
       - name: docker build api
-        run: cd mentor_upload_api && DOCKER_IMAGE=uscictdocker/mentor-upload-api:${{ steps.tag.outputs.image_tag }} make docker-build
+        run: cd mentor_upload_api && DOCKER_IMAGE=mentorpal/mentor-upload-api:${{ steps.tag.outputs.image_tag }} make docker-build
       - name: docker tag release as version
         if: needs.publish-check.outputs.is_release == 'true'
         run: |
-          docker tag "uscictdocker/mentor-upload-worker:${{ steps.tag.outputs.image_tag }}" "uscictdocker/mentor-upload-worker:${GITHUB_REF#refs/tags/}"
-          docker tag "uscictdocker/mentor-upload-api:${{ steps.tag.outputs.image_tag }}" "uscictdocker/mentor-upload-api:${GITHUB_REF#refs/tags/}"
+          docker tag "mentorpal/mentor-upload-worker:${{ steps.tag.outputs.image_tag }}" "mentorpal/mentor-upload-worker:${GITHUB_REF#refs/tags/}"
+          docker tag "mentorpal/mentor-upload-api:${{ steps.tag.outputs.image_tag }}" "mentorpal/mentor-upload-api:${GITHUB_REF#refs/tags/}"
       - name: docker tag main as latest
         if: github.ref == 'refs/heads/main'
         run: |
-          docker tag "uscictdocker/mentor-upload-worker:${{ steps.tag.outputs.image_tag }}" "uscictdocker/mentor-upload-worker:latest"
-          docker tag "uscictdocker/mentor-upload-api:${{ steps.tag.outputs.image_tag }}" "uscictdocker/mentor-upload-api:latest"
+          docker tag "mentorpal/mentor-upload-worker:${{ steps.tag.outputs.image_tag }}" "mentorpal/mentor-upload-worker:latest"
+          docker tag "mentorpal/mentor-upload-api:${{ steps.tag.outputs.image_tag }}" "mentorpal/mentor-upload-api:latest"
       - name: docker push worker
-        run: docker push --all-tags uscictdocker/mentor-upload-worker
+        run: docker push --all-tags mentorpal/mentor-upload-worker
       - name: docker push api
-        run: docker push --all-tags uscictdocker/mentor-upload-api
+        run: docker push --all-tags mentorpal/mentor-upload-api
