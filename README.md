@@ -42,13 +42,13 @@ To build/push a work-in-progress tag of `mentor-upload` for the current commit i
 To build/push a pre-release semver tag of `mentor-upload` for the current commit in your branch
 
 - create a [github release](https://github.com/ICTLearningSciences/mentor-upload/releases/new) **from your development branch** with tag format `/^\d+\.\d+\.\d+(-[a-z\d\-.]+)?$/` (e.g. `1.0.0-alpha.1`)
-- this will create a tag like `uscictdocker/mentor-upload:1.0.0-alpha.1`
+- this will create a tag like `mentorpal/mentor-upload:1.0.0-alpha.1`
 - you can follow progress in [github actions](https://github.com/mentorpal/mentor-upload/actions)
 
 
 Once your changes are approved and merged to main, you should create a release tag in semver format as follows:
 
 - create a [github release](https://github.com/ICTLearningSciences/mentor-upload/releases/new) **from main** with tag format `/^\d+\.\d+\.\d$/` (e.g. `1.0.0`)
-- this will create a tag like `uscictdocker/mentor-upload:1.0.0`
+- this will create a tag like `mentorpal/mentor-upload:1.0.0`
 - you can follow progress in [github actions](https://github.com/mentorpal/mentor-upload/actions)
 
