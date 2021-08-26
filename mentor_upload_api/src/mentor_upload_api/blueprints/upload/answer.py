@@ -50,7 +50,7 @@ def upload():
         "trim": trim,
     }
     t = mentor_upload_tasks.tasks.process_answer_video.apply_async(
-        queue=mentor_upload_tasks.QUEUE_UPLOADS, args=[req]
+        queue=mentor_upload_tasks.get_queue_uploads(), args=[req]
     )
     update_status(
         StatusUpdateRequest(
@@ -83,7 +83,7 @@ def cancel():
     task_id = body.get("task")
     req = {"mentor": mentor, "question": question, "task_id": task_id}
     t = mentor_upload_tasks.tasks.cancel_task.apply_async(
-        queue=mentor_upload_tasks.QUEUE_UPLOADS, args=[req]
+        queue=mentor_upload_tasks.get_queue_uploads(), args=[req]
     )
     return jsonify({"data": {"id": t.id, "cancelledId": task_id}})
 

@@ -5,7 +5,6 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import os
-from typing import Final
 
 from dotenv import load_dotenv
 
@@ -22,7 +21,10 @@ from mentor_upload_process import (  # NOQA
     process,
 )
 
-QUEUE_UPLOADS: Final[str] = "uploads"
+
+def get_queue_uploads() -> str:
+    # return "uscquestions-prod-mentorpal-uploads.fifo"
+    return os.environ.get("QUEUE_NAME_UPLOADS") or "uploads"
 
 
 broker_url = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
@@ -36,17 +38,17 @@ celery.conf.update(
             "CELERY_RESULT_BACKEND", "redis://redis:6379/0"
         ),
         "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
-        "task_default_queue": QUEUE_UPLOADS,
-        "task_default_exchange": QUEUE_UPLOADS,
-        "task_default_routing_key": QUEUE_UPLOADS,
+        "task_default_queue": get_queue_uploads(),
+        "task_default_exchange": get_queue_uploads(),
+        "task_default_routing_key": get_queue_uploads(),
         "task_queues": [
             Queue(
-                QUEUE_UPLOADS,
-                exchange=Exchange(QUEUE_UPLOADS, "direct", durable=True),
-                routing_key=QUEUE_UPLOADS,
+                get_queue_uploads(),
+                exchange=Exchange(get_queue_uploads(), "direct", durable=True),
+                routing_key=get_queue_uploads(),
             )
         ],
-        "task_routes": {"mentor_upload_tasks.tasks.*": {"queue": QUEUE_UPLOADS}},
+        "task_routes": {"mentor_upload_tasks.tasks.*": {"queue": get_queue_uploads()}},
         "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
     }
 )
