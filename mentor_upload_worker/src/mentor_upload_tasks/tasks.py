@@ -5,11 +5,13 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import os
+from typing import Final
 
 from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env.
 from celery import Celery  # NOQA
+from kombu import Exchange, Queue  # NOQA
 
 from mentor_upload_process import (  # NOQA
     CancelTaskRequest,
@@ -20,16 +22,34 @@ from mentor_upload_process import (  # NOQA
     process,
 )
 
-config = {
-    "broker_url": os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0"),
-    "result_backend": os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/0"),
-    "accept_content": ["json"],
-    "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
-    "event_serializer": os.environ.get("CELERY_EVENT_SERIALIZER", "json"),
-    "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
-}
-celery = Celery("mentor_upload_tasks", broker=config["broker_url"])
-celery.conf.update(config)
+QUEUE_UPLOADS: Final[str] = "uploads"
+
+
+broker_url = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+celery = Celery("mentor_upload_tasks", broker=broker_url)
+celery.conf.update(
+    {
+        "accept_content": ["json"],
+        "broker_url": broker_url,
+        "event_serializer": os.environ.get("CELERY_EVENT_SERIALIZER", "json"),
+        "result_backend": os.environ.get(
+            "CELERY_RESULT_BACKEND", "redis://redis:6379/0"
+        ),
+        "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
+        "task_default_queue": QUEUE_UPLOADS,
+        "task_default_exchange": QUEUE_UPLOADS,
+        "task_default_routing_key": QUEUE_UPLOADS,
+        "task_queues": [
+            Queue(
+                QUEUE_UPLOADS,
+                exchange=Exchange(QUEUE_UPLOADS, "direct", durable=True),
+                routing_key=QUEUE_UPLOADS,
+            )
+        ],
+        "task_routes": {"mentor_upload_tasks.tasks.*": {"queue": QUEUE_UPLOADS}},
+        "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
+    }
+)
 
 
 @celery.task()
