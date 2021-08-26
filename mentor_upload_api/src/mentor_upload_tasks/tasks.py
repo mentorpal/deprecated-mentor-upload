@@ -7,19 +7,44 @@
 import os
 
 from celery import Celery
+from kombu import Exchange, Queue
 
-from . import CancelTaskRequest, ProcessAnswerRequest, ProcessTransferRequest
+from . import (
+    CancelTaskRequest,
+    ProcessAnswerRequest,
+    ProcessTransferRequest,
+    get_queue_uploads,
+)
 
-config = {
-    "broker_url": os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0"),
-    "result_backend": os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/0"),
-    "accept_content": ["json"],
-    "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
-    "event_serializer": os.environ.get("CELERY_EVENT_SERIALIZER", "json"),
-    "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
-}
-celery = Celery("mentor_upload_tasks", broker=config["broker_url"])
-celery.conf.update(config)
+broker_url = (
+    os.environ.get("UPLOAD_CELERY_BROKER_URL")
+    or os.environ.get("CELERY_BROKER_URL")
+    or "redis://redis:6379/0"
+)
+celery = Celery("mentor_upload_tasks", broker=broker_url)
+celery.conf.update(
+    {
+        "accept_content": ["json"],
+        "broker_url": broker_url,
+        "event_serializer": os.environ.get("CELERY_EVENT_SERIALIZER", "json"),
+        "result_backend": os.environ.get(
+            "CELERY_RESULT_BACKEND", "redis://redis:6379/0"
+        ),
+        "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
+        "task_default_queue": get_queue_uploads(),
+        "task_default_exchange": get_queue_uploads(),
+        "task_default_routing_key": get_queue_uploads(),
+        "task_queues": [
+            Queue(
+                get_queue_uploads(),
+                exchange=Exchange(get_queue_uploads(), "direct", durable=True),
+                routing_key=get_queue_uploads(),
+            )
+        ],
+        "task_routes": {"mentor_upload_tasks.tasks.*": {"queue": get_queue_uploads()}},
+        "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
+    }
+)
 
 
 @celery.task()
@@ -35,4 +60,3 @@ def process_transfer_video(req: ProcessTransferRequest):
 @celery.task()
 def cancel_task(req: CancelTaskRequest):
     celery.control.revoke(req.get("task_id"), terminate=True)
-    pass
