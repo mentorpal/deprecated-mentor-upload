@@ -1,16 +1,30 @@
-FROM python:3.8-slim
+FROM python:3.8-slim as builder
 RUN apt-get update && \
     apt-get install -y \
-    build-essential \
-    ffmpeg \
-    libcurl4-openssl-dev \
-    libssl-dev \
-    mediainfo \
-    && rm -rf /var/lib/apt/lists/*
+        build-essential \
+        libcurl4-openssl-dev \
+        libssl-dev \
+    && pip install wheel \
+    && pip wheel \
+            --wheel-dir=/svc/wheels \
+            --no-binary :all: \
+            --global-option="--with-openssl" \
+            --no-cache-dir \
+        pycurl
+FROM python:3.8-slim
+COPY --from=builder /svc /svc
+WORKDIR /svc
 ADD requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt \
+RUN apt-get update && \
+    apt-get install -y \
+        ffmpeg \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        mediainfo \
+    && pip install -r /tmp/requirements.txt \
     && pip uninstall pycurl \
-    && pip install pycurl --compile --global-option="--with-openssl" --no-cache-dir
+    && pip install --no-index --find-links=/svc/wheels pycurl \
+    && rm -rf /var/lib/apt/lists/*
 RUN rm /tmp/requirements.txt
 WORKDIR /app
 COPY src ./
