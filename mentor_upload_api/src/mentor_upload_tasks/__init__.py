@@ -9,7 +9,6 @@ from typing import Final, TypedDict
 
 
 def get_queue_uploads() -> str:
-    # return "uscquestions-prod-mentorpal-uploads.fifo"
     return environ.get("QUEUE_NAME_UPLOADS") or "uploads"
 
 

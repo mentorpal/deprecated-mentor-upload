@@ -23,7 +23,6 @@ from mentor_upload_process import (  # NOQA
 
 
 def get_queue_uploads() -> str:
-    # return "uscquestions-prod-mentorpal-uploads.fifo"
     return os.environ.get("QUEUE_NAME_UPLOADS") or "uploads"
 
 
