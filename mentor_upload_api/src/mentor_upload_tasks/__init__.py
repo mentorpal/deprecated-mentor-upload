@@ -9,7 +9,7 @@ from typing import TypedDict
 
 
 def get_queue_uploads() -> str:
-    return environ.get("QUEUE_NAME_UPLOADS") or "uploads"
+    return environ.get("UPLOAD_QUEUE_NAME") or "uploads"
 
 
 class TrimRequest(TypedDict):

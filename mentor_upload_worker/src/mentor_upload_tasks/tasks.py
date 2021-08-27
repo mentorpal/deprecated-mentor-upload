@@ -23,10 +23,14 @@ from mentor_upload_process import (  # NOQA
 
 
 def get_queue_uploads() -> str:
-    return os.environ.get("QUEUE_NAME_UPLOADS") or "uploads"
+    return os.environ.get("UPLOAD_QUEUE_NAME") or "uploads"
 
 
-broker_url = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+broker_url = (
+    os.environ.get("UPLOAD_CELERY_BROKER_URL")
+    or os.environ.get("CELERY_BROKER_URL")
+    or "redis://redis:6379/0"
+)
 celery = Celery("mentor_upload_tasks", broker=broker_url)
 celery.conf.update(
     {

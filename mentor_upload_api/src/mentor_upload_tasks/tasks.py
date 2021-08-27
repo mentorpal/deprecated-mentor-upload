@@ -16,7 +16,11 @@ from . import (
     get_queue_uploads,
 )
 
-broker_url = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+broker_url = (
+    os.environ.get("UPLOAD_CELERY_BROKER_URL")
+    or os.environ.get("CELERY_BROKER_URL")
+    or "redis://redis:6379/0"
+)
 celery = Celery("mentor_upload_tasks", broker=broker_url)
 celery.conf.update(
     {
