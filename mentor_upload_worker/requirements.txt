@@ -2,7 +2,6 @@ boto3>=1.16.5
 boto3_type_annotations>=0.3.1
 celery==5.1.2
 ffmpy==0.3.0
-kombu==5.1.0
 pymediainfo==5.1.0
 python-dotenv==0.18.0
 py_transcribe_aws==1.4.2
