@@ -1,4 +1,11 @@
 FROM python:3.8-slim as builder
+# To use celery over AWS SQS requires pycurl
+# and it doesn't work unless it's compiled,
+# which requires hundreds of MB of build tools...
+# So we do a two-phase docker build.
+# In the first phase, we compile pycurl
+# as a wheel, and then in the final phase,
+# we install from that wheel (to avoid needing the build tools)
 RUN apt-get update && \
     apt-get install -y \
         build-essential \
