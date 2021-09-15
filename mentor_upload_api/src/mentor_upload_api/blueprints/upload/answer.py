@@ -28,6 +28,7 @@ def get_upload_root() -> str:
     return environ.get("UPLOAD_ROOT") or "./uploads"
 
 
+# TODO: puts task in queue
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
 def upload():
@@ -58,6 +59,10 @@ def upload():
             question=question,
             task_id=t.id,
             status="QUEUING",
+            upload_flag="QUEUED",
+            transcoding_flag="QUEUED",
+            finalization_flag="QUEUED",
+            transcribing_flag="QUEUED",
             transcript="",
             media=[],
         )

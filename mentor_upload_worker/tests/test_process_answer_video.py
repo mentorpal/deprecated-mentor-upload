@@ -113,8 +113,12 @@ def _mock_gql_status_update(
     mentor: str,
     question: str,
     task_id: str,
-    status: str,
-    transcript: str,
+    status: str = None,
+    upload_flag: str = None,
+    transcribing_flag: str = None,
+    transcoding_flag: str = None,
+    finalization_flag: str = None,
+    transcript: str = None,
     timestamp: str = None,
 ) -> dict:
     media = []
@@ -134,6 +138,10 @@ def _mock_gql_status_update(
             question=question,
             task_id=task_id,
             status=status,
+            upload_flag=upload_flag,
+            transcribing_flag=transcribing_flag,
+            transcoding_flag=transcoding_flag,
+            finalization_flag=finalization_flag,
             transcript=transcript,
             media=media,
         )
@@ -383,7 +391,7 @@ def test_processes_mentor_answer(
             + (
                 [
                     _mock_gql_status_update(
-                        ex.mentor, ex.question, "fake_task_id", "TRIM_IN_PROGRESS", ""
+                        ex.mentor, ex.question, "fake_task_id", "TRIM_IN_PROGRESS"
                     )
                 ]
                 if ex.trim
@@ -392,11 +400,26 @@ def test_processes_mentor_answer(
             + (
                 [
                     _mock_gql_status_update(
+                        ex.mentor, ex.question, "fake_task_id", status="PROCESSING"
+                    ),
+                    _mock_gql_status_update(
                         ex.mentor,
                         ex.question,
                         "fake_task_id",
-                        "TRANSCRIBE_IN_PROGRESS",
-                        "",
+                        transcoding_flag="IN_PROGRESS",
+                    ),
+                    _mock_gql_status_update(
+                        ex.mentor, ex.question, "fake_task_id", transcoding_flag="DONE"
+                    ),
+                ]
+            )
+            + (
+                [
+                    _mock_gql_status_update(
+                        ex.mentor,
+                        ex.question,
+                        "fake_task_id",
+                        transcribing_flag="IN_PROGRESS",
                     ),
                 ]
                 if not is_idle
@@ -404,19 +427,22 @@ def test_processes_mentor_answer(
             )
             + [
                 _mock_gql_status_update(
-                    ex.mentor,
-                    ex.question,
-                    "fake_task_id",
-                    "UPLOAD_IN_PROGRESS",
-                    ex.transcript_fake,
+                    ex.mentor, ex.question, "fake_task_id", transcribing_flag="DONE"
                 ),
+                _mock_gql_status_update(
+                    ex.mentor, ex.question, "fake_task_id", upload_flag="IN_PROGRESS"
+                ),
+                _mock_gql_status_update(
+                    ex.mentor, ex.question, "fake_task_id", upload_flag="DONE"
+                ),
+                # finalization
                 _mock_gql_status_update(
                     ex.mentor,
                     ex.question,
                     "fake_task_id",
-                    "DONE",
-                    ex.transcript_fake,
-                    ex.timestamp,
+                    status="DONE",
+                    transcript=ex.transcript_fake,
+                    timestamp=ex.timestamp,
                 ),
                 expected_update_answer_gql_query,
             ]

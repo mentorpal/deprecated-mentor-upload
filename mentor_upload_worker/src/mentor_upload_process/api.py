@@ -48,20 +48,28 @@ class AnswerUpdateResponse:
 class StatusUpdateRequest:
     mentor: str
     question: str
-    status: str
     task_id: str
-    transcript: str
-    media: List[Media]
+    status: str = None
+    upload_flag: str = None
+    transcribing_flag: str = None
+    transcoding_flag: str = None
+    finalization_flag: str = None
+    transcript: str = None
+    media: List[Media] = None
 
 
 @dataclass
 class StatusUpdateResponse:
     mentor: str
     question: str
-    status: str
     task_id: str
-    transcript: str
-    media: List[Media]
+    status: str = None
+    upload_flag: str = None
+    transcribing_flag: str = None
+    transcoding_flag: str = None
+    finalization_flag: str = None
+    transcript: str = None
+    media: List[Media] = None
 
 
 @dataclass
@@ -113,6 +121,23 @@ def answer_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
 
 
 def status_update_gql(req: StatusUpdateRequest) -> GQLQueryBody:
+    status = {}
+    status["taskId"] = req.task_id
+    if req.status:
+        status["uploadStatus"] = req.status
+    if req.upload_flag:
+        status["uploadFlag"] = req.upload_flag
+    if req.transcribing_flag:
+        status["transcribingFlag"] = req.transcribing_flag
+    if req.transcoding_flag:
+        status["transcodingFlag"] = req.transcoding_flag
+    if req.finalization_flag:
+        status["finalizationFlag"] = req.finalization_flag
+    if req.transcript:
+        status["transcript"] = req.transcript
+    if req.media:
+        status["media"] = req.media
+
     return {
         "query": """mutation UploadStatus($mentorId: ID!, $questionId: ID!, $status: UploadTaskInputType!) {
             api {
@@ -122,12 +147,7 @@ def status_update_gql(req: StatusUpdateRequest) -> GQLQueryBody:
         "variables": {
             "mentorId": req.mentor,
             "questionId": req.question,
-            "status": {
-                "taskId": req.task_id,
-                "uploadStatus": req.status,
-                "transcript": req.transcript,
-                "media": req.media,
-            },
+            "status": status,
         },
     }
 

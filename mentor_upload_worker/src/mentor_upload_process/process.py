@@ -119,6 +119,9 @@ def is_idle_question(question_id: str) -> bool:
     return name == "_IDLE_"
 
 
+# def stage_one():
+
+
 def process_answer_video(
     req: ProcessAnswerRequest, task_id: str
 ) -> ProcessAnswerResponse:
@@ -142,8 +145,6 @@ def process_answer_video(
                         question=question,
                         task_id=task_id,
                         status="TRIM_IN_PROGRESS",
-                        transcript="",
-                        media=[],
                     )
                 )
                 trim_file = work_dir / "trim.mp4"
@@ -151,10 +152,31 @@ def process_answer_video(
                 from shutil import copyfile
 
                 copyfile(trim_file, video_file)
+            # NEW: change blanket status to processing once trimming is complete
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    status="PROCESSING",
+                )
+            )
+
+            # create array to hold transcoded media to later upload
             MediaUpload = Tuple[  # noqa: N806
                 str, str, str, str, str
             ]  # media_type, tag, file_name, content_type, file
             media_uploads: List[MediaUpload] = []
+
+            # START: transcoding
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    transcoding_flag="IN_PROGRESS",
+                )
+            )
             audio_file = video_to_audio(video_file)
             video_mobile_file = work_dir / "mobile.mp4"
             video_encode_for_mobile(video_file, video_mobile_file)
@@ -166,6 +188,17 @@ def process_answer_video(
             media_uploads.append(
                 ("video", "web", "web.mp4", "video/mp4", video_web_file)
             )
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    transcoding_flag="DONE",
+                )
+            )
+            # END: transcoding
+
+            # START: transcribe
             transcript = ""
             if not is_idle:
                 update_status(
@@ -173,9 +206,7 @@ def process_answer_video(
                         mentor=mentor,
                         question=question,
                         task_id=task_id,
-                        status="TRANSCRIBE_IN_PROGRESS",
-                        transcript="",
-                        media=[],
+                        transcribing_flag="IN_PROGRESS",
                     )
                 )
                 transcription_service = transcribe.init_transcription_service()
@@ -201,9 +232,18 @@ def process_answer_video(
                     mentor=mentor,
                     question=question,
                     task_id=task_id,
-                    status="UPLOAD_IN_PROGRESS",
-                    transcript=transcript,
-                    media=[],
+                    transcribing_flag="DONE",
+                )
+            )
+            # END: transcribe
+
+            # START: upload
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    upload_flag="IN_PROGRESS",
                 )
             )
             video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
@@ -235,7 +275,18 @@ def process_answer_video(
                     mentor=mentor,
                     question=question,
                     task_id=task_id,
-                    status="DONE",
+                    upload_flag="DONE",
+                )
+            )
+            # END: upload
+
+            # START: finalization
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    status="DONE",  # when admin sees a DONE status, it requests that it gets removed from DB
                     transcript=transcript,
                     media=media,
                 )
@@ -259,6 +310,7 @@ def process_answer_video(
                     )
                 ),
             )
+            # END: finalization
         except Exception as x:
             import logging
 

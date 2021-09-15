@@ -25,7 +25,11 @@ def _mock_gql_status_update(
     mentor: str,
     question: str,
     task_id: str,
-    status: str,
+    status: str = None,
+    upload_flag: str = None,
+    transcribing_flag: str = None,
+    transcoding_flag: str = None,
+    finalization_flag: str = None,
 ) -> dict:
     gql_query = status_update_gql(
         StatusUpdateRequest(
@@ -33,6 +37,10 @@ def _mock_gql_status_update(
             question=question,
             task_id=task_id,
             status=status,
+            upload_flag=upload_flag,
+            transcribing_flag=transcribing_flag,
+            transcoding_flag=transcoding_flag,
+            finalization_flag=finalization_flag,
             transcript="",
             media=[],
         )
@@ -87,6 +95,10 @@ def test_upload(
         question=input_question,
         task_id=fake_task_id,
         status="QUEUING",
+        upload_flag="QUEUED",
+        transcoding_flag="QUEUED",
+        finalization_flag="QUEUED",
+        transcribing_flag="QUEUED",
     )
     res = client.post(
         f"{upload_domain}/upload/answer",
@@ -157,6 +169,10 @@ def test_cancel(
         question=input_question,
         task_id=fake_task_id,
         status="QUEUING",
+        upload_flag="QUEUED",
+        transcoding_flag="QUEUED",
+        finalization_flag="QUEUED",
+        transcribing_flag="QUEUED",
     )
     res = client.post(
         f"{upload_domain}/upload/answer",
@@ -229,6 +245,10 @@ def test_env_fixes_ssl_status_url(
         question=fake_question_id,
         task_id=fake_task_id,
         status="QUEUING",
+        upload_flag="QUEUED",
+        transcoding_flag="QUEUED",
+        finalization_flag="QUEUED",
+        transcribing_flag="QUEUED",
     )
     res = client.post(
         f"{request_root}/upload/answer",
