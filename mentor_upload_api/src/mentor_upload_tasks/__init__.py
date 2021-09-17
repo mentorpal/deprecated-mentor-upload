@@ -8,8 +8,12 @@ from os import environ
 from typing import TypedDict
 
 
-def get_queue_uploads() -> str:
-    return environ.get("UPLOAD_QUEUE_NAME") or "uploads"
+def get_queue_finalization_stage() -> str:
+    return environ.get("UPLOAD_QUEUE_NAME") or "finalization"
+
+
+def get_queue_upload_transcribe_transcode_stage() -> str:
+    return environ.get("FIRST_STAGE_QUEUE_NAME") or "upload_transcribe_transcode"
 
 
 class TrimRequest(TypedDict):

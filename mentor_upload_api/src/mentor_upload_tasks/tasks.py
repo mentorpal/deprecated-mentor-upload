@@ -13,7 +13,8 @@ from . import (
     CancelTaskRequest,
     ProcessAnswerRequest,
     ProcessTransferRequest,
-    get_queue_uploads,
+    get_queue_finalization_stage,
+    get_queue_upload_transcribe_transcode_stage,
 )
 
 broker_url = (
@@ -33,24 +34,47 @@ celery.conf.update(
             or "redis://redis:6379/0"
         ),
         "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
-        "task_default_queue": get_queue_uploads(),
-        "task_default_exchange": get_queue_uploads(),
-        "task_default_routing_key": get_queue_uploads(),
+        "task_default_queue": get_queue_finalization_stage(),
+        "task_default_exchange": get_queue_finalization_stage(),
+        "task_default_routing_key": get_queue_finalization_stage(),
         "task_queues": [
             Queue(
-                get_queue_uploads(),
-                exchange=Exchange(get_queue_uploads(), "direct", durable=True),
-                routing_key=get_queue_uploads(),
-            )
+                get_queue_finalization_stage(),
+                exchange=Exchange(
+                    get_queue_finalization_stage(), "direct", durable=True
+                ),
+                routing_key=get_queue_finalization_stage(),
+            ),
+            Queue(
+                get_queue_upload_transcribe_transcode_stage(),
+                exchange=Exchange(
+                    get_queue_upload_transcribe_transcode_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_upload_transcribe_transcode_stage(),
+            ),
         ],
-        "task_routes": {"mentor_upload_tasks.tasks.*": {"queue": get_queue_uploads()}},
+        "task_routes": {
+            "mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video": {
+                "queue": get_queue_upload_transcribe_transcode_stage()
+            },
+            "mentor_upload_tasks.tasks.finalization_stage": {
+                "queue": get_queue_finalization_stage()
+            },
+        },
         "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
     }
 )
 
 
 @celery.task()
-def process_answer_video(req: ProcessAnswerRequest):
+def upload_transcribe_transcode_answer_video(req: ProcessAnswerRequest):
+    pass
+
+
+@celery.task()
+def finalization_stage(req: ProcessAnswerRequest):
     pass
 
 

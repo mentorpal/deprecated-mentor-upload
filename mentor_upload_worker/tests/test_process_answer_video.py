@@ -76,17 +76,18 @@ def _test_env(
 
 
 def _mock_gql_answer_update(
-    mentor: str, question: str, transcript: str, timestamp: str
+    mentor: str, question: str, transcript: str, timestamp: str, media=None
 ) -> Tuple[dict, List[dict]]:
     base_path = f"videos/{mentor}/{question}/{timestamp}/"
-    media = [
-        {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
-        {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
-    ]
-    if question != "q1_idle":
-        media.append(
-            {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"},
-        )
+    if media is None:
+        media = [
+            {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
+            {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
+        ]
+        if question != "q1_idle":
+            media.append(
+                {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"},
+            )
     gql_query = answer_update_gql(
         AnswerUpdateRequest(
             mentor=mentor, question=question, transcript=transcript, media=media
@@ -120,9 +121,10 @@ def _mock_gql_status_update(
     finalization_flag: str = None,
     transcript: str = None,
     timestamp: str = None,
+    media=None,
 ) -> dict:
-    media = []
-    if timestamp is not None:
+    if media is None and timestamp is not None:
+        media = []
         base_path = f"videos/{mentor}/{question}/{timestamp}/"
         media = [
             {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
@@ -214,10 +216,6 @@ def _expect_transcode_calls(
         + [
             call(
                 inputs={video_path: None},
-                outputs={expected_audio_path: output_args_video_to_audio()},
-            ),
-            call(
-                inputs={video_path: None},
                 outputs={
                     expected_mobile_video_path: output_args_video_encode_for_mobile(
                         video_path, video_dims=video_dims
@@ -231,6 +229,10 @@ def _expect_transcode_calls(
                         video_path, video_dims=video_dims
                     )
                 },
+            ),
+            call(
+                inputs={video_path: None},
+                outputs={expected_audio_path: output_args_video_to_audio()},
             ),
         ],
     )
@@ -364,9 +366,11 @@ def test_processes_mentor_answer(
             ex.mentor, ex.question, ex.transcript_fake, ex.timestamp
         )
         mock_s3 = mock_s3_client(mock_boto3_client)
-        from mentor_upload_process.process import process_answer_video
+        from mentor_upload_process.process import (
+            upload_transcribe_transcode_answer_video,
+        )
 
-        assert process_answer_video(req, "fake_task_id") == {
+        assert upload_transcribe_transcode_answer_video(req, "fake_task_id") == {
             "mentor": ex.mentor,
             "question": ex.question,
             "trim": ex.trim,
@@ -435,16 +439,6 @@ def test_processes_mentor_answer(
                 _mock_gql_status_update(
                     ex.mentor, ex.question, "fake_task_id", upload_flag="DONE"
                 ),
-                # finalization
-                _mock_gql_status_update(
-                    ex.mentor,
-                    ex.question,
-                    "fake_task_id",
-                    status="DONE",
-                    transcript=ex.transcript_fake,
-                    timestamp=ex.timestamp,
-                ),
-                expected_update_answer_gql_query,
             ]
         )
         expected_upload_file_calls = [
@@ -476,13 +470,68 @@ def test_processes_mentor_answer(
         mock_s3.upload_file.assert_has_calls(expected_upload_file_calls)
 
 
+@responses.activate
+def test_finalization_stage():
+    req = {"mentor": "m1", "question": "q1"}
+    task_id = "t1"
+    dict1 = {"video_path": "video1.mp4"}
+    dict2 = {
+        "media": [
+            {"type": "video", "tag": "mobile", "url": "mobile.mp4"},
+            {"type": "video", "tag": "web", "url": "web.mp4"},
+        ],
+        "transcript": "Hello, world!",
+    }
+    timestamp = "20120114T032134Z"
+    expected_update_answer_gql_query, expected_media = _mock_gql_answer_update(
+        req["mentor"],
+        req["question"],
+        dict2["transcript"],
+        timestamp,
+        media=dict2["media"],
+    )
+
+    from mentor_upload_process.process import finalization_stage
+
+    assert finalization_stage(req, task_id, dict1, dict2) == {
+        "mentor": req["mentor"],
+        "question": req["question"],
+        "video_path": "video1.mp4",
+        "transcript": dict2["transcript"],
+        "media": dict2["media"],
+    }
+
+    _expect_gql(
+        [
+            _mock_gql_status_update(
+                req["mentor"],
+                req["question"],
+                task_id,
+                finalization_flag="IN_PROGRESS",
+            ),
+            expected_update_answer_gql_query,
+            _mock_gql_status_update(
+                req["mentor"],
+                req["question"],
+                task_id,
+                finalization_flag="DONE",
+                transcript=dict2["transcript"],
+                media=dict2["media"],
+                timestamp=timestamp,
+            ),
+        ]
+    )
+
+
 def test_raises_if_video_path_not_specified():
     req = {"mentor": "m1", "question": "q1"}
     caught_exception = None
     try:
-        from mentor_upload_process.process import process_answer_video
+        from mentor_upload_process.process import (
+            upload_transcribe_transcode_answer_video,
+        )
 
-        process_answer_video(req, "fake_task_id")
+        upload_transcribe_transcode_answer_video(req, "fake_task_id")
     except Exception as err:
         caught_exception = err
     assert caught_exception is not None
@@ -493,9 +542,11 @@ def test_raises_if_video_not_found_for_path():
     req = {"mentor": "m1", "question": "q1", "video_path": "not_exists.mp4"}
     caught_exception = None
     try:
-        from mentor_upload_process.process import process_answer_video
+        from mentor_upload_process.process import (
+            upload_transcribe_transcode_answer_video,
+        )
 
-        process_answer_video(req, "fake_task_id")
+        upload_transcribe_transcode_answer_video(req, "fake_task_id")
     except Exception as err:
         caught_exception = err
     assert caught_exception is not None

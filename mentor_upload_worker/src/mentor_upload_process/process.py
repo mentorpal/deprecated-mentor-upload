@@ -122,7 +122,7 @@ def is_idle_question(question_id: str) -> bool:
 # def stage_one():
 
 
-def process_answer_video(
+def upload_transcribe_transcode_answer_video(
     req: ProcessAnswerRequest, task_id: str
 ) -> ProcessAnswerResponse:
     video_path = req.get("video_path", "")
@@ -177,7 +177,6 @@ def process_answer_video(
                     transcoding_flag="IN_PROGRESS",
                 )
             )
-            audio_file = video_to_audio(video_file)
             video_mobile_file = work_dir / "mobile.mp4"
             video_encode_for_mobile(video_file, video_mobile_file)
             media_uploads.append(
@@ -199,6 +198,7 @@ def process_answer_video(
             # END: transcoding
 
             # START: transcribe
+            audio_file = video_to_audio(video_file)
             transcript = ""
             if not is_idle:
                 update_status(
@@ -279,23 +279,6 @@ def process_answer_video(
                 )
             )
             # END: upload
-
-            # START: finalization
-            update_status(
-                StatusUpdateRequest(
-                    mentor=mentor,
-                    question=question,
-                    task_id=task_id,
-                    status="DONE",  # when admin sees a DONE status, it requests that it gets removed from DB
-                    transcript=transcript,
-                    media=media,
-                )
-            )
-            update_answer(
-                AnswerUpdateRequest(
-                    mentor=mentor, question=question, transcript=transcript, media=media
-                )
-            )
             static_url_base = environ.get("STATIC_URL_BASE", "")
             return ProcessAnswerResponse(
                 **req,
@@ -310,34 +293,89 @@ def process_answer_video(
                     )
                 ),
             )
-            # END: finalization
         except Exception as x:
             import logging
 
             logging.exception(x)
-            update_status(
-                StatusUpdateRequest(
-                    mentor=mentor,
-                    question=question,
-                    task_id=task_id,
-                    status="UPLOAD_FAILED",
-                    transcript="",
-                    media=[],
-                )
-            )
-        finally:
-            try:
-                #  We are deleting the uploaded video file from a shared network mount here
-                #  We generally do want to clean these up, but maybe should have a flag
-                # in the job request like "disable_delete_file_on_complete" (default False)
-                remove(video_path_full)
-            except Exception as x:
-                import logging
+            # should log that finalization failed, or whichever task this is
 
-                logging.error(
-                    f"failed to delete uploaded video file '{video_path_full}'"
-                )
-                logging.exception(x)
+
+# START: finalization, will get mentor, question from req param, task_id gets passed in from called, needs video_path_full, transcript, and media from child tasks
+def finalization_stage(req: ProcessAnswerRequest, task_id: str, *dict_tuple: dict):
+    # extract params from children tasks which get passed up as dicts
+    params = {}
+    print(dict_tuple)
+    for dic in dict_tuple:
+        if "video_path" in dic:
+            params["video_path"] = dic["video_path"]
+        if "transcript" in dic:
+            params["transcript"] = dic["transcript"]
+        if "media" in dic:
+            params["media"] = dic["media"]
+    if "media" not in params:
+        raise Exception("Missing media param in finalization stage")
+    if "transcript" not in params:
+        raise Exception("Missing transcript param in finalization stage")
+    if "video_path" not in params:
+        raise Exception("Missing video_path param in finalization stage")
+
+    try:
+        mentor = req.get("mentor")
+        question = req.get("question")
+        video_path_full = upload_path(params["video_path"])
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                finalization_flag="IN_PROGRESS",
+            )
+        )
+
+        transcript = params["transcript"]
+        media = params["media"]
+
+        update_answer(
+            AnswerUpdateRequest(
+                mentor=mentor, question=question, transcript=transcript, media=media
+            )
+        )
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                finalization_flag="DONE",
+                transcript=transcript,
+                media=media,
+            )
+        )
+        return ProcessAnswerResponse(**req, **params)
+        # END: finalization
+    except Exception as x:
+        import logging
+
+        logging.exception(x)
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                finalization_flag="FAILED",
+            )
+        )
+    finally:
+        video_path_full = video_path_full
+        try:
+            #  We are deleting the uploaded video file from a shared network mount here
+            #  We generally do want to clean these up, but maybe should have a flag
+            # in the job request like "disable_delete_file_on_complete" (default False)
+            remove(video_path_full)
+        except Exception as x:
+            import logging
+
+            logging.error(f"failed to delete uploaded video file '{video_path_full}'")
+            logging.exception(x)
 
 
 def process_transfer_video(req: ProcessTransferRequest, task_id: str):

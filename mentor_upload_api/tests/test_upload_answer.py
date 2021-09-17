@@ -67,39 +67,67 @@ def python_path_env(monkeypatch, tmpdir):
 
 
 @pytest.mark.parametrize(
-    "upload_domain,input_mentor,input_question,input_video,fake_task_id",
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_upload_transcribe_transcode_task_id",
     [
-        ("https://mentor.org", "mentor1", "q1", "video.mp4", "fake_task_id_1"),
-        ("http://a.diff.org", "mentor2", "q2", "video.mp4", "fake_task_id_2"),
+        (
+            "https://mentor.org",
+            "mentor1",
+            "q1",
+            "video.mp4",
+            "fake_finalization_task_id",
+            "fake_upload_transcribe_transcode_task_id",
+        ),
+        (
+            "http://a.diff.org",
+            "mentor2",
+            "q2",
+            "video.mp4",
+            "fake_finalization_task_id_2",
+            "fake_upload_transcribe_transcode_task_id_2",
+        ),
     ],
 )
 @responses.activate
-@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch("mentor_upload_api.blueprints.upload.answer.chord")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
+@patch("mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video")
 @patch.object(uuid, "uuid4")
 def test_upload(
     mock_uuid,
-    mock_upload_task,
+    upload_transcribe_transcode_stage_task,
+    finalization_stage_task,
+    mock_chord,
     tmpdir,
     upload_domain,
     input_mentor,
     input_question,
     input_video,
-    fake_task_id,
+    fake_finalization_task_id,
+    fake_upload_transcribe_transcode_task_id,
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
-    mock_task = Bunch(id=fake_task_id)
-    mock_upload_task.apply_async.return_value = mock_task
+    # mocking the result of the chord
+    mock_chord_result = Bunch(
+        parent=Bunch(subtasks=[Bunch(id=fake_upload_transcribe_transcode_task_id)]),
+        id=fake_finalization_task_id,
+    )
+    mock_chord()().get.return_value = mock_chord_result
+    fake_task_id_collection = [
+        fake_upload_transcribe_transcode_task_id,
+        fake_finalization_task_id,
+    ]
     expected_status_update_query = _mock_gql_status_update(
         mentor=input_mentor,
         question=input_question,
-        task_id=fake_task_id,
+        task_id=fake_task_id_collection,
         status="QUEUING",
         upload_flag="QUEUED",
         transcoding_flag="QUEUED",
         finalization_flag="QUEUED",
         transcribing_flag="QUEUED",
     )
+    # sends the request to trigger upload()
     res = client.post(
         f"{upload_domain}/upload/answer",
         data={
@@ -111,8 +139,8 @@ def test_upload(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_task_id,
-            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id}",
+            "id": fake_task_id_collection,
+            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
         }
     }
     root_ext = path.splitext(input_video)
@@ -122,52 +150,84 @@ def test_upload(
         )
     )
 
+    finalization_stage_task.apply_async.assert_called()
+    upload_transcribe_transcode_stage_task.apply_async.asser_called()
+    # args, kwargs = mock_upload_task.call_args
+    assert (
+        finalization_stage_task.apply_async.call_args.kwargs.get("queue")
+        == "finalization"
+    )
+    assert (
+        upload_transcribe_transcode_stage_task.apply_async.call_args.kwargs.get("queue")
+        == "upload_transcribe_transcode"
+    )
+    # raise Exception(mock_upload_task.apply_async.call_args.kwargs.get('queue'))
+
 
 @pytest.mark.parametrize(
-    "upload_domain,input_mentor,input_question,input_video,fake_task_id,fake_cancel_task_id",
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_upload_transcribe_transcode_task_id,fake_cancel_finalization_task_id,fake_cancel_upload_transcribe_transcode_task_id",
     [
         (
             "https://mentor.org",
             "mentor1",
             "q1",
             "video.mp4",
-            "fake_task_id_1",
-            "fake_cancel_task_id_1",
+            "fake_finalization_task_id",
+            "fake_upload_transcribe_transcode_task_id",
+            "fake_cancel_finalization_task_id",
+            "fake_cancel_upload_transcribe_transcode_task_id",
         ),
         (
             "http://a.diff.org",
             "mentor2",
             "q2",
             "video.mp4",
-            "fake_task_id_2",
-            "fake_cancel_task_id_2",
+            "fake_finalization_task_id_2",
+            "fake_upload_transcribe_transcode_task_id_2",
+            "fake_cancel_finalization_task_id_2",
+            "fake_cancel_upload_transcribe_transcode_task_id_2",
         ),
     ],
 )
 @responses.activate
+@patch("mentor_upload_api.blueprints.upload.answer.chord")
 @patch("mentor_upload_tasks.tasks.cancel_task")
-@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
+@patch("mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video")
 @patch.object(uuid, "uuid4")
 def test_cancel(
     mock_uuid,
     mock_upload_task,
+    mock_finalzation_stage_task,
     mock_cancel_task,
+    mock_chord,
     tmpdir,
     upload_domain,
     input_mentor,
     input_question,
     input_video,
-    fake_task_id,
-    fake_cancel_task_id,
+    fake_finalization_task_id,
+    fake_upload_transcribe_transcode_task_id,
+    fake_cancel_finalization_task_id,
+    fake_cancel_upload_transcribe_transcode_task_id,
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
-    mock_task = Bunch(id=fake_task_id)
-    mock_upload_task.apply_async.return_value = mock_task
+
+    # mocking the result of the chord
+    mock_chord_result = Bunch(
+        parent=Bunch(subtasks=[Bunch(id=fake_upload_transcribe_transcode_task_id)]),
+        id=fake_finalization_task_id,
+    )
+    mock_chord()().get.return_value = mock_chord_result
+    fake_task_id_collection = [
+        fake_upload_transcribe_transcode_task_id,
+        fake_finalization_task_id,
+    ]
     expected_status_update_query = _mock_gql_status_update(
         mentor=input_mentor,
         question=input_question,
-        task_id=fake_task_id,
+        task_id=fake_task_id_collection,
         status="QUEUING",
         upload_flag="QUEUED",
         transcoding_flag="QUEUED",
@@ -185,25 +245,26 @@ def test_cancel(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_task_id,
-            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id}",
+            "id": fake_task_id_collection,
+            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
         }
     }
-    mock_cancel_task_id = Bunch(id=fake_cancel_task_id)
+    # TODO: update the cancellation method that this sends to so that it can take a list of ID's to cancel instead of one
+    mock_cancel_task_id = Bunch(id=fake_cancel_finalization_task_id)
     mock_cancel_task.apply_async.return_value = mock_cancel_task_id
     res = client.post(
         f"{upload_domain}/upload/answer/cancel",
         json={
             "mentor": input_mentor,
             "question": input_question,
-            "task": fake_task_id,
+            "task": fake_finalization_task_id,
         },
     )
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_cancel_task_id,
-            "cancelledId": fake_task_id,
+            "id": fake_cancel_finalization_task_id,
+            "cancelledId": fake_finalization_task_id,
         }
     }
 
@@ -223,27 +284,40 @@ def test_cancel(
     ],
 )
 @responses.activate
-@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch("mentor_upload_api.blueprints.upload.answer.chord")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
+@patch("mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video")
 def test_env_fixes_ssl_status_url(
     mock_upload_task: Mock,
+    mock_finalization_stage_task: Mock,
+    mock_chord,
     request_root: str,
     env_val: str,
     expected_status_url_root: str,
     monkeypatch,
     client,
 ):
-    fake_task_id = "fake_task_id"
+    fake_finalization_task_id = "fake_finalization_task_id"
+    fake_upload_transcribe_transcode_task_id = (
+        "fake_upload_transcribe_transcode_task_id"
+    )
     fake_mentor_id = "mentor1"
     fake_question_id = "question1"
     fake_video = open(path.join(fixture_path("input_videos"), "video.mp4"), "rb")
     if env_val is not None:
         monkeypatch.setenv("STATUS_URL_FORCE_HTTPS", env_val)
-    mock_task = Bunch(id=fake_task_id)
-    mock_upload_task.apply_async.return_value = mock_task
+
+    # mocking the result of the chord
+    mock_chord_result = Bunch(
+        parent=Bunch(subtasks=[Bunch(id=fake_upload_transcribe_transcode_task_id)]),
+        id=fake_finalization_task_id,
+    )
+    mock_chord()().get.return_value = mock_chord_result
+
     expected_status_update_query = _mock_gql_status_update(
         mentor=fake_mentor_id,
         question=fake_question_id,
-        task_id=fake_task_id,
+        task_id=[fake_upload_transcribe_transcode_task_id, fake_finalization_task_id],
         status="QUEUING",
         upload_flag="QUEUED",
         transcoding_flag="QUEUED",
@@ -263,8 +337,8 @@ def test_env_fixes_ssl_status_url(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_task_id,
-            "statusUrl": f"{expected_status_url_root}/upload/answer/status/fake_task_id",
+            "id": [fake_upload_transcribe_transcode_task_id, fake_finalization_task_id],
+            "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_upload_transcribe_transcode_task_id, fake_finalization_task_id]}",
         }
     }
 
@@ -284,9 +358,17 @@ def test_env_fixes_ssl_status_url(
         ),
     ],
 )
-@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
+@patch("mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video")
 def test_it_returns_status_for_a_upload_job(
-    mock_upload_task, task_id, state, status, info, expected_info, client
+    mock_upload_task,
+    mock_finalization_stage_task,
+    task_id,
+    state,
+    status,
+    info,
+    expected_info,
+    client,
 ):
     mock_task = Bunch(id=task_id, state=state, status=status, info=info)
     mock_upload_task.AsyncResult.return_value = mock_task

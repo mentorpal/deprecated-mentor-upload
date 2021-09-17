@@ -10,6 +10,8 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
+from celery import chord
+
 from mentor_upload_api.api import (
     StatusUpdateRequest,
     update_status,
@@ -50,14 +52,51 @@ def upload():
         "video_path": file_name,
         "trim": trim,
     }
-    t = mentor_upload_tasks.tasks.process_answer_video.apply_async(
-        queue=mentor_upload_tasks.get_queue_uploads(), args=[req]
-    )
+
+    my_chord = chord(
+        mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.apply_async(
+            queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage(),
+            args=[req],
+        )
+    )(
+        mentor_upload_tasks.tasks.finalization_stage.apply_async(
+            queue=mentor_upload_tasks.get_queue_finalization_stage(),
+            args=[req],
+        )
+    ).get()
+
+    # stage_one = (
+    #     mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.apply_async(
+    #         queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage(),
+    #         args=[req],
+    #     )
+    # )
+
+    # chord()
+
+    # task_group = [
+    #     mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.s(
+    #         queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage(),
+    #         args=[req],
+    #     )
+    # ]
+
+    # callback_task = mentor_upload_tasks.tasks.finalization_stage.s(
+    #     queue=mentor_upload_tasks.get_queue_finalization_stage(), args=[req]
+    # )
+
+    # task_chord = chord(task_group)(callback_task)
+
+    task_ids = []
+    for task in my_chord.parent.subtasks:
+        task_ids.append(task.id)
+    task_ids.append(my_chord.id)
+
     update_status(
         StatusUpdateRequest(
             mentor=mentor,
             question=question,
-            task_id=t.id,
+            task_id=task_ids,
             status="QUEUING",
             upload_flag="QUEUED",
             transcoding_flag="QUEUED",
@@ -70,8 +109,8 @@ def upload():
     return jsonify(
         {
             "data": {
-                "id": t.id,
-                "statusUrl": _to_status_url(request.url_root, t.id),
+                "id": task_ids,
+                "statusUrl": _to_status_url(request.url_root, task_ids),
             }
         }
     )
@@ -88,7 +127,8 @@ def cancel():
     task_id = body.get("task")
     req = {"mentor": mentor, "question": question, "task_id": task_id}
     t = mentor_upload_tasks.tasks.cancel_task.apply_async(
-        queue=mentor_upload_tasks.get_queue_uploads(), args=[req]
+        queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage(),
+        args=[req],
     )
     return jsonify({"data": {"id": t.id, "cancelledId": task_id}})
 
@@ -96,7 +136,9 @@ def cancel():
 @answer_blueprint.route("/status/<task_id>/", methods=["GET"])
 @answer_blueprint.route("/status/<task_id>", methods=["GET"])
 def upload_status(task_id: str):
-    t = mentor_upload_tasks.tasks.process_answer_video.AsyncResult(task_id)
+    t = mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.AsyncResult(
+        task_id
+    )
     return jsonify(
         {
             "data": {
