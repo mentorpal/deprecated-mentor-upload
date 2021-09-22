@@ -30,7 +30,31 @@ def get_upload_root() -> str:
     return environ.get("UPLOAD_ROOT") or "./uploads"
 
 
-# TODO: puts task in queue
+def begin_tasks_in_parallel(req):
+    return chord(
+        [
+            mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.s(
+                req
+            ).set(
+                queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage()
+            )
+        ]
+    )(
+        mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(
+            queue=mentor_upload_tasks.get_queue_finalization_stage()
+        )
+    )
+
+
+# parallelGroup = (Task2 ,Task3)
+# parallelGroup.link(Task4)
+# (Task1 | parallelGroup)
+
+
+# chord( chord(Task1)(Task2 + Task3) )(Task4)
+# Task4.apply_async( callback=[chord(Task1)(Task2 + Task3)])
+
+
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
 def upload():
@@ -53,45 +77,13 @@ def upload():
         "trim": trim,
     }
 
-    my_chord = chord(
-        mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.apply_async(
-            queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage(),
-            args=[req],
-        )
-    )(
-        mentor_upload_tasks.tasks.finalization_stage.apply_async(
-            queue=mentor_upload_tasks.get_queue_finalization_stage(),
-            args=[req],
-        )
-    ).get()
-
-    # stage_one = (
-    #     mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.apply_async(
-    #         queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage(),
-    #         args=[req],
-    #     )
-    # )
-
-    # chord()
-
-    # task_group = [
-    #     mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.s(
-    #         queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage(),
-    #         args=[req],
-    #     )
-    # ]
-
-    # callback_task = mentor_upload_tasks.tasks.finalization_stage.s(
-    #     queue=mentor_upload_tasks.get_queue_finalization_stage(), args=[req]
-    # )
-
-    # task_chord = chord(task_group)(callback_task)
-
+    # because I moved this to its own function, will have to test
+    my_chord = begin_tasks_in_parallel(req)
     task_ids = []
-    for task in my_chord.parent.subtasks:
+    for task in my_chord.parent.children:
         task_ids.append(task.id)
     task_ids.append(my_chord.id)
-
+    # raise Exception(my_chord.id)
     update_status(
         StatusUpdateRequest(
             mentor=mentor,

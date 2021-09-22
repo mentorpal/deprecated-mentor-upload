@@ -74,7 +74,7 @@ def upload_transcribe_transcode_answer_video(req: ProcessAnswerRequest):
 
 
 @celery.task()
-def finalization_stage(req: ProcessAnswerRequest):
+def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest):
     pass
 
 

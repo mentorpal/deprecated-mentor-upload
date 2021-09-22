@@ -493,7 +493,7 @@ def test_finalization_stage():
 
     from mentor_upload_process.process import finalization_stage
 
-    assert finalization_stage(req, task_id, dict1, dict2) == {
+    assert finalization_stage((dict1, dict2), req, task_id) == {
         "mentor": req["mentor"],
         "question": req["question"],
         "video_path": "video1.mp4",

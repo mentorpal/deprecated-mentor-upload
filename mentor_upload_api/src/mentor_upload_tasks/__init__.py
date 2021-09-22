@@ -9,11 +9,18 @@ from typing import TypedDict
 
 
 def get_queue_finalization_stage() -> str:
-    return environ.get("UPLOAD_QUEUE_NAME") or "finalization"
+    return environ.get("FINALIZATION_QUEUE_NAME") or "finalization"
 
 
 def get_queue_upload_transcribe_transcode_stage() -> str:
-    return environ.get("FIRST_STAGE_QUEUE_NAME") or "upload_transcribe_transcode"
+    return (
+        environ.get("UPLOAD_TRANSCRIBE_TRANSCODE_QUEUE_NAME")
+        or "upload_transcribe_transcode"
+    )
+
+
+def get_queue_init_stage() -> str:
+    return environ.get("INIT_QUEUE_NAME") or "init"
 
 
 class TrimRequest(TypedDict):

@@ -23,11 +23,14 @@ from mentor_upload_process import (  # NOQA
 
 
 def get_queue_finalization_stage() -> str:
-    return os.environ.get("UPLOAD_QUEUE_NAME") or "finalization"
+    return os.environ.get("FINALIZATION_QUEUE_NAME") or "finalization"
 
 
 def get_queue_upload_transcribe_transcode_stage() -> str:
-    return os.environ.get("FIRST_STAGE_QUEUE_NAME") or "upload_transcribe_transcode"
+    return (
+        os.environ.get("UPLOAD_TRANSCRIBE_TRANSCODE_QUEUE_NAME")
+        or "upload_transcribe_transcode"
+    )
 
 
 broker_url = (
@@ -90,9 +93,11 @@ def upload_transcribe_transcode_answer_video(
 
 
 @celery.task()
-def finalization_stage(req: ProcessAnswerRequest) -> ProcessAnswerResponse:
+def finalization_stage(
+    dict_tuple: dict, req: ProcessAnswerRequest
+) -> ProcessAnswerResponse:
     task_id = finalization_stage.request.id
-    return process.finalization_stage(req, task_id)
+    return process.finalization_stage(dict_tuple, req=req, task_id=task_id)
 
 
 @celery.task()

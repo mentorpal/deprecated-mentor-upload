@@ -125,6 +125,8 @@ def is_idle_question(question_id: str) -> bool:
 def upload_transcribe_transcode_answer_video(
     req: ProcessAnswerRequest, task_id: str
 ) -> ProcessAnswerResponse:
+    print("req in upload_transcribe_transcode_answer_video: ")
+    print(req)
     video_path = req.get("video_path", "")
     if not video_path:
         raise Exception("missing required param 'video_path'")
@@ -301,9 +303,16 @@ def upload_transcribe_transcode_answer_video(
 
 
 # START: finalization, will get mentor, question from req param, task_id gets passed in from called, needs video_path_full, transcript, and media from child tasks
-def finalization_stage(req: ProcessAnswerRequest, task_id: str, *dict_tuple: dict):
+def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
     # extract params from children tasks which get passed up as dicts
-    params = {}
+    print("req in finalization_stage: ")
+    print(req)
+    print("task_id in finalization_stage: ")
+    print(task_id)
+    params = req
+    print("params before processing: ")
+    print(params)
+    print("dict_tuple in finalization_stage: ")
     print(dict_tuple)
     for dic in dict_tuple:
         if "video_path" in dic:
@@ -318,10 +327,11 @@ def finalization_stage(req: ProcessAnswerRequest, task_id: str, *dict_tuple: dic
         raise Exception("Missing transcript param in finalization stage")
     if "video_path" not in params:
         raise Exception("Missing video_path param in finalization stage")
-
+    print("params after processing: ")
+    print(params)
     try:
-        mentor = req.get("mentor")
-        question = req.get("question")
+        mentor = params.get("mentor")
+        question = params.get("question")
         video_path_full = upload_path(params["video_path"])
         update_status(
             StatusUpdateRequest(
@@ -350,7 +360,7 @@ def finalization_stage(req: ProcessAnswerRequest, task_id: str, *dict_tuple: dic
                 media=media,
             )
         )
-        return ProcessAnswerResponse(**req, **params)
+        return ProcessAnswerResponse(**params)
         # END: finalization
     except Exception as x:
         import logging
