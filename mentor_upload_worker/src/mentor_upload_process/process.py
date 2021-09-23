@@ -6,6 +6,8 @@
 #
 from contextlib import contextmanager
 from datetime import datetime
+
+# from mentor_upload_api.src.mentor_upload_api.blueprints.upload.answer import upload
 from os import environ, path, makedirs, remove
 from pathlib import Path
 from tempfile import mkdtemp
@@ -119,7 +121,200 @@ def is_idle_question(question_id: str) -> bool:
     return name == "_IDLE_"
 
 
-# def stage_one():
+def init_stage(req: ProcessAnswerRequest, task_id: str):
+    video_path = req.get("video_path", "")
+    if not video_path:
+        raise Exception("missing required param 'video_path'")
+    video_path_full = upload_path(video_path)
+    if not path.isfile(video_path_full):
+        raise Exception(f"video not found for path '{video_path}'")
+    with _video_work_dir(video_path_full) as context:
+        try:
+            print("in init stage")
+            mentor = req.get("mentor")
+            question = req.get("question")
+            trim = req.get("trim", None)
+            video_file, work_dir = context
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    upload_flag="IN_PROGRESS",
+                )
+            )
+            if trim:
+                trim_file = work_dir / "trim.mp4"
+                video_trim(video_file, trim_file, trim.get("start"), trim.get("end"))
+                from shutil import copyfile
+
+                copyfile(trim_file, video_file)
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    upload_flag="DONE",
+                )
+            )
+            print("finish init stage, transcode and transcribe should now start")
+        except Exception as x:
+            import logging
+
+            logging.exception(x)
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    upload_flag="FAILED",
+                )
+            )
+
+
+def transcode_stage(req: ProcessAnswerRequest, task_id: str):
+    video_path = req.get("video_path", "")
+    if not video_path:
+        raise Exception("missing required param 'video_path'")
+    video_path_full = upload_path(video_path)
+    if not path.isfile(video_path_full):
+        raise Exception(f"video not found for path '{video_path}'")
+    with _video_work_dir(video_path_full) as context:
+        try:
+            print("in transcode stage")
+            mentor = req.get("mentor")
+            question = req.get("question")
+            video_file, work_dir = context
+            MediaUpload = Tuple[  # noqa: N806
+                str, str, str, str, str
+            ]  # media_type, tag, file_name, content_type, file
+            media_uploads: List[MediaUpload] = []
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    transcoding_flag="IN_PROGRESS",
+                )
+            )
+            video_mobile_file = work_dir / "mobile.mp4"
+            video_encode_for_mobile(video_file, video_mobile_file)
+            media_uploads.append(
+                ("video", "mobile", "mobile.mp4", "video/mp4", video_mobile_file)
+            )
+            video_web_file = work_dir / "web.mp4"
+            video_encode_for_web(video_file, video_web_file)
+            media_uploads.append(
+                ("video", "web", "web.mp4", "video/mp4", video_web_file)
+            )
+
+            media = []
+            s3 = _create_s3_client()
+            s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
+            video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
+            for media_type, tag, file_name, content_type, file in media_uploads:
+                if path.isfile(file):
+                    item_path = f"{video_path_base}{file_name}"
+                    media.append(
+                        {
+                            "type": media_type,
+                            "tag": tag,
+                            "url": item_path,
+                        }
+                    )
+                    s3.upload_file(
+                        str(file),
+                        s3_bucket,
+                        item_path,
+                        ExtraArgs={"ContentType": content_type},
+                    )
+                else:
+                    import logging
+
+                    logging.error(f"Failed to find file at {file}")
+
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    transcoding_flag="DONE",
+                )
+            )
+            print("finish transcode stage, returning: ")
+            print({"media": media, "video_path": video_path})
+            # return media for finalization stage to upload
+            return {"media": media, "video_path": video_path}
+        except Exception as x:
+            import logging
+
+            logging.exception(x)
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    transcoding_flag="FAILED",
+                )
+            )
+
+
+def transcribe_stage(req: ProcessAnswerRequest, task_id: str):
+    video_path = req.get("video_path", "")
+    if not video_path:
+        raise Exception("missing required param 'video_path'")
+    video_path_full = upload_path(video_path)
+    if not path.isfile(video_path_full):
+        raise Exception(f"video not found for path '{video_path}'")
+    with _video_work_dir(video_path_full) as context:
+        try:
+            print("in transcribe stage")
+            mentor = req.get("mentor")
+            question = req.get("question")
+            is_idle = is_idle_question(question)
+            video_file, work_dir = context
+            audio_file = video_to_audio(video_file)
+            transcript = ""
+            if not is_idle:
+                update_status(
+                    StatusUpdateRequest(
+                        mentor=mentor,
+                        question=question,
+                        task_id=task_id,
+                        transcribing_flag="IN_PROGRESS",
+                    )
+                )
+                transcription_service = transcribe.init_transcription_service()
+                transcribe_result = transcription_service.transcribe(
+                    [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
+                )
+                job_result = transcribe_result.first()
+                transcript = job_result.transcript if job_result else ""
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    transcribing_flag="DONE",
+                )
+            )
+            # returns transcript for finalization stage to upload
+            print("finish transcribe stage, returning:")
+            print({"transcript": transcript})
+            return {"transcript": transcript}
+        except Exception as x:
+            import logging
+
+            logging.exception(x)
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    transcribing_flag="FAILED",
+                )
+            )
+    pass
 
 
 def upload_transcribe_transcode_answer_video(
@@ -140,6 +335,7 @@ def upload_transcribe_transcode_answer_video(
             trim = req.get("trim", None)
             is_idle = is_idle_question(question)
             video_file, work_dir = context
+
             if trim:
                 update_status(
                     StatusUpdateRequest(
@@ -155,6 +351,7 @@ def upload_transcribe_transcode_answer_video(
 
                 copyfile(trim_file, video_file)
             # NEW: change blanket status to processing once trimming is complete
+
             update_status(
                 StatusUpdateRequest(
                     mentor=mentor,
@@ -302,25 +499,26 @@ def upload_transcribe_transcode_answer_video(
             # should log that finalization failed, or whichever task this is
 
 
-# START: finalization, will get mentor, question from req param, task_id gets passed in from called, needs video_path_full, transcript, and media from child tasks
 def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
     # extract params from children tasks which get passed up as dicts
+    print("dict_tuple in finalization_stage: ")
+    print(dict_tuple)
     print("req in finalization_stage: ")
     print(req)
     print("task_id in finalization_stage: ")
     print(task_id)
     params = req
+    params["media"] = []
     print("params before processing: ")
     print(params)
-    print("dict_tuple in finalization_stage: ")
-    print(dict_tuple)
     for dic in dict_tuple:
         if "video_path" in dic:
             params["video_path"] = dic["video_path"]
         if "transcript" in dic:
             params["transcript"] = dic["transcript"]
         if "media" in dic:
-            params["media"] = dic["media"]
+            for media in dic["media"]:
+                params["media"].append(media)
     if "media" not in params:
         raise Exception("Missing media param in finalization stage")
     if "transcript" not in params:
@@ -341,6 +539,8 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
                 finalization_flag="IN_PROGRESS",
             )
         )
+
+        # TODO: create VTT + uploads it to S3
 
         transcript = params["transcript"]
         media = params["media"]

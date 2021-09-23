@@ -14,7 +14,9 @@ from . import (
     ProcessAnswerRequest,
     ProcessTransferRequest,
     get_queue_finalization_stage,
-    get_queue_upload_transcribe_transcode_stage,
+    get_queue_transcribe_stage,
+    get_queue_init_stage,
+    get_queue_transcode_stage,
 )
 
 broker_url = (
@@ -39,25 +41,49 @@ celery.conf.update(
         "task_default_routing_key": get_queue_finalization_stage(),
         "task_queues": [
             Queue(
+                get_queue_init_stage(),
+                exchange=Exchange(
+                    get_queue_init_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_init_stage(),
+            ),
+            Queue(
+                get_queue_transcode_stage(),
+                exchange=Exchange(
+                    get_queue_transcode_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_transcode_stage(),
+            ),
+            Queue(
+                get_queue_transcribe_stage(),
+                exchange=Exchange(
+                    get_queue_transcribe_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_transcribe_stage(),
+            ),
+            Queue(
                 get_queue_finalization_stage(),
                 exchange=Exchange(
                     get_queue_finalization_stage(), "direct", durable=True
                 ),
                 routing_key=get_queue_finalization_stage(),
             ),
-            Queue(
-                get_queue_upload_transcribe_transcode_stage(),
-                exchange=Exchange(
-                    get_queue_upload_transcribe_transcode_stage(),
-                    "direct",
-                    durable=True,
-                ),
-                routing_key=get_queue_upload_transcribe_transcode_stage(),
-            ),
         ],
         "task_routes": {
-            "mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video": {
-                "queue": get_queue_upload_transcribe_transcode_stage()
+            "mentor_upload_tasks.tasks.init_stage": {
+                "queue": get_queue_transcribe_stage()
+            },
+            "mentor_upload_tasks.tasks.transcribe_stage": {
+                "queue": get_queue_transcribe_stage()
+            },
+            "mentor_upload_tasks.tasks.transcode_stage": {
+                "queue": get_queue_transcode_stage()
             },
             "mentor_upload_tasks.tasks.finalization_stage": {
                 "queue": get_queue_finalization_stage()
@@ -68,8 +94,29 @@ celery.conf.update(
 )
 
 
+# @celery.task()
+# def upload_transcribe_transcode_answer_video(req: ProcessAnswerRequest):
+#     pass
+
+
 @celery.task()
-def upload_transcribe_transcode_answer_video(req: ProcessAnswerRequest):
+def init_stage(
+    req: ProcessAnswerRequest,
+):
+    pass
+
+
+@celery.task()
+def transcode_stage(
+    req: ProcessAnswerRequest,
+):
+    pass
+
+
+@celery.task()
+def transcribe_stage(
+    req: ProcessAnswerRequest,
+):
     pass
 
 

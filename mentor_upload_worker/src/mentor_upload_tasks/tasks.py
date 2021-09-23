@@ -22,15 +22,20 @@ from mentor_upload_process import (  # NOQA
 )
 
 
+def get_queue_init_stage() -> str:
+    return os.environ.get("INIT_QUEUE_NAME") or "init"
+
+
+def get_queue_transcribe_stage() -> str:
+    return os.environ.get("TRANSCRIBE_QUEUE_NAME") or "transcribe"
+
+
+def get_queue_transcode_stage() -> str:
+    return os.environ.get("TRANSCODE_QUEUE_NAME") or "transcode"
+
+
 def get_queue_finalization_stage() -> str:
     return os.environ.get("FINALIZATION_QUEUE_NAME") or "finalization"
-
-
-def get_queue_upload_transcribe_transcode_stage() -> str:
-    return (
-        os.environ.get("UPLOAD_TRANSCRIBE_TRANSCODE_QUEUE_NAME")
-        or "upload_transcribe_transcode"
-    )
 
 
 broker_url = (
@@ -55,25 +60,49 @@ celery.conf.update(
         "task_default_routing_key": get_queue_finalization_stage(),
         "task_queues": [
             Queue(
+                get_queue_init_stage(),
+                exchange=Exchange(
+                    get_queue_init_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_init_stage(),
+            ),
+            Queue(
+                get_queue_transcode_stage(),
+                exchange=Exchange(
+                    get_queue_transcode_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_transcode_stage(),
+            ),
+            Queue(
+                get_queue_transcribe_stage(),
+                exchange=Exchange(
+                    get_queue_transcribe_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_transcribe_stage(),
+            ),
+            Queue(
                 get_queue_finalization_stage(),
                 exchange=Exchange(
                     get_queue_finalization_stage(), "direct", durable=True
                 ),
                 routing_key=get_queue_finalization_stage(),
             ),
-            Queue(
-                get_queue_upload_transcribe_transcode_stage(),
-                exchange=Exchange(
-                    get_queue_upload_transcribe_transcode_stage(),
-                    "direct",
-                    durable=True,
-                ),
-                routing_key=get_queue_upload_transcribe_transcode_stage(),
-            ),
         ],
         "task_routes": {
-            "mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video": {
-                "queue": get_queue_upload_transcribe_transcode_stage()
+            "mentor_upload_tasks.tasks.init_stage": {
+                "queue": get_queue_transcribe_stage()
+            },
+            "mentor_upload_tasks.tasks.transcribe_stage": {
+                "queue": get_queue_transcribe_stage()
+            },
+            "mentor_upload_tasks.tasks.transcode_stage": {
+                "queue": get_queue_transcode_stage()
             },
             "mentor_upload_tasks.tasks.finalization_stage": {
                 "queue": get_queue_finalization_stage()
@@ -84,12 +113,36 @@ celery.conf.update(
 )
 
 
+# @celery.task()
+# def upload_transcribe_transcode_answer_video(
+#     req: ProcessAnswerRequest,
+# ) -> ProcessAnswerResponse:
+#     task_id = upload_transcribe_transcode_answer_video.request.id
+#     return process.upload_transcribe_transcode_answer_video(req, task_id)
+
+
 @celery.task()
-def upload_transcribe_transcode_answer_video(
+def init_stage(
     req: ProcessAnswerRequest,
 ) -> ProcessAnswerResponse:
-    task_id = upload_transcribe_transcode_answer_video.request.id
-    return process.upload_transcribe_transcode_answer_video(req, task_id)
+    task_id = init_stage.request.id
+    return process.init_stage(req, task_id)
+
+
+@celery.task()
+def transcode_stage(
+    req: ProcessAnswerRequest,
+) -> ProcessAnswerResponse:
+    task_id = transcode_stage.request.id
+    return process.transcode_stage(req, task_id)
+
+
+@celery.task()
+def transcribe_stage(
+    req: ProcessAnswerRequest,
+) -> ProcessAnswerResponse:
+    task_id = transcribe_stage.request.id
+    return process.transcribe_stage(req, task_id)
 
 
 @celery.task()

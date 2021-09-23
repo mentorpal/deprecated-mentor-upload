@@ -5,12 +5,13 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
+
 from os import environ, path, makedirs
 import uuid
 
 from flask import Blueprint, jsonify, request
 
-from celery import chord
+from celery import group, chord, chain
 
 from mentor_upload_api.api import (
     StatusUpdateRequest,
@@ -31,28 +32,89 @@ def get_upload_root() -> str:
 
 
 def begin_tasks_in_parallel(req):
-    return chord(
-        [
-            mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.s(
-                req
-            ).set(
-                queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage()
-            )
-        ]
-    )(
-        mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(
-            queue=mentor_upload_tasks.get_queue_finalization_stage()
-        )
+    print("begin tasks in parallel")
+    parallel_group = group(
+        mentor_upload_tasks.tasks.transcode_stage.si(req=req).set(
+            queue=mentor_upload_tasks.get_queue_transcode_stage()
+        ),
+        mentor_upload_tasks.tasks.transcribe_stage.si(req=req).set(
+            queue=mentor_upload_tasks.get_queue_transcribe_stage()
+        ),
     )
+    # try 1
+    # my_chord= chord( chord(
+    #                 [mentor_upload_tasks.tasks.init_stage.s(
+    #                 req=req
+    #                 ).set(queue=mentor_upload_tasks.get_queue_init_stage())]
+    #             )(
+    #                 parallel_group
+    #             )
+    # )(
+    #     mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(queue=mentor_upload_tasks.get_queue_finalization_stage())
+    # )
 
+    my_chord = chord(
+        group(
+            [
+                chord(
+                    group(
+                        [
+                            mentor_upload_tasks.tasks.init_stage.s(req=req).set(
+                                queue=mentor_upload_tasks.get_queue_init_stage()
+                            )
+                        ]
+                    ),
+                    body=parallel_group,
+                )
+            ]
+        ),
+        body=mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(
+            queue=mentor_upload_tasks.get_queue_finalization_stage()
+        ),
+    )
+    my_chord.delay()
 
-# parallelGroup = (Task2 ,Task3)
-# parallelGroup.link(Task4)
-# (Task1 | parallelGroup)
+    # my_chord= chord( group([chord(
+    #                 group([mentor_upload_tasks.tasks.init_stage.s(
+    #                 req=req
+    #                 ).set(queue=mentor_upload_tasks.get_queue_init_stage())])
+    #             )(
+    #                 parallel_group
+    #             )])
+    # )(
+    #     mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(queue=mentor_upload_tasks.get_queue_finalization_stage())
+    # )
 
+    # final_task = mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(queue=mentor_upload_tasks.get_queue_finalization_stage())
 
-# chord( chord(Task1)(Task2 + Task3) )(Task4)
-# Task4.apply_async( callback=[chord(Task1)(Task2 + Task3)])
+    # try 2
+    # chain(chord(
+    #         [mentor_upload_tasks.tasks.init_stage.s(
+    #         req=req
+    #         ).set(queue=mentor_upload_tasks.get_queue_init_stage())]
+    #     )(
+    #         parallel_group
+    #     ), mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(queue=mentor_upload_tasks.get_queue_finalization_stage()))
+
+    # chord_2 = chord(
+    #     chord_1
+    # )(
+    #     mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(
+    #         queue=mentor_upload_tasks.get_queue_finalization_stage()
+    #     )
+    # )
+
+    # my_chord.delay()
+
+    # c = chord(
+    #         group([chord(group([chord(group([first_task.s('foo')]),
+
+    #                                 body=first_body.s())]),
+
+    #                     body=second_body.s())]),
+
+    #         body=third_body.s())
+    return my_chord
 
 
 @answer_blueprint.route("/", methods=["POST"])
@@ -119,7 +181,7 @@ def cancel():
     task_id = body.get("task")
     req = {"mentor": mentor, "question": question, "task_id": task_id}
     t = mentor_upload_tasks.tasks.cancel_task.apply_async(
-        queue=mentor_upload_tasks.get_queue_upload_transcribe_transcode_stage(),
+        queue=mentor_upload_tasks.get_queue_transcribe_stage(),
         args=[req],
     )
     return jsonify({"data": {"id": t.id, "cancelledId": task_id}})

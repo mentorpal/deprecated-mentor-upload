@@ -158,7 +158,7 @@ def test_upload(
     # )
     # assert (
     #     upload_transcribe_transcode_stage_task.apply_async.call_args.kwargs.get("queue")
-    #     == "upload_transcribe_transcode"
+    #     == "transcribe"
     # )
     # raise Exception(mock_upload_task.apply_async.call_args.kwargs.get('queue'))
 
