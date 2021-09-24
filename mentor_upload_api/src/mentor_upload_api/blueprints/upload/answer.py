@@ -11,7 +11,7 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from celery import group, chord, chain
+from celery import group, chord
 
 from mentor_upload_api.api import (
     StatusUpdateRequest,
@@ -32,7 +32,6 @@ def get_upload_root() -> str:
 
 
 def begin_tasks_in_parallel(req):
-    print("begin tasks in parallel")
     parallel_group = group(
         mentor_upload_tasks.tasks.transcode_stage.si(req=req).set(
             queue=mentor_upload_tasks.get_queue_transcode_stage()
@@ -41,18 +40,6 @@ def begin_tasks_in_parallel(req):
             queue=mentor_upload_tasks.get_queue_transcribe_stage()
         ),
     )
-    # try 1
-    # my_chord= chord( chord(
-    #                 [mentor_upload_tasks.tasks.init_stage.s(
-    #                 req=req
-    #                 ).set(queue=mentor_upload_tasks.get_queue_init_stage())]
-    #             )(
-    #                 parallel_group
-    #             )
-    # )(
-    #     mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(queue=mentor_upload_tasks.get_queue_finalization_stage())
-    # )
-
     my_chord = chord(
         group(
             [
@@ -72,49 +59,7 @@ def begin_tasks_in_parallel(req):
             queue=mentor_upload_tasks.get_queue_finalization_stage()
         ),
     )
-    my_chord.delay()
-
-    # my_chord= chord( group([chord(
-    #                 group([mentor_upload_tasks.tasks.init_stage.s(
-    #                 req=req
-    #                 ).set(queue=mentor_upload_tasks.get_queue_init_stage())])
-    #             )(
-    #                 parallel_group
-    #             )])
-    # )(
-    #     mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(queue=mentor_upload_tasks.get_queue_finalization_stage())
-    # )
-
-    # final_task = mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(queue=mentor_upload_tasks.get_queue_finalization_stage())
-
-    # try 2
-    # chain(chord(
-    #         [mentor_upload_tasks.tasks.init_stage.s(
-    #         req=req
-    #         ).set(queue=mentor_upload_tasks.get_queue_init_stage())]
-    #     )(
-    #         parallel_group
-    #     ), mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(queue=mentor_upload_tasks.get_queue_finalization_stage()))
-
-    # chord_2 = chord(
-    #     chord_1
-    # )(
-    #     mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(
-    #         queue=mentor_upload_tasks.get_queue_finalization_stage()
-    #     )
-    # )
-
-    # my_chord.delay()
-
-    # c = chord(
-    #         group([chord(group([chord(group([first_task.s('foo')]),
-
-    #                                 body=first_body.s())]),
-
-    #                     body=second_body.s())]),
-
-    #         body=third_body.s())
-    return my_chord
+    return my_chord.delay()
 
 
 @answer_blueprint.route("/", methods=["POST"])
@@ -138,20 +83,18 @@ def upload():
         "video_path": file_name,
         "trim": trim,
     }
-
-    # because I moved this to its own function, will have to test
     my_chord = begin_tasks_in_parallel(req)
     task_ids = []
-    for task in my_chord.parent.children:
+    for task in my_chord.parent.results:
+        task_ids.append(task.id)
+    for task in my_chord.parent.parent.results:
         task_ids.append(task.id)
     task_ids.append(my_chord.id)
-    # raise Exception(my_chord.id)
     update_status(
         StatusUpdateRequest(
             mentor=mentor,
             question=question,
             task_id=task_ids,
-            status="QUEUING",
             upload_flag="QUEUED",
             transcoding_flag="QUEUED",
             finalization_flag="QUEUED",
@@ -187,6 +130,7 @@ def cancel():
     return jsonify({"data": {"id": t.id, "cancelledId": task_id}})
 
 
+# TODO : adapt this to the multiple process types
 @answer_blueprint.route("/status/<task_id>/", methods=["GET"])
 @answer_blueprint.route("/status/<task_id>", methods=["GET"])
 def upload_status(task_id: str):

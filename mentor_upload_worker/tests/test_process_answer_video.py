@@ -110,11 +110,27 @@ def _mock_gql_answer_update(
     )
 
 
+def _transcode_expected_media(
+    mentor: str, question: str, timestamp: str, media=None
+) -> Tuple[dict, List[dict]]:
+    base_path = f"videos/{mentor}/{question}/{timestamp}/"
+    if media is None:
+        media = [
+            {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
+            {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
+        ]
+    return list(
+        map(
+            lambda m: {k: (v) for k, v in m.items()},
+            media,
+        )
+    )
+
+
 def _mock_gql_status_update(
     mentor: str,
     question: str,
     task_id: str,
-    status: str = None,
     upload_flag: str = None,
     transcribing_flag: str = None,
     transcoding_flag: str = None,
@@ -139,7 +155,6 @@ def _mock_gql_status_update(
             mentor=mentor,
             question=question,
             task_id=task_id,
-            status=status,
             upload_flag=upload_flag,
             transcribing_flag=transcribing_flag,
             transcoding_flag=transcoding_flag,
@@ -175,6 +190,64 @@ def _expect_gql(expected_gql_queries: List[dict]) -> None:
     for i, query in enumerate(expected_gql_queries):
         assert responses.calls[i].request.url == get_graphql_endpoint()
         assert responses.calls[i].request.body.decode("UTF-8") == json.dumps(query)
+
+
+def _transcode_stage_expect_transcode_calls(
+    video_path: str,
+    mock_ffmpeg_cls: Mock,
+    video_dims: Tuple[int, int],
+) -> Tuple[str, str, str, str, str]:
+    """
+    There are currently 2 transcode calls that need to happen in the transcode stage:
+     - convert the uploaded video to a web-optimized video
+     - convert the uploaded video to a mobile-optimized video
+    """
+    expected_mobile_video_path = path.join(path.split(video_path)[0], "mobile.mp4")
+    expected_web_video_path = path.join(path.split(video_path)[0], "web.mp4")
+    mock_ffmpeg_cls.assert_has_calls(
+        [
+            call(
+                inputs={video_path: None},
+                outputs={
+                    expected_mobile_video_path: output_args_video_encode_for_mobile(
+                        video_path, video_dims=video_dims
+                    )
+                },
+            ),
+            call(
+                inputs={video_path: None},
+                outputs={
+                    expected_web_video_path: output_args_video_encode_for_web(
+                        video_path, video_dims=video_dims
+                    )
+                },
+            ),
+        ],
+    )
+    return (
+        expected_web_video_path,
+        expected_mobile_video_path,
+    )
+
+
+def _transcribe_stage_expect_transcode_calls(
+    video_path: str,
+    mock_ffmpeg_cls: Mock,
+) -> Tuple[str, str, str, str, str]:
+    """
+    There is currently 1 transcode call that need to happen in the transcribe process:
+     - convert the uploaded video to an audio file (for transcription)
+    """
+    expected_audio_path = re.sub("mp4$", "mp3", video_path)
+    mock_ffmpeg_cls.assert_has_calls(
+        [
+            call(
+                inputs={video_path: None},
+                outputs={expected_audio_path: output_args_video_to_audio()},
+            ),
+        ],
+    )
+    return expected_audio_path
 
 
 def _expect_transcode_calls(
@@ -255,6 +328,120 @@ class _TestProcessExample:
     video_dims: Tuple[int, int]
     video_name: str
     video_duration_fake: float
+
+
+@responses.activate
+@patch("mentor_upload_process.media_tools.find_duration")
+@patch.object(transcribe, "init_transcription_service")
+@patch("ffmpy.FFmpeg")
+@patch("boto3.client")
+@pytest.mark.parametrize(
+    "ex",
+    [
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript_fake="mentor answer for question 1",
+                trim=None,
+                video_dims=(400, 400),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript_fake="mentor answer for question 1",
+                trim={"start": 0.0, "end": 5.0},
+                video_dims=(1280, 720),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript_fake="mentor answer for question 1",
+                trim={"start": 5.3, "end": 8.921},
+                video_dims=(480, 640),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1_idle",
+                timestamp="20120114T032134Z",
+                transcript_fake="",
+                trim={"start": 5.3, "end": 8.921},
+                video_dims=(480, 640),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+    ],
+)
+def test_init_stage(
+    mock_boto3_client: Mock,
+    mock_ffmpeg_cls: Mock,
+    mock_init_transcription_service: Mock,
+    mock_video_duration: Mock,
+    monkeypatch,
+    tmpdir,
+    ex: _TestProcessExample,
+):
+    with _test_env(ex.video_name, ex.timestamp, ex.video_dims, monkeypatch, tmpdir):
+        req = {
+            "mentor": ex.mentor,
+            "question": ex.question,
+            "trim": ex.trim,
+            "video_path": ex.video_name,
+        }
+        mock_ffmpeg_inst = Mock()
+
+        def mock_ffmpeg_constructor(inputs: dict, outputs: dict) -> Mock:
+            """
+            when FFMpeg constructor is called,
+            we need to capture the target 'output' file
+            and create a fake output there
+            """
+            if outputs:
+                output_file = list(outputs.keys())[0]
+                Path(output_file).write_text("fake output")
+            return mock_ffmpeg_inst
+
+        mock_ffmpeg_cls.side_effect = mock_ffmpeg_constructor
+        mock_video_duration.return_value = ex.video_duration_fake
+
+        expected_gql = [
+            _mock_gql_status_update(
+                req["mentor"],
+                req["question"],
+                "fake_task_id",
+                upload_flag="IN_PROGRESS",
+            ),
+            _mock_gql_status_update(
+                req["mentor"],
+                req["question"],
+                "fake_task_id",
+                upload_flag="DONE",
+            ),
+        ]
+
+        from mentor_upload_process.process import (
+            init_stage,
+        )
+
+        init_stage(req, "fake_task_id")
+
+        _expect_gql(expected_gql)
 
 
 @responses.activate
@@ -471,6 +658,148 @@ def test_processes_mentor_answer(
 
 
 @responses.activate
+@patch("mentor_upload_process.media_tools.find_duration")
+@patch.object(transcribe, "init_transcription_service")
+@patch("ffmpy.FFmpeg")
+@patch("boto3.client")
+@pytest.mark.parametrize(
+    "ex",
+    [
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript_fake="mentor answer for question 1",
+                trim=None,
+                video_dims=(400, 400),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript_fake="mentor answer for question 1",
+                trim={"start": 0.0, "end": 5.0},
+                video_dims=(1280, 720),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript_fake="mentor answer for question 1",
+                trim={"start": 5.3, "end": 8.921},
+                video_dims=(480, 640),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1_idle",
+                timestamp="20120114T032134Z",
+                transcript_fake="",
+                trim={"start": 5.3, "end": 8.921},
+                video_dims=(480, 640),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+    ],
+)
+def test_transcribing_stage(
+    mock_boto3_client: Mock,
+    mock_ffmpeg_cls: Mock,
+    mock_init_transcription_service: Mock,
+    mock_video_duration: Mock,
+    monkeypatch,
+    tmpdir,
+    ex: _TestProcessExample,
+):
+    with _test_env(
+        ex.video_name, ex.timestamp, ex.video_dims, monkeypatch, tmpdir
+    ) as work_dir:
+        req = {
+            "mentor": ex.mentor,
+            "question": ex.question,
+            "trim": ex.trim,
+            "video_path": ex.video_name,
+        }
+        is_idle = req["question"] == "q1_idle"
+        mock_ffmpeg_inst = Mock()
+
+        def mock_ffmpeg_constructor(inputs: dict, outputs: dict) -> Mock:
+            """
+            when FFMpeg constructor is called,
+            we need to capture the target 'output' file
+            and create a fake output there
+            """
+            if outputs:
+                output_file = list(outputs.keys())[0]
+                Path(output_file).write_text("fake output")
+            return mock_ffmpeg_inst
+
+        is_idle = req["question"] == "q1_idle"
+        mock_ffmpeg_cls.side_effect = mock_ffmpeg_constructor
+        mock_transcriptions = MockTranscriptions(mock_init_transcription_service, ".")
+        mock_transcriptions.mock_transcribe_result(
+            [
+                MockTranscribeJob(
+                    batch_id="b1",
+                    request=transcribe.TranscribeJobRequest(
+                        sourceFile=re.sub("mp4$", "mp3", ex.video_name)
+                    ),
+                    transcript=ex.transcript_fake,
+                )
+            ]
+        )
+        expected_is_idle_question_gql_query = _mock_is_idle_question_(ex.question)
+        mock_video_duration.return_value = ex.video_duration_fake
+
+        expected_gql = [expected_is_idle_question_gql_query]
+
+        if not is_idle:
+            expected_gql.append(
+                _mock_gql_status_update(
+                    ex.mentor,
+                    ex.question,
+                    "fake_task_id",
+                    transcribing_flag="IN_PROGRESS",
+                ),
+            )
+
+        expected_gql.append(
+            _mock_gql_status_update(
+                req["mentor"],
+                req["question"],
+                "fake_task_id",
+                transcribing_flag="DONE",
+            ),
+        )
+
+        from mentor_upload_process.process import transcribe_stage
+
+        assert transcribe_stage(req, "fake_task_id") == {
+            "transcript": ex.transcript_fake,
+        }
+
+        if not is_idle:
+            _transcribe_stage_expect_transcode_calls(
+                str(work_dir / ex.video_name), mock_ffmpeg_cls
+            )
+
+        _expect_gql(expected_gql)
+
+
+@responses.activate
 def test_finalization_stage():
     req = {"mentor": "m1", "question": "q1"}
     task_id = "t1"
@@ -493,7 +822,7 @@ def test_finalization_stage():
 
     from mentor_upload_process.process import finalization_stage
 
-    assert finalization_stage((dict1, dict2), req, task_id) == {
+    assert finalization_stage([(dict1, dict2)], req, task_id) == {
         "mentor": req["mentor"],
         "question": req["question"],
         "video_path": "video1.mp4",
@@ -521,6 +850,98 @@ def test_finalization_stage():
             ),
         ]
     )
+
+
+@responses.activate
+@patch("mentor_upload_process.media_tools.find_duration")
+@patch.object(transcribe, "init_transcription_service")
+@patch("ffmpy.FFmpeg")
+@patch("boto3.client")
+@pytest.mark.parametrize(
+    "ex",
+    [
+        (
+            _TestProcessExample(
+                mentor="m1",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript_fake="mentor answer for question 1",
+                trim=None,
+                video_dims=(400, 400),
+                video_name="video1.mp4",
+                video_duration_fake=13.5,
+            )
+        ),
+    ],
+)
+def test_transcode_stage(
+    mock_boto3_client: Mock,
+    mock_ffmpeg_cls: Mock,
+    mock_init_transcription_service: Mock,
+    mock_video_duration: Mock,
+    monkeypatch,
+    tmpdir,
+    ex: _TestProcessExample,
+):
+    with _test_env(
+        ex.video_name, ex.timestamp, ex.video_dims, monkeypatch, tmpdir
+    ) as work_dir:
+        req = {
+            "mentor": "m1",
+            "question": "q1",
+            "video_path": "video1.mp4",
+            "trim": None,
+        }
+        task_id = "t1"
+        timestamp = "20120114T032134Z"
+
+        mock_ffmpeg_inst = Mock()
+
+        def mock_ffmpeg_constructor(inputs: dict, outputs: dict) -> Mock:
+            """
+            when FFMpeg constructor is called,
+            we need to capture the target 'output' file
+            and create a fake output there
+            """
+            if outputs:
+                output_file = list(outputs.keys())[0]
+                Path(output_file).write_text("fake output")
+            return mock_ffmpeg_inst
+
+        mock_ffmpeg_cls.side_effect = mock_ffmpeg_constructor
+
+        from mentor_upload_process.process import transcode_stage
+
+        expected_gql = [
+            _mock_gql_status_update(
+                "m1",
+                "q1",
+                task_id,
+                transcoding_flag="IN_PROGRESS",
+            ),
+            _mock_gql_status_update(
+                "m1",
+                "q1",
+                task_id,
+                transcoding_flag="DONE",
+            ),
+        ]
+
+        expected_media = _transcode_expected_media("m1", "q1", timestamp)
+
+        assert transcode_stage(req, task_id) == {
+            "media": expected_media,
+            "video_path": req["video_path"],
+        }
+        (
+            expected_web_video_path,
+            expected_mobile_video_path,
+        ) = _transcode_stage_expect_transcode_calls(
+            str(work_dir / ex.video_name),
+            mock_ffmpeg_cls,
+            video_dims=ex.video_dims,
+        )
+        _expect_gql(expected_gql)
 
 
 def test_raises_if_video_path_not_specified():

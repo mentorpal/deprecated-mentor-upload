@@ -25,7 +25,6 @@ def _mock_gql_status_update(
     mentor: str,
     question: str,
     task_id: str,
-    status: str = None,
     upload_flag: str = None,
     transcribing_flag: str = None,
     transcoding_flag: str = None,
@@ -36,7 +35,6 @@ def _mock_gql_status_update(
             mentor=mentor,
             question=question,
             task_id=task_id,
-            status=status,
             upload_flag=upload_flag,
             transcribing_flag=transcribing_flag,
             transcoding_flag=transcoding_flag,
@@ -67,7 +65,7 @@ def python_path_env(monkeypatch, tmpdir):
 
 
 @pytest.mark.parametrize(
-    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_upload_transcribe_transcode_task_id",
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_init_task_id",
     [
         (
             "https://mentor.org",
@@ -75,7 +73,9 @@ def python_path_env(monkeypatch, tmpdir):
             "q1",
             "video.mp4",
             "fake_finalization_task_id",
-            "fake_upload_transcribe_transcode_task_id",
+            "fake_transcoding_task_id",
+            "fake_transcribing_task_id",
+            "fake_init_task_id",
         ),
         (
             "http://a.diff.org",
@@ -83,19 +83,25 @@ def python_path_env(monkeypatch, tmpdir):
             "q2",
             "video.mp4",
             "fake_finalization_task_id_2",
-            "fake_upload_transcribe_transcode_task_id_2",
+            "fake_transcoding_task_id_2",
+            "fake_transcribing_task_id_2",
+            "fake_init_task_id_2",
         ),
     ],
 )
 @responses.activate
 @patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
+@patch("mentor_upload_tasks.tasks.init_stage")
+@patch("mentor_upload_tasks.tasks.transcode_stage")
+@patch("mentor_upload_tasks.tasks.transcribe_stage")
 @patch("mentor_upload_tasks.tasks.finalization_stage")
-@patch("mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video")
 @patch.object(uuid, "uuid4")
 def test_upload(
     mock_uuid,
-    upload_transcribe_transcode_stage_task,
     finalization_stage_task,
+    transcribe_stage_task,
+    transcode_stage_task,
+    init_stage_task,
     mock_begin_tasks_in_parallel,
     tmpdir,
     upload_domain,
@@ -103,25 +109,36 @@ def test_upload(
     input_question,
     input_video,
     fake_finalization_task_id,
-    fake_upload_transcribe_transcode_task_id,
+    fake_transcoding_task_id,
+    fake_transcribing_task_id,
+    fake_init_task_id,
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
     # mocking the result of the chord
     mock_chord_result = Bunch(
-        parent=Bunch(children=[Bunch(id=fake_upload_transcribe_transcode_task_id)]),
+        parent=Bunch(
+            results=[
+                Bunch(id=fake_transcribing_task_id),
+                Bunch(id=fake_transcoding_task_id),
+            ],
+            parent=Bunch(results=[Bunch(id=fake_init_task_id)]),
+        ),
         id=fake_finalization_task_id,
     )
     mock_begin_tasks_in_parallel.return_value = mock_chord_result
+
     fake_task_id_collection = [
-        fake_upload_transcribe_transcode_task_id,
+        fake_transcribing_task_id,
+        fake_transcoding_task_id,
+        fake_init_task_id,
         fake_finalization_task_id,
     ]
+
     expected_status_update_query = _mock_gql_status_update(
         mentor=input_mentor,
         question=input_question,
         task_id=fake_task_id_collection,
-        status="QUEUING",
         upload_flag="QUEUED",
         transcoding_flag="QUEUED",
         finalization_flag="QUEUED",
@@ -150,21 +167,9 @@ def test_upload(
         )
     )
 
-    # finalization_stage_task.assert_called()
-    # args, kwargs = mock_upload_task.call_args
-    # assert (
-    #     finalization_stage_task.apply_async.call_args.kwargs.get("queue")
-    #     == "finalization"
-    # )
-    # assert (
-    #     upload_transcribe_transcode_stage_task.apply_async.call_args.kwargs.get("queue")
-    #     == "transcribe"
-    # )
-    # raise Exception(mock_upload_task.apply_async.call_args.kwargs.get('queue'))
-
 
 @pytest.mark.parametrize(
-    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_upload_transcribe_transcode_task_id,fake_cancel_finalization_task_id,fake_cancel_upload_transcribe_transcode_task_id",
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_init_task_id,fake_cancel_finalization_task_id,fake_cancel_upload_transcribe_transcode_task_id",
     [
         (
             "https://mentor.org",
@@ -172,7 +177,9 @@ def test_upload(
             "q1",
             "video.mp4",
             "fake_finalization_task_id",
-            "fake_upload_transcribe_transcode_task_id",
+            "fake_transcoding_task_id",
+            "fake_transcribing_task_id",
+            "fake_init_task_id",
             "fake_cancel_finalization_task_id",
             "fake_cancel_upload_transcribe_transcode_task_id",
         ),
@@ -182,7 +189,9 @@ def test_upload(
             "q2",
             "video.mp4",
             "fake_finalization_task_id_2",
-            "fake_upload_transcribe_transcode_task_id_2",
+            "fake_transcoding_task_id_2",
+            "fake_transcribing_task_id_2",
+            "fake_init_task_id_2",
             "fake_cancel_finalization_task_id_2",
             "fake_cancel_upload_transcribe_transcode_task_id_2",
         ),
@@ -191,13 +200,17 @@ def test_upload(
 @responses.activate
 @patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
 @patch("mentor_upload_tasks.tasks.cancel_task")
+@patch("mentor_upload_tasks.tasks.init_stage")
+@patch("mentor_upload_tasks.tasks.transcode_stage")
+@patch("mentor_upload_tasks.tasks.transcribe_stage")
 @patch("mentor_upload_tasks.tasks.finalization_stage")
-@patch("mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video")
 @patch.object(uuid, "uuid4")
 def test_cancel(
     mock_uuid,
-    mock_upload_task,
-    mock_finalzation_stage_task,
+    finalization_stage_task,
+    transcribe_stage_task,
+    transcode_stage_task,
+    init_stage_task,
     mock_cancel_task,
     mock_begin_tasks_in_parallel,
     tmpdir,
@@ -206,29 +219,38 @@ def test_cancel(
     input_question,
     input_video,
     fake_finalization_task_id,
-    fake_upload_transcribe_transcode_task_id,
+    fake_transcoding_task_id,
+    fake_transcribing_task_id,
+    fake_init_task_id,
     fake_cancel_finalization_task_id,
     fake_cancel_upload_transcribe_transcode_task_id,
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
-
     # mocking the result of the chord
     mock_chord_result = Bunch(
-        parent=Bunch(children=[Bunch(id=fake_upload_transcribe_transcode_task_id)]),
+        parent=Bunch(
+            results=[
+                Bunch(id=fake_transcribing_task_id),
+                Bunch(id=fake_transcoding_task_id),
+            ],
+            parent=Bunch(results=[Bunch(id=fake_init_task_id)]),
+        ),
         id=fake_finalization_task_id,
     )
     mock_begin_tasks_in_parallel.return_value = mock_chord_result
 
     fake_task_id_collection = [
-        fake_upload_transcribe_transcode_task_id,
+        fake_transcribing_task_id,
+        fake_transcoding_task_id,
+        fake_init_task_id,
         fake_finalization_task_id,
     ]
+
     expected_status_update_query = _mock_gql_status_update(
         mentor=input_mentor,
         question=input_question,
         task_id=fake_task_id_collection,
-        status="QUEUING",
         upload_flag="QUEUED",
         transcoding_flag="QUEUED",
         finalization_flag="QUEUED",
@@ -285,11 +307,15 @@ def test_cancel(
 )
 @responses.activate
 @patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
+@patch("mentor_upload_tasks.tasks.init_stage")
+@patch("mentor_upload_tasks.tasks.transcode_stage")
+@patch("mentor_upload_tasks.tasks.transcribe_stage")
 @patch("mentor_upload_tasks.tasks.finalization_stage")
-@patch("mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video")
 def test_env_fixes_ssl_status_url(
-    mock_upload_task: Mock,
-    mock_finalization_stage_task: Mock,
+    finalization_stage_task,
+    transcribe_stage_task,
+    transcode_stage_task,
+    init_stage_task,
     mock_begin_tasks_in_parallel: Mock,
     request_root: str,
     env_val: str,
@@ -297,18 +323,24 @@ def test_env_fixes_ssl_status_url(
     monkeypatch,
     client,
 ):
-    fake_finalization_task_id = "fake_finalization_task_id"
-    fake_upload_transcribe_transcode_task_id = (
-        "fake_upload_transcribe_transcode_task_id"
-    )
     fake_mentor_id = "mentor1"
     fake_question_id = "question1"
     fake_video = open(path.join(fixture_path("input_videos"), "video.mp4"), "rb")
     if env_val is not None:
         monkeypatch.setenv("STATUS_URL_FORCE_HTTPS", env_val)
 
+    fake_init_task_id = "fake_init_task_id"
+    fake_transcribe_task_id = "fake_transcribe_task_id"
+    fake_transcode_task_id = "fake_transcode_task_id"
+    fake_finalization_task_id = "fake_finalization_task_id"
     mock_chord_result = Bunch(
-        parent=Bunch(children=[Bunch(id=fake_upload_transcribe_transcode_task_id)]),
+        parent=Bunch(
+            results=[
+                Bunch(id=fake_transcribe_task_id),
+                Bunch(id=fake_transcode_task_id),
+            ],
+            parent=Bunch(results=[Bunch(id=fake_init_task_id)]),
+        ),
         id=fake_finalization_task_id,
     )
     mock_begin_tasks_in_parallel.return_value = mock_chord_result
@@ -316,8 +348,12 @@ def test_env_fixes_ssl_status_url(
     expected_status_update_query = _mock_gql_status_update(
         mentor=fake_mentor_id,
         question=fake_question_id,
-        task_id=[fake_upload_transcribe_transcode_task_id, fake_finalization_task_id],
-        status="QUEUING",
+        task_id=[
+            fake_transcribe_task_id,
+            fake_transcode_task_id,
+            fake_init_task_id,
+            fake_finalization_task_id,
+        ],
         upload_flag="QUEUED",
         transcoding_flag="QUEUED",
         finalization_flag="QUEUED",
@@ -336,43 +372,53 @@ def test_env_fixes_ssl_status_url(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": [fake_upload_transcribe_transcode_task_id, fake_finalization_task_id],
-            "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_upload_transcribe_transcode_task_id, fake_finalization_task_id]}",
+            "id": [
+                fake_transcribe_task_id,
+                fake_transcode_task_id,
+                fake_init_task_id,
+                fake_finalization_task_id,
+            ],
+            "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_transcribe_task_id,fake_transcode_task_id,fake_init_task_id,fake_finalization_task_id]}",
         }
     }
 
 
-@pytest.mark.parametrize(
-    "task_id,state,status,info,expected_info",
-    [
-        ("fake-task-id-123", "PENDING", "working", None, None),
-        ("fake-task-id-234", "STARTED", "working harder", None, None),
-        ("fake-task-id-456", "SUCCESS", "done!", None, None),
-        (
-            "fake-task-id-678",
-            "FAILURE",
-            "error!",
-            Exception("error message"),
-            "error message",
-        ),
-    ],
-)
-@patch("mentor_upload_tasks.tasks.finalization_stage")
-@patch("mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video")
-def test_it_returns_status_for_a_upload_job(
-    mock_upload_task,
-    mock_finalization_stage_task,
-    task_id,
-    state,
-    status,
-    info,
-    expected_info,
-    client,
-):
-    mock_task = Bunch(id=task_id, state=state, status=status, info=info)
-    mock_upload_task.AsyncResult.return_value = mock_task
-    res = client.get(f"/upload/answer/status/{task_id}")
-    assert res.status_code == 200
-    assert res.json == {
-        "data": {"id": task_id, "state": state, "status": status, "info": expected_info}
-    }
+# TODO: related to upload_status(task_id: str) in answer.py
+# @pytest.mark.parametrize(
+#     "task_id,state,status,info,expected_info",
+#     [
+#         ("fake-task-id-123", "PENDING", "working", None, None),
+#         ("fake-task-id-234", "STARTED", "working harder", None, None),
+#         ("fake-task-id-456", "SUCCESS", "done!", None, None),
+#         (
+#             "fake-task-id-678",
+#             "FAILURE",
+#             "error!",
+#             Exception("error message"),
+#             "error message",
+#         ),
+#     ],
+# )
+# @patch("mentor_upload_tasks.tasks.init_stage")
+# @patch("mentor_upload_tasks.tasks.transcode_stage")
+# @patch("mentor_upload_tasks.tasks.transcribe_stage")
+# @patch("mentor_upload_tasks.tasks.finalization_stage")
+# def test_it_returns_status_for_a_upload_job(
+#     finalization_stage_task,
+#     transcribe_stage_task,
+#     transcode_stage_task,
+#     init_stage_task,
+#     task_id,
+#     state,
+#     status,
+#     info,
+#     expected_info,
+#     client,
+# ):
+#     mock_task = Bunch(id=task_id, state=state, status=status, info=info)
+#     init_stage_task.AsyncResult.return_value = mock_task
+#     res = client.get(f"/upload/answer/status/{task_id}")
+#     assert res.status_code == 200
+#     assert res.json == {
+#         "data": {"id": task_id, "state": state, "status": status, "info": expected_info}
+#     }

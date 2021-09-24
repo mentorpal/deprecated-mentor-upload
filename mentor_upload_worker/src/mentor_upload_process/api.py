@@ -49,7 +49,6 @@ class StatusUpdateRequest:
     mentor: str
     question: str
     task_id: str
-    status: str = None
     upload_flag: str = None
     transcribing_flag: str = None
     transcoding_flag: str = None
@@ -63,7 +62,6 @@ class StatusUpdateResponse:
     mentor: str
     question: str
     task_id: str
-    status: str = None
     upload_flag: str = None
     transcribing_flag: str = None
     transcoding_flag: str = None
@@ -123,8 +121,6 @@ def answer_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
 def status_update_gql(req: StatusUpdateRequest) -> GQLQueryBody:
     status = {}
     status["taskId"] = req.task_id
-    if req.status:
-        status["uploadStatus"] = req.status
     if req.upload_flag:
         status["uploadFlag"] = req.upload_flag
     if req.transcribing_flag:

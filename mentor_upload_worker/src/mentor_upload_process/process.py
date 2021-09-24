@@ -98,7 +98,8 @@ def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
             mentor=req.get("mentor"),
             question=req.get("question"),
             task_id=req.get("task_id"),
-            status="CANCEL_IN_PROGRESS",
+            # TODO:
+            # status="CANCEL_IN_PROGRESS",
             transcript="",
             media=[],
         )
@@ -109,7 +110,8 @@ def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
             mentor=req.get("mentor"),
             question=req.get("question"),
             task_id=req.get("task_id"),
-            status="CANCELLED",
+            # TODO:
+            # status="CANCELLED",
             transcript="",
             media=[],
         )
@@ -212,6 +214,7 @@ def transcode_stage(req: ProcessAnswerRequest, task_id: str):
             s3 = _create_s3_client()
             s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
             video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
+            print(media_uploads)
             for media_type, tag, file_name, content_type, file in media_uploads:
                 if path.isfile(file):
                     item_path = f"{video_path_base}{file_name}"
@@ -511,6 +514,9 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
     params["media"] = []
     print("params before processing: ")
     print(params)
+
+    dict_tuple = dict_tuple[0]
+
     for dic in dict_tuple:
         if "video_path" in dic:
             params["video_path"] = dic["video_path"]
@@ -519,6 +525,7 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
         if "media" in dic:
             for media in dic["media"]:
                 params["media"].append(media)
+
     if "media" not in params:
         raise Exception("Missing media param in finalization stage")
     if "transcript" not in params:
@@ -540,7 +547,7 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
             )
         )
 
-        # TODO: create VTT + uploads it to S3
+        # TODO: create VTT + uploads it to S3 (other media already uploaded by transcode step)
 
         transcript = params["transcript"]
         media = params["media"]
@@ -601,7 +608,8 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
             mentor=mentor,
             question=question,
             task_id=task_id,
-            status="TRANSFER_IN_PROGRESS",
+            # TODO:
+            # status="TRANSFER_IN_PROGRESS",
             transcript=transcript,
             media=media,
         )
@@ -630,7 +638,8 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                         mentor=mentor,
                         question=question,
                         task_id=task_id,
-                        status="TRANSFER_IN_PROGRESS",
+                        # TODO
+                        # status="TRANSFER_IN_PROGRESS",
                         transcript=transcript,
                         media=media,
                     )
@@ -647,7 +656,8 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                         mentor=mentor,
                         question=question,
                         task_id=task_id,
-                        status="TRANSFER_FAILED",
+                        # TODO:
+                        # status="TRANSFER_FAILED",
                         transcript=transcript,
                         media=media,
                     )
@@ -665,7 +675,8 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
             mentor=mentor,
             question=question,
             task_id=task_id,
-            status="DONE",
+            # TODO: this means transfer is done
+            # status="DONE",
             transcript=transcript,
             media=media,
         )

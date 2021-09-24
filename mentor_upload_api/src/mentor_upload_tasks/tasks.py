@@ -94,11 +94,6 @@ celery.conf.update(
 )
 
 
-# @celery.task()
-# def upload_transcribe_transcode_answer_video(req: ProcessAnswerRequest):
-#     pass
-
-
 @celery.task()
 def init_stage(
     req: ProcessAnswerRequest,
