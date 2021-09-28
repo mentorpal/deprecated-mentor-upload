@@ -151,7 +151,6 @@ def init_stage(req: ProcessAnswerRequest, task_id: str):
         raise Exception(f"video not found for path '{video_path}'")
     with _video_work_dir(video_path_full) as context:
         try:
-            print("in init stage")
             video_file, work_dir = context
             update_status(
                 StatusUpdateRequest(
@@ -175,7 +174,6 @@ def init_stage(req: ProcessAnswerRequest, task_id: str):
                     upload_flag="DONE",
                 )
             )
-            print("finish init stage, transcode and transcribe should now start")
         except Exception as x:
             import logging
 
@@ -217,7 +215,6 @@ def transcode_stage(req: ProcessAnswerRequest, task_id: str):
         raise Exception(f"video not found for path '{video_path}'")
     with _video_work_dir(video_path_full) as context:
         try:
-            print("in transcode stage")
             video_file, work_dir = context
             MediaUpload = Tuple[  # noqa: N806
                 str, str, str, str, str
@@ -246,7 +243,6 @@ def transcode_stage(req: ProcessAnswerRequest, task_id: str):
             s3 = _create_s3_client()
             s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
             video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
-            print(media_uploads)
             for media_type, tag, file_name, content_type, file in media_uploads:
                 if path.isfile(file):
                     item_path = f"{video_path_base}{file_name}"
@@ -276,8 +272,6 @@ def transcode_stage(req: ProcessAnswerRequest, task_id: str):
                     transcoding_flag="DONE",
                 )
             )
-            print("finish transcode stage, returning: ")
-            print({"media": media, "video_path": video_path})
             # return media for finalization stage to upload
             return {"media": media, "video_path": video_path}
         except Exception as x:
@@ -321,7 +315,6 @@ def transcribe_stage(req: ProcessAnswerRequest, task_id: str):
         raise Exception(f"video not found for path '{video_path}'")
     with _video_work_dir(video_path_full) as context:
         try:
-            print("in transcribe stage")
             is_idle = is_idle_question(question)
             video_file, work_dir = context
             audio_file = video_to_audio(video_file)
@@ -350,8 +343,6 @@ def transcribe_stage(req: ProcessAnswerRequest, task_id: str):
                 )
             )
             # returns transcript for finalization stage to upload
-            print("finish transcribe stage, returning:")
-            print({"transcript": transcript})
             return {"transcript": transcript}
         except Exception as x:
             import logging
@@ -371,8 +362,6 @@ def transcribe_stage(req: ProcessAnswerRequest, task_id: str):
 def upload_transcribe_transcode_answer_video(
     req: ProcessAnswerRequest, task_id: str
 ) -> ProcessAnswerResponse:
-    print("req in upload_transcribe_transcode_answer_video: ")
-    print(req)
     video_path = req.get("video_path", "")
     if not video_path:
         raise Exception("missing required param 'video_path'")
@@ -553,17 +542,8 @@ def upload_transcribe_transcode_answer_video(
 def extract_params_for_finalization_stage(
     dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
 ):
-    # extract params from children tasks which get passed up as dicts
-    # print("dict_tuple in finalization_stage: ")
-    # print(dict_tuple)
-    # print("req in finalization_stage: ")
-    # print(req)
-    # print("task_id in finalization_stage: ")
-    # print(task_id)
     params = req
     params["media"] = []
-    # print("params before processing: ")
-    # print(params)
     dict_tuple = dict_tuple[0]
     for dic in dict_tuple:
         if "video_path" in dic:
@@ -604,8 +584,6 @@ def extract_params_for_finalization_stage(
             )
         )
         raise Exception("Missing video_path param in finalization stage")
-    # print("params after processing: ")
-    # print(params)
     return params
 
 
@@ -781,7 +759,6 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                         mentor=mentor,
                         question=question,
                         task_id=task_id,
-                        # TODO
                         transferring_flag="IN_PROGRESS",
                         transcript=transcript,
                         media=media,
