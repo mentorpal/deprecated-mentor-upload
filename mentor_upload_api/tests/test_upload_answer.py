@@ -25,6 +25,7 @@ def _mock_gql_status_update(
     mentor: str,
     question: str,
     task_id: str,
+    transferring_flag: str = None,
     upload_flag: str = None,
     transcribing_flag: str = None,
     transcoding_flag: str = None,

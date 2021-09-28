@@ -124,18 +124,34 @@ def is_idle_question(question_id: str) -> bool:
 
 
 def init_stage(req: ProcessAnswerRequest, task_id: str):
+    mentor = req.get("mentor")
+    question = req.get("question")
+    trim = req.get("trim", None)
     video_path = req.get("video_path", "")
     if not video_path:
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                upload_flag="FAILED",
+            )
+        )
         raise Exception("missing required param 'video_path'")
     video_path_full = upload_path(video_path)
     if not path.isfile(video_path_full):
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                upload_flag="FAILED",
+            )
+        )
         raise Exception(f"video not found for path '{video_path}'")
     with _video_work_dir(video_path_full) as context:
         try:
             print("in init stage")
-            mentor = req.get("mentor")
-            question = req.get("question")
-            trim = req.get("trim", None)
             video_file, work_dir = context
             update_status(
                 StatusUpdateRequest(
@@ -176,16 +192,32 @@ def init_stage(req: ProcessAnswerRequest, task_id: str):
 
 def transcode_stage(req: ProcessAnswerRequest, task_id: str):
     video_path = req.get("video_path", "")
+    mentor = req.get("mentor")
+    question = req.get("question")
     if not video_path:
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                transcoding_flag="FAILED",
+            )
+        )
         raise Exception("missing required param 'video_path'")
     video_path_full = upload_path(video_path)
     if not path.isfile(video_path_full):
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                transcoding_flag="FAILED",
+            )
+        )
         raise Exception(f"video not found for path '{video_path}'")
     with _video_work_dir(video_path_full) as context:
         try:
             print("in transcode stage")
-            mentor = req.get("mentor")
-            question = req.get("question")
             video_file, work_dir = context
             MediaUpload = Tuple[  # noqa: N806
                 str, str, str, str, str
@@ -263,17 +295,33 @@ def transcode_stage(req: ProcessAnswerRequest, task_id: str):
 
 
 def transcribe_stage(req: ProcessAnswerRequest, task_id: str):
+    mentor = req.get("mentor")
+    question = req.get("question")
     video_path = req.get("video_path", "")
     if not video_path:
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                transcribing_flag="FAILED",
+            )
+        )
         raise Exception("missing required param 'video_path'")
     video_path_full = upload_path(video_path)
     if not path.isfile(video_path_full):
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                transcribing_flag="FAILED",
+            )
+        )
         raise Exception(f"video not found for path '{video_path}'")
     with _video_work_dir(video_path_full) as context:
         try:
             print("in transcribe stage")
-            mentor = req.get("mentor")
-            question = req.get("question")
             is_idle = is_idle_question(question)
             video_file, work_dir = context
             audio_file = video_to_audio(video_file)
@@ -502,21 +550,21 @@ def upload_transcribe_transcode_answer_video(
             # should log that finalization failed, or whichever task this is
 
 
-def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
+def extract_params_for_finalization_stage(
+    dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
+):
     # extract params from children tasks which get passed up as dicts
-    print("dict_tuple in finalization_stage: ")
-    print(dict_tuple)
-    print("req in finalization_stage: ")
-    print(req)
-    print("task_id in finalization_stage: ")
-    print(task_id)
+    # print("dict_tuple in finalization_stage: ")
+    # print(dict_tuple)
+    # print("req in finalization_stage: ")
+    # print(req)
+    # print("task_id in finalization_stage: ")
+    # print(task_id)
     params = req
     params["media"] = []
-    print("params before processing: ")
-    print(params)
-
+    # print("params before processing: ")
+    # print(params)
     dict_tuple = dict_tuple[0]
-
     for dic in dict_tuple:
         if "video_path" in dic:
             params["video_path"] = dic["video_path"]
@@ -527,52 +575,52 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
                 params["media"].append(media)
 
     if "media" not in params:
+        update_status(
+            StatusUpdateRequest(
+                mentor=params["mentor"],
+                question=params["question"],
+                task_id=task_id,
+                finalization_flag="FAILED",
+            )
+        )
         raise Exception("Missing media param in finalization stage")
     if "transcript" not in params:
+        update_status(
+            StatusUpdateRequest(
+                mentor=params["mentor"],
+                question=params["question"],
+                task_id=task_id,
+                finalization_flag="FAILED",
+            )
+        )
         raise Exception("Missing transcript param in finalization stage")
     if "video_path" not in params:
+        update_status(
+            StatusUpdateRequest(
+                mentor=params["mentor"],
+                question=params["question"],
+                task_id=task_id,
+                finalization_flag="FAILED",
+            )
+        )
         raise Exception("Missing video_path param in finalization stage")
-    print("params after processing: ")
-    print(params)
-    try:
-        mentor = params.get("mentor")
-        question = params.get("question")
-        video_path_full = upload_path(params["video_path"])
-        update_status(
-            StatusUpdateRequest(
-                mentor=mentor,
-                question=question,
-                task_id=task_id,
-                finalization_flag="IN_PROGRESS",
-            )
-        )
+    # print("params after processing: ")
+    # print(params)
+    return params
 
-        # TODO: create VTT + uploads it to S3 (other media already uploaded by transcode step)
 
-        transcript = params["transcript"]
-        media = params["media"]
+def get_video_and_vtt_file_paths(work_dir: Path):
+    video_web_file = work_dir / "web.mp4"
+    vtt_file = work_dir / "subtitles.vtt"
+    return video_web_file, vtt_file
 
-        update_answer(
-            AnswerUpdateRequest(
-                mentor=mentor, question=question, transcript=transcript, media=media
-            )
-        )
-        update_status(
-            StatusUpdateRequest(
-                mentor=mentor,
-                question=question,
-                task_id=task_id,
-                finalization_flag="DONE",
-                transcript=transcript,
-                media=media,
-            )
-        )
-        return ProcessAnswerResponse(**params)
-        # END: finalization
-    except Exception as x:
-        import logging
 
-        logging.exception(x)
+def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
+    params = extract_params_for_finalization_stage(dict_tuple, req, task_id)
+    video_path = req.get("video_path", "")
+    mentor = params.get("mentor")
+    question = params.get("question")
+    if not video_path:
         update_status(
             StatusUpdateRequest(
                 mentor=mentor,
@@ -581,18 +629,114 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
                 finalization_flag="FAILED",
             )
         )
-    finally:
-        video_path_full = video_path_full
+        raise Exception("missing required param 'video_path'")
+    video_path_full = upload_path(video_path)
+    if not path.isfile(video_path_full):
+        update_status(
+            StatusUpdateRequest(
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                finalization_flag="FAILED",
+            )
+        )
+        raise Exception(f"video not found for path '{video_path}'")
+    with _video_work_dir(video_path_full) as context:
         try:
-            #  We are deleting the uploaded video file from a shared network mount here
-            #  We generally do want to clean these up, but maybe should have a flag
-            # in the job request like "disable_delete_file_on_complete" (default False)
-            remove(video_path_full)
+            video_path_full = upload_path(params["video_path"])
+            video_file, work_dir = context
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    finalization_flag="IN_PROGRESS",
+                )
+            )
+            media_uploads = []
+            media = params["media"]
+            transcript = params["transcript"] or ""
+            if params["transcript"]:
+                try:
+                    video_web_file, vtt_file = get_video_and_vtt_file_paths(work_dir)
+                    transcript_to_vtt(video_web_file, vtt_file, transcript)
+                    media_uploads.append(
+                        ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
+                    )
+                except Exception as vtt_err:
+                    import logging
+
+                    logging.error(f"Failed to create vtt file at {vtt_file}")
+                    logging.exception(vtt_err)
+
+            if media_uploads:
+                s3 = _create_s3_client()
+                s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
+                video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
+                for media_type, tag, file_name, content_type, file in media_uploads:
+                    if path.isfile(file):
+                        item_path = f"{video_path_base}{file_name}"
+                        media.append(
+                            {
+                                "type": media_type,
+                                "tag": tag,
+                                "url": item_path,
+                            }
+                        )
+                        s3.upload_file(
+                            str(file),
+                            s3_bucket,
+                            item_path,
+                            ExtraArgs={"ContentType": content_type},
+                        )
+                    else:
+                        import logging
+
+                        logging.error(f"Failed to find file at {file}")
+
+            update_answer(
+                AnswerUpdateRequest(
+                    mentor=mentor, question=question, transcript=transcript, media=media
+                )
+            )
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    finalization_flag="DONE",
+                    transcript=transcript,
+                    media=media,
+                )
+            )
+            return ProcessAnswerResponse(**params)
+            # END: finalization
         except Exception as x:
             import logging
 
-            logging.error(f"failed to delete uploaded video file '{video_path_full}'")
             logging.exception(x)
+            update_status(
+                StatusUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    finalization_flag="FAILED",
+                )
+            )
+        finally:
+            video_path_full = video_path_full
+            try:
+                #  We are deleting the uploaded video file from a shared network mount here
+                #  We generally do want to clean these up, but maybe should have a flag
+                # in the job request like "disable_delete_file_on_complete" (default False)
+                remove(video_path_full)
+            except Exception as x:
+                import logging
+
+                logging.error(
+                    f"failed to delete uploaded video file '{video_path_full}'"
+                )
+                logging.exception(x)
 
 
 def process_transfer_video(req: ProcessTransferRequest, task_id: str):
@@ -608,8 +752,7 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
             mentor=mentor,
             question=question,
             task_id=task_id,
-            # TODO:
-            # status="TRANSFER_IN_PROGRESS",
+            transferring_flag="IN_PROGRESS",
             transcript=transcript,
             media=media,
         )
@@ -639,7 +782,7 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                         question=question,
                         task_id=task_id,
                         # TODO
-                        # status="TRANSFER_IN_PROGRESS",
+                        transferring_flag="IN_PROGRESS",
                         transcript=transcript,
                         media=media,
                     )
@@ -656,8 +799,7 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                         mentor=mentor,
                         question=question,
                         task_id=task_id,
-                        # TODO:
-                        # status="TRANSFER_FAILED",
+                        transferring_flag="FAILED",
                         transcript=transcript,
                         media=media,
                     )
@@ -675,8 +817,7 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
             mentor=mentor,
             question=question,
             task_id=task_id,
-            # TODO: this means transfer is done
-            # status="DONE",
+            transferring_flag="DONE",
             transcript=transcript,
             media=media,
         )

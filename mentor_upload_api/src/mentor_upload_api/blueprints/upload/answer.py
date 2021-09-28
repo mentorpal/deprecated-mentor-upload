@@ -130,7 +130,6 @@ def cancel():
     return jsonify({"data": {"id": t.id, "cancelledId": task_id}})
 
 
-# TODO : adapt this to the multiple process types
 @answer_blueprint.route("/status/<task_id>/", methods=["GET"])
 @answer_blueprint.route("/status/<task_id>", methods=["GET"])
 def upload_status(task_id: str):

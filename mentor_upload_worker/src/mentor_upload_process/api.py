@@ -49,6 +49,7 @@ class StatusUpdateRequest:
     mentor: str
     question: str
     task_id: str
+    transferring_flag: str = None
     upload_flag: str = None
     transcribing_flag: str = None
     transcoding_flag: str = None
@@ -62,6 +63,7 @@ class StatusUpdateResponse:
     mentor: str
     question: str
     task_id: str
+    transferring_flag: str = None
     upload_flag: str = None
     transcribing_flag: str = None
     transcoding_flag: str = None

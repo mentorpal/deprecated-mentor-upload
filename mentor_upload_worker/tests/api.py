@@ -43,6 +43,7 @@ class StatusUpdateRequest:
     question: str
     task_id: str
     status: str = None
+    transferring_flag: str = None
     upload_flag: str = None
     transcribing_flag: str = None
     transcoding_flag: str = None
