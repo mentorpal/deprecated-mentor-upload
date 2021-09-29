@@ -92,7 +92,7 @@ def python_path_env(monkeypatch, tmpdir):
 )
 @responses.activate
 @patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
-@patch("mentor_upload_tasks.tasks.init_stage")
+@patch("mentor_upload_tasks.tasks.trim_upload_stage")
 @patch("mentor_upload_tasks.tasks.transcode_stage")
 @patch("mentor_upload_tasks.tasks.transcribe_stage")
 @patch("mentor_upload_tasks.tasks.finalization_stage")
@@ -201,7 +201,7 @@ def test_upload(
 @responses.activate
 @patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
 @patch("mentor_upload_tasks.tasks.cancel_task")
-@patch("mentor_upload_tasks.tasks.init_stage")
+@patch("mentor_upload_tasks.tasks.trim_upload_stage")
 @patch("mentor_upload_tasks.tasks.transcode_stage")
 @patch("mentor_upload_tasks.tasks.transcribe_stage")
 @patch("mentor_upload_tasks.tasks.finalization_stage")
@@ -308,7 +308,7 @@ def test_cancel(
 )
 @responses.activate
 @patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
-@patch("mentor_upload_tasks.tasks.init_stage")
+@patch("mentor_upload_tasks.tasks.trim_upload_stage")
 @patch("mentor_upload_tasks.tasks.transcode_stage")
 @patch("mentor_upload_tasks.tasks.transcribe_stage")
 @patch("mentor_upload_tasks.tasks.finalization_stage")
@@ -400,7 +400,7 @@ def test_env_fixes_ssl_status_url(
 #         ),
 #     ],
 # )
-# @patch("mentor_upload_tasks.tasks.init_stage")
+# @patch("mentor_upload_tasks.tasks.trim_upload_stage")
 # @patch("mentor_upload_tasks.tasks.transcode_stage")
 # @patch("mentor_upload_tasks.tasks.transcribe_stage")
 # @patch("mentor_upload_tasks.tasks.finalization_stage")

@@ -122,7 +122,7 @@ def is_idle_question(question_id: str) -> bool:
     return name == "_IDLE_"
 
 
-def init_stage(req: ProcessAnswerRequest, task_id: str):
+def trim_upload_stage(req: ProcessAnswerRequest, task_id: str):
     mentor = req.get("mentor")
     question = req.get("question")
     trim = req.get("trim", None)

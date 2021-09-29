@@ -15,7 +15,7 @@ from . import (
     ProcessTransferRequest,
     get_queue_finalization_stage,
     get_queue_transcribe_stage,
-    get_queue_init_stage,
+    get_queue_trim_upload_stage,
     get_queue_transcode_stage,
 )
 
@@ -41,13 +41,13 @@ celery.conf.update(
         "task_default_routing_key": get_queue_finalization_stage(),
         "task_queues": [
             Queue(
-                get_queue_init_stage(),
+                get_queue_trim_upload_stage(),
                 exchange=Exchange(
-                    get_queue_init_stage(),
+                    get_queue_trim_upload_stage(),
                     "direct",
                     durable=True,
                 ),
-                routing_key=get_queue_init_stage(),
+                routing_key=get_queue_trim_upload_stage(),
             ),
             Queue(
                 get_queue_transcode_stage(),
@@ -76,8 +76,8 @@ celery.conf.update(
             ),
         ],
         "task_routes": {
-            "mentor_upload_tasks.tasks.init_stage": {
-                "queue": get_queue_transcribe_stage()
+            "mentor_upload_tasks.tasks.trim_upload_stage": {
+                "queue": get_queue_trim_upload_stage()
             },
             "mentor_upload_tasks.tasks.transcribe_stage": {
                 "queue": get_queue_transcribe_stage()
@@ -95,7 +95,7 @@ celery.conf.update(
 
 
 @celery.task()
-def init_stage(
+def trim_upload_stage(
     req: ProcessAnswerRequest,
 ):
     pass

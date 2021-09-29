@@ -46,8 +46,8 @@ def begin_tasks_in_parallel(req):
                 chord(
                     group(
                         [
-                            mentor_upload_tasks.tasks.init_stage.s(req=req).set(
-                                queue=mentor_upload_tasks.get_queue_init_stage()
+                            mentor_upload_tasks.tasks.trim_upload_stage.s(req=req).set(
+                                queue=mentor_upload_tasks.get_queue_trim_upload_stage()
                             )
                         ]
                     ),

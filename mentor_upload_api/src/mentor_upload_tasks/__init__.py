@@ -8,7 +8,7 @@ from os import environ
 from typing import TypedDict
 
 
-def get_queue_init_stage() -> str:
+def get_queue_trim_upload_stage() -> str:
     return environ.get("INIT_QUEUE_NAME") or "init"
 
 

@@ -22,7 +22,7 @@ from mentor_upload_process import (  # NOQA
 )
 
 
-def get_queue_init_stage() -> str:
+def get_queue_trim_upload_stage() -> str:
     return os.environ.get("INIT_QUEUE_NAME") or "init"
 
 
@@ -60,13 +60,13 @@ celery.conf.update(
         "task_default_routing_key": get_queue_finalization_stage(),
         "task_queues": [
             Queue(
-                get_queue_init_stage(),
+                get_queue_trim_upload_stage(),
                 exchange=Exchange(
-                    get_queue_init_stage(),
+                    get_queue_trim_upload_stage(),
                     "direct",
                     durable=True,
                 ),
-                routing_key=get_queue_init_stage(),
+                routing_key=get_queue_trim_upload_stage(),
             ),
             Queue(
                 get_queue_transcode_stage(),
@@ -95,8 +95,8 @@ celery.conf.update(
             ),
         ],
         "task_routes": {
-            "mentor_upload_tasks.tasks.init_stage": {
-                "queue": get_queue_transcribe_stage()
+            "mentor_upload_tasks.tasks.trim_upload_stage": {
+                "queue": get_queue_trim_upload_stage()
             },
             "mentor_upload_tasks.tasks.transcribe_stage": {
                 "queue": get_queue_transcribe_stage()
@@ -114,11 +114,11 @@ celery.conf.update(
 
 
 @celery.task()
-def init_stage(
+def trim_upload_stage(
     req: ProcessAnswerRequest,
 ) -> ProcessAnswerResponse:
-    task_id = init_stage.request.id
-    return process.init_stage(req, task_id)
+    task_id = trim_upload_stage.request.id
+    return process.trim_upload_stage(req, task_id)
 
 
 @celery.task()

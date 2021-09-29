@@ -430,10 +430,10 @@ def test_init_stage(
         ]
 
         from mentor_upload_process.process import (
-            init_stage,
+            trim_upload_stage,
         )
 
-        init_stage(req, "fake_task_id")
+        trim_upload_stage(req, "fake_task_id")
 
         _expect_gql(expected_gql)
 
@@ -841,13 +841,13 @@ def test_raises_if_video_path_not_specified():
         ),
     ]
     from mentor_upload_process.process import (
-        init_stage,
+        trim_upload_stage,
         transcode_stage,
         transcribe_stage,
     )
 
     try:
-        init_stage(req, "fake_task_id")
+        trim_upload_stage(req, "fake_task_id")
         _expect_gql(expected_gql)
 
     except Exception as err:
@@ -897,14 +897,14 @@ def test_raises_if_video_not_found_for_path():
         ),
     ]
     from mentor_upload_process.process import (
-        init_stage,
+        trim_upload_stage,
         transcode_stage,
         transcribe_stage,
     )
 
     try:
 
-        init_stage(req, "fake_task_id")
+        trim_upload_stage(req, "fake_task_id")
         _expect_gql(expected_gql)
 
     except Exception as err:
