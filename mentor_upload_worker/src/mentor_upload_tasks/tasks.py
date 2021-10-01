@@ -133,18 +133,20 @@ def trim_upload_stage(
 
 @celery.task()
 def transcode_stage(
+    dict_tuple: dict, 
     req: ProcessAnswerRequest,
 ) -> ProcessAnswerResponse:
     task_id = transcode_stage.request.id
-    return process.transcode_stage(req, task_id)
+    return process.transcode_stage(dict_tuple, req, task_id)
 
 
 @celery.task()
 def transcribe_stage(
+    dict_tuple: dict, 
     req: ProcessAnswerRequest,
 ) -> ProcessAnswerResponse:
     task_id = transcribe_stage.request.id
-    return process.transcribe_stage(req, task_id)
+    return process.transcribe_stage(dict_tuple, req, task_id)
 
 
 @celery.task()

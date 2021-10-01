@@ -110,6 +110,7 @@ def trim_upload_stage(
 
 @celery.task()
 def transcode_stage(
+    dict_tuple: dict, 
     req: ProcessAnswerRequest,
 ):
     pass
@@ -117,6 +118,7 @@ def transcode_stage(
 
 @celery.task()
 def transcribe_stage(
+    dict_tuple: dict, 
     req: ProcessAnswerRequest,
 ):
     pass

@@ -33,10 +33,10 @@ def get_upload_root() -> str:
 
 def begin_tasks_in_parallel(req):
     parallel_group = group(
-        mentor_upload_tasks.tasks.transcode_stage.si(req=req).set(
+        mentor_upload_tasks.tasks.transcode_stage.s(req=req).set(
             queue=mentor_upload_tasks.get_queue_transcode_stage()
         ),
-        mentor_upload_tasks.tasks.transcribe_stage.si(req=req).set(
+        mentor_upload_tasks.tasks.transcribe_stage.s(req=req).set(
             queue=mentor_upload_tasks.get_queue_transcribe_stage()
         ),
     )

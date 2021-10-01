@@ -77,19 +77,30 @@ def _video_work_dir(source_path: str):
     media_work_dir = (
         Path(environ.get("TRANSCODE_WORK_DIR") or mkdtemp()) / _new_work_dir_name()
     )
-    try:
-        makedirs(media_work_dir)
-        video_file = media_work_dir / path.basename(source_path)
-        copyfile(source_path, video_file)
-        yield (video_file, media_work_dir)
-    finally:
-        try:
-            rmtree(str(media_work_dir))
-        except Exception as x:
-            import logging
+    #try:
+    makedirs(media_work_dir)
+    video_file = media_work_dir / path.basename(source_path)
+    copyfile(source_path, video_file)
+    yield (video_file, media_work_dir)
+    
+    # finally:
+    #     try:
+    #         rmtree(str(media_work_dir))
+    #     except Exception as x:
+    #         import logging
 
-            logging.error(f"failed to delete media work dir {media_work_dir}")
-            logging.exception(x)
+    #         logging.error(f"failed to delete media work dir {media_work_dir}")
+    #         logging.exception(x)
+
+@contextmanager
+def _delete_video_work_dir(work_dir: str):
+    try:
+        rmtree(str(work_dir))
+    except Exception as x:
+        import logging
+
+        logging.error(f"failed to delete media work dir {work_dir}")
+        logging.exception(x)
 
 
 def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
@@ -166,6 +177,7 @@ def trim_upload_stage(req: ProcessAnswerRequest, task_id: str):
                     new_status="DONE",
                 )
             )
+            return {"video_file": str(video_file), "work_dir": str(work_dir)}
         except Exception as x:
             import logging
 
@@ -180,11 +192,89 @@ def trim_upload_stage(req: ProcessAnswerRequest, task_id: str):
             )
 
 
-def transcode_stage(req: ProcessAnswerRequest, task_id: str):
-    video_path = req.get("video_path", "")
-    mentor = req.get("mentor")
-    question = req.get("question")
-    if not video_path:
+def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
+    params = req
+
+    import logging
+    logging.warning("dict tuple in transcode")
+    logging.warning(dict_tuple)
+
+    for dic in dict_tuple:
+        if "video_file" in dic:
+            params["video_file"] = dic["video_file"]
+        if "work_dir" in dic:
+            params["work_dir"] = dic["work_dir"]
+
+    mentor = params.get("mentor")
+    question = params.get("question")
+    work_dir = params.get("work_dir")
+    video_file = params.get("video_file")
+
+    logging.warning("params after processing in transcode")
+    logging.warning(params)
+
+    try:
+        MediaUpload = Tuple[  # noqa: N806
+            str, str, str, str, str
+        ]  # media_type, tag, file_name, content_type, file
+        media_uploads: List[MediaUpload] = []
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=req.get("mentor"),
+                question=req.get("question"),
+                task_id=task_id,
+                new_status="IN_PROGRESS",
+            )
+        )
+        video_mobile_file = work_dir + "mobile.mp4"
+        video_encode_for_mobile(video_file, video_mobile_file)
+        media_uploads.append(
+            ("video", "mobile", "mobile.mp4", "video/mp4", video_mobile_file)
+        )
+        video_web_file = work_dir + "web.mp4"
+        video_encode_for_web(video_file, video_web_file)
+        media_uploads.append(
+            ("video", "web", "web.mp4", "video/mp4", video_web_file)
+        )
+
+        media = []
+        s3 = _create_s3_client()
+        s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
+        video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
+        for media_type, tag, file_name, content_type, file in media_uploads:
+            if path.isfile(file):
+                item_path = f"{video_path_base}{file_name}"
+                media.append(
+                    {
+                        "type": media_type,
+                        "tag": tag,
+                        "url": item_path,
+                    }
+                )
+                s3.upload_file(
+                    str(file),
+                    s3_bucket,
+                    item_path,
+                    ExtraArgs={"ContentType": content_type},
+                )
+            else:
+                import logging
+
+                logging.error(f"Failed to find file at {file}")
+
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=req.get("mentor"),
+                question=req.get("question"),
+                task_id=task_id,
+                new_status="DONE",
+            )
+        )
+        return {"media": media, "video_file": video_file, "work_dir": work_dir}
+    except Exception as x:
+        import logging
+
+        logging.exception(x)
         upload_task_status_update(
             UpdateTaskStatusRequest(
                 mentor=req.get("mentor"),
@@ -193,176 +283,94 @@ def transcode_stage(req: ProcessAnswerRequest, task_id: str):
                 new_status="FAILED",
             )
         )
-        raise Exception("missing required param 'video_path'")
-    video_path_full = upload_path(video_path)
-    if not path.isfile(video_path_full):
-        upload_task_status_update(
-            UpdateTaskStatusRequest(
-                mentor=req.get("mentor"),
-                question=req.get("question"),
-                task_id=task_id,
-                new_status="FAILED",
-            )
-        )
-        raise Exception(f"video not found for path '{video_path}'")
-    with _video_work_dir(video_path_full) as context:
-        try:
-            video_file, work_dir = context
-            MediaUpload = Tuple[  # noqa: N806
-                str, str, str, str, str
-            ]  # media_type, tag, file_name, content_type, file
-            media_uploads: List[MediaUpload] = []
+
+
+def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
+    params = req
+
+    import logging
+    logging.warning("dict tuple in transcribe")
+    logging.warning(dict_tuple)
+    for dic in dict_tuple:
+        if "video_file" in dic:
+            params["video_file"] = dic["video_file"]
+        if "work_dir" in dic:
+            params["work_dir"] = dic["work_dir"]
+
+    mentor = params.get("mentor")
+    question = params.get("question")
+    work_dir = params.get("work_dir")
+    video_file = params.get("video_file")
+
+    logging.warning("params after processing in transcribe")
+    logging.warning(params)
+
+    try:
+        is_idle = is_idle_question(question)
+        audio_file = video_to_audio(video_file)
+        transcript = ""
+        if not is_idle:
             upload_task_status_update(
                 UpdateTaskStatusRequest(
-                    mentor=req.get("mentor"),
-                    question=req.get("question"),
+                    mentor=mentor,
+                    question=question,
                     task_id=task_id,
                     new_status="IN_PROGRESS",
                 )
             )
-            video_mobile_file = work_dir / "mobile.mp4"
-            video_encode_for_mobile(video_file, video_mobile_file)
-            media_uploads.append(
-                ("video", "mobile", "mobile.mp4", "video/mp4", video_mobile_file)
+            transcription_service = transcribe.init_transcription_service()
+            transcribe_result = transcription_service.transcribe(
+                [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
             )
-            video_web_file = work_dir / "web.mp4"
-            video_encode_for_web(video_file, video_web_file)
-            media_uploads.append(
-                ("video", "web", "web.mp4", "video/mp4", video_web_file)
-            )
-
-            media = []
-            s3 = _create_s3_client()
-            s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
-            video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
-            for media_type, tag, file_name, content_type, file in media_uploads:
-                if path.isfile(file):
-                    item_path = f"{video_path_base}{file_name}"
-                    media.append(
-                        {
-                            "type": media_type,
-                            "tag": tag,
-                            "url": item_path,
-                        }
-                    )
-                    s3.upload_file(
-                        str(file),
-                        s3_bucket,
-                        item_path,
-                        ExtraArgs={"ContentType": content_type},
-                    )
-                else:
-                    import logging
-
-                    logging.error(f"Failed to find file at {file}")
-
-            upload_task_status_update(
-                UpdateTaskStatusRequest(
-                    mentor=req.get("mentor"),
-                    question=req.get("question"),
-                    task_id=task_id,
-                    new_status="DONE",
-                )
-            )
-            return {"media": media, "video_path": video_path}
-        except Exception as x:
-            import logging
-
-            logging.exception(x)
-            upload_task_status_update(
-                UpdateTaskStatusRequest(
-                    mentor=req.get("mentor"),
-                    question=req.get("question"),
-                    task_id=task_id,
-                    new_status="FAILED",
-                )
-            )
-
-
-def transcribe_stage(req: ProcessAnswerRequest, task_id: str):
-    question = req.get("question")
-    video_path = req.get("video_path", "")
-    if not video_path:
+            job_result = transcribe_result.first()
+            transcript = job_result.transcript if job_result else ""
         upload_task_status_update(
             UpdateTaskStatusRequest(
-                mentor=req.get("mentor"),
-                question=req.get("question"),
+                mentor=mentor,
+                question=question,
+                task_id=task_id,
+                new_status="DONE",
+            )
+        )
+        # returns transcript for finalization stage to upload
+        return {"transcript": transcript}
+    except Exception as x:
+        import logging
+
+        logging.exception(x)
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=mentor,
+                question=question,
                 task_id=task_id,
                 new_status="FAILED",
             )
         )
-        raise Exception("missing required param 'video_path'")
-    video_path_full = upload_path(video_path)
-    if not path.isfile(video_path_full):
-        upload_task_status_update(
-            UpdateTaskStatusRequest(
-                mentor=req.get("mentor"),
-                question=req.get("question"),
-                task_id=task_id,
-                new_status="FAILED",
-            )
-        )
-        raise Exception(f"video not found for path '{video_path}'")
-    with _video_work_dir(video_path_full) as context:
-        try:
-            is_idle = is_idle_question(question)
-            video_file, work_dir = context
-            audio_file = video_to_audio(video_file)
-            transcript = ""
-            if not is_idle:
-                upload_task_status_update(
-                    UpdateTaskStatusRequest(
-                        mentor=req.get("mentor"),
-                        question=req.get("question"),
-                        task_id=task_id,
-                        new_status="IN_PROGRESS",
-                    )
-                )
-                transcription_service = transcribe.init_transcription_service()
-                transcribe_result = transcription_service.transcribe(
-                    [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
-                )
-                job_result = transcribe_result.first()
-                transcript = job_result.transcript if job_result else ""
-            upload_task_status_update(
-                UpdateTaskStatusRequest(
-                    mentor=req.get("mentor"),
-                    question=req.get("question"),
-                    task_id=task_id,
-                    new_status="DONE",
-                )
-            )
-            # returns transcript for finalization stage to upload
-            return {"transcript": transcript}
-        except Exception as x:
-            import logging
-
-            logging.exception(x)
-            upload_task_status_update(
-                UpdateTaskStatusRequest(
-                    mentor=req.get("mentor"),
-                    question=req.get("question"),
-                    task_id=task_id,
-                    new_status="FAILED",
-                )
-            )
-    pass
 
 
 def extract_params_for_finalization_stage(
     dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
 ):
+    import logging
+    logging.warning("dict tuple in finalization")
+    logging.warning(dict_tuple)
     params = req
     params["media"] = []
     dict_tuple = dict_tuple[0]
     for dic in dict_tuple:
         if "video_path" in dic:
             params["video_path"] = dic["video_path"]
+        if "video_web_file_path" in dic:
+            params["video_web_file_path"] = dic["video_web_file_path"]
         if "transcript" in dic:
             params["transcript"] = dic["transcript"]
         if "media" in dic:
             for media in dic["media"]:
                 params["media"].append(media)
+        if "video_file" in dic:
+            params["video_file"] = dic["video_file"]
+        if "work_dir" in dic:
+            params["work_dir"] = dic["work_dir"]
 
     if "media" not in params:
         upload_task_status_update(
@@ -398,138 +406,120 @@ def extract_params_for_finalization_stage(
     return params
 
 
-def get_video_and_vtt_file_paths(work_dir: Path):
-    video_web_file = work_dir / "web.mp4"
-    vtt_file = work_dir / "subtitles.vtt"
+def get_video_and_vtt_file_paths(work_dir: str):
+    video_web_file = work_dir + "web.mp4"
+    vtt_file = work_dir + "subtitles.vtt"
     return video_web_file, vtt_file
 
 
 def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
     params = extract_params_for_finalization_stage(dict_tuple, req, task_id)
-    video_path = req.get("video_path", "")
     mentor = params.get("mentor")
     question = params.get("question")
-    if not video_path:
+    work_dir = params.get("work_dir")
+    video_file = params.get("video_file")
+
+    import logging
+    logging.warning("params in finalization stage")
+    logging.warning(params)
+    try:
+        video_path_full = upload_path(params["video_path"])
         upload_task_status_update(
             UpdateTaskStatusRequest(
                 mentor=req.get("mentor"),
                 question=req.get("question"),
                 task_id=task_id,
-                new_status="FAILED",
+                new_status="IN_PROGRESS",
             )
         )
-        raise Exception("missing required param 'video_path'")
-    video_path_full = upload_path(video_path)
-    if not path.isfile(video_path_full):
-        upload_task_status_update(
-            UpdateTaskStatusRequest(
-                mentor=req.get("mentor"),
-                question=req.get("question"),
-                task_id=task_id,
-                new_status="FAILED",
-            )
-        )
-        raise Exception(f"video not found for path '{video_path}'")
-    with _video_work_dir(video_path_full) as context:
-        try:
-            video_path_full = upload_path(params["video_path"])
-            video_file, work_dir = context
-            upload_task_status_update(
-                UpdateTaskStatusRequest(
-                    mentor=req.get("mentor"),
-                    question=req.get("question"),
-                    task_id=task_id,
-                    new_status="IN_PROGRESS",
+        media_uploads = []
+        media = params["media"]
+        transcript = params["transcript"] or ""
+        if params["transcript"]:
+            try:
+                video_web_file, vtt_file = get_video_and_vtt_file_paths(work_dir)
+                transcript_to_vtt(video_web_file, vtt_file, transcript)
+                media_uploads.append(
+                    ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
                 )
-            )
-            media_uploads = []
-            media = params["media"]
-            transcript = params["transcript"] or ""
-            if params["transcript"]:
-                try:
-                    video_web_file, vtt_file = get_video_and_vtt_file_paths(work_dir)
-                    transcript_to_vtt(video_web_file, vtt_file, transcript)
-                    media_uploads.append(
-                        ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
+            except Exception as vtt_err:
+                import logging
+
+                logging.error(f"Failed to create vtt file at {vtt_file}")
+                logging.exception(vtt_err)
+
+        if media_uploads:
+            s3 = _create_s3_client()
+            s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
+            video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
+            for media_type, tag, file_name, content_type, file in media_uploads:
+                if path.isfile(file):
+                    item_path = f"{video_path_base}{file_name}"
+                    media.append(
+                        {
+                            "type": media_type,
+                            "tag": tag,
+                            "url": item_path,
+                        }
                     )
-                except Exception as vtt_err:
+                    s3.upload_file(
+                        str(file),
+                        s3_bucket,
+                        item_path,
+                        ExtraArgs={"ContentType": content_type},
+                    )
+                else:
                     import logging
 
-                    logging.error(f"Failed to create vtt file at {vtt_file}")
-                    logging.exception(vtt_err)
+                    logging.error(f"Failed to find file at {file}")
 
-            if media_uploads:
-                s3 = _create_s3_client()
-                s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
-                video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
-                for media_type, tag, file_name, content_type, file in media_uploads:
-                    if path.isfile(file):
-                        item_path = f"{video_path_base}{file_name}"
-                        media.append(
-                            {
-                                "type": media_type,
-                                "tag": tag,
-                                "url": item_path,
-                            }
-                        )
-                        s3.upload_file(
-                            str(file),
-                            s3_bucket,
-                            item_path,
-                            ExtraArgs={"ContentType": content_type},
-                        )
-                    else:
-                        import logging
-
-                        logging.error(f"Failed to find file at {file}")
-
-            update_answer(
-                AnswerUpdateRequest(
-                    mentor=mentor, question=question, transcript=transcript, media=media
-                )
+        update_answer(
+            AnswerUpdateRequest(
+                mentor=mentor, question=question, transcript=transcript, media=media
             )
-            upload_task_update(
-                UploadTaskRequest(
-                    mentor=mentor,
-                    question=question,
-                    task_list=[
-                        {
-                            "task_name": "finalization",
-                            "task_id": task_id,
-                            "status": "DONE",
-                        }
-                    ],
-                    transcript=transcript,
-                    media=media,
-                )
+        )
+        upload_task_update(
+            UploadTaskRequest(
+                mentor=mentor,
+                question=question,
+                task_list=[
+                    {
+                        "task_name": "finalization",
+                        "task_id": task_id,
+                        "status": "DONE",
+                    }
+                ],
+                transcript=transcript,
+                media=media,
             )
-            return ProcessAnswerResponse(**params)
+        )
+        return ProcessAnswerResponse(**params)
+    except Exception as x:
+        import logging
+
+        logging.exception(x)
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=req.get("mentor"),
+                question=req.get("question"),
+                task_id=task_id,
+                new_status="FAILED",
+            )
+        )
+    finally:
+        video_path_full = video_path_full
+        try:
+            #  We are deleting the uploaded video file from a shared network mount here
+            #  We generally do want to clean these up, but maybe should have a flag
+            # in the job request like "disable_delete_file_on_complete" (default False)
+            remove(video_path_full)
         except Exception as x:
             import logging
 
-            logging.exception(x)
-            upload_task_status_update(
-                UpdateTaskStatusRequest(
-                    mentor=req.get("mentor"),
-                    question=req.get("question"),
-                    task_id=task_id,
-                    new_status="FAILED",
-                )
+            logging.error(
+                f"failed to delete uploaded video file '{video_path_full}'"
             )
-        finally:
-            video_path_full = video_path_full
-            try:
-                #  We are deleting the uploaded video file from a shared network mount here
-                #  We generally do want to clean these up, but maybe should have a flag
-                # in the job request like "disable_delete_file_on_complete" (default False)
-                remove(video_path_full)
-            except Exception as x:
-                import logging
-
-                logging.error(
-                    f"failed to delete uploaded video file '{video_path_full}'"
-                )
-                logging.exception(x)
+            logging.exception(x)
 
 
 def process_transfer_video(req: ProcessTransferRequest, task_id: str):
