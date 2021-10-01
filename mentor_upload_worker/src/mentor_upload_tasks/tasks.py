@@ -38,6 +38,10 @@ def get_queue_finalization_stage() -> str:
     return os.environ.get("FINALIZATION_QUEUE_NAME") or "finalization"
 
 
+def get_queue_cancel_task() -> str:
+    return os.environ.get("CANCEL_TASK_QUEUE_NAME") or "cancel"
+
+
 broker_url = (
     os.environ.get("UPLOAD_CELERY_BROKER_URL")
     or os.environ.get("CELERY_BROKER_URL")
@@ -93,6 +97,11 @@ celery.conf.update(
                 ),
                 routing_key=get_queue_finalization_stage(),
             ),
+            Queue(
+                get_queue_cancel_task(),
+                exchange=Exchange(get_queue_cancel_task(), "direct", durable=True),
+                routing_key=get_queue_cancel_task(),
+            ),
         ],
         "task_routes": {
             "mentor_upload_tasks.tasks.trim_upload_stage": {
@@ -107,6 +116,7 @@ celery.conf.update(
             "mentor_upload_tasks.tasks.finalization_stage": {
                 "queue": get_queue_finalization_stage()
             },
+            "mentor_upload_tasks.tasks.cancel_task": {"queue": get_queue_cancel_task()},
         },
         "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
     }

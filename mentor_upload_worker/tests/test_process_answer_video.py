@@ -7,6 +7,7 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
 import json
+
 from os import path, makedirs
 from pathlib import Path
 import re
@@ -22,12 +23,15 @@ from transcribe.mock import MockTranscribeJob, MockTranscriptions
 
 from mentor_upload_process import TrimRequest
 from mentor_upload_process.api import (
+    upload_task_req_gql,
+    upload_task_status_req_gql,
+    UpdateTaskStatusRequest,
+    UploadTaskRequest,
     answer_update_gql,
-    status_update_gql,
     fetch_question_name_gql,
     get_graphql_endpoint,
     AnswerUpdateRequest,
-    StatusUpdateRequest,
+    TaskInfo,
 )
 from mentor_upload_process.media_tools import (
     output_args_trim_video,
@@ -127,15 +131,11 @@ def _transcode_expected_media(
     )
 
 
-def _mock_gql_status_update(
+# Note: This is for updating the upload task as a whole.
+def _mock_gql_upload_task_update(
     mentor: str,
     question: str,
-    task_id: str,
-    transferring_flag: str = None,
-    upload_flag: str = None,
-    transcribing_flag: str = None,
-    transcoding_flag: str = None,
-    finalization_flag: str = None,
+    task_list: List[TaskInfo],
     transcript: str = None,
     timestamp: str = None,
     media=None,
@@ -151,17 +151,31 @@ def _mock_gql_status_update(
             media.append(
                 {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"}
             )
-    gql_query = status_update_gql(
-        StatusUpdateRequest(
+    gql_query = upload_task_req_gql(
+        UploadTaskRequest(
             mentor=mentor,
             question=question,
-            task_id=task_id,
-            upload_flag=upload_flag,
-            transcribing_flag=transcribing_flag,
-            transcoding_flag=transcoding_flag,
-            finalization_flag=finalization_flag,
+            task_list=task_list,
             transcript=transcript,
             media=media,
+        )
+    )
+    responses.add(
+        responses.POST,
+        get_graphql_endpoint(),
+        json=gql_query,
+        status=200,
+    )
+    return gql_query
+
+
+# Note: this is for updating a single upload task status
+def _mock_gql_task_status_update(
+    mentor: str, question: str, task_id: str, new_status: str
+) -> dict:
+    gql_query = upload_task_status_req_gql(
+        UpdateTaskStatusRequest(
+            mentor=mentor, question=question, task_id=task_id, new_status=new_status
         )
     )
     responses.add(
@@ -415,17 +429,19 @@ def test_init_stage(
         mock_ffmpeg_cls.side_effect = mock_ffmpeg_constructor
 
         expected_gql = [
-            _mock_gql_status_update(
+            _mock_gql_task_status_update(
                 req["mentor"],
                 req["question"],
-                "fake_task_id",
-                upload_flag="IN_PROGRESS",
+                task_id="fake_task_id",
+                new_status="IN_PROGRESS"
+                # upload_flag={"task_id": "fake_task_id", "flag": "IN_PROGRESS"},
             ),
-            _mock_gql_status_update(
+            _mock_gql_task_status_update(
                 req["mentor"],
                 req["question"],
-                "fake_task_id",
-                upload_flag="DONE",
+                task_id="fake_task_id",
+                new_status="DONE"
+                # upload_flag={"task_id": "fake_task_id", "flag": "IN_PROGRESS"},
             ),
         ]
 
@@ -543,20 +559,20 @@ def test_transcribing_stage(
 
         if not is_idle:
             expected_gql.append(
-                _mock_gql_status_update(
-                    ex.mentor,
-                    ex.question,
-                    "fake_task_id",
-                    transcribing_flag="IN_PROGRESS",
+                _mock_gql_task_status_update(
+                    req["mentor"],
+                    req["question"],
+                    task_id="fake_task_id",
+                    new_status="IN_PROGRESS",
                 ),
             )
 
         expected_gql.append(
-            _mock_gql_status_update(
+            _mock_gql_task_status_update(
                 req["mentor"],
                 req["question"],
-                "fake_task_id",
-                transcribing_flag="DONE",
+                task_id="fake_task_id",
+                new_status="DONE",
             ),
         )
 
@@ -678,18 +694,23 @@ def test_finalization_stage(
 
         _expect_gql(
             [
-                _mock_gql_status_update(
+                _mock_gql_task_status_update(
                     req["mentor"],
                     req["question"],
-                    task_id,
-                    finalization_flag="IN_PROGRESS",
+                    task_id=task_id,
+                    new_status="IN_PROGRESS",
                 ),
                 expected_update_answer_gql_query,
-                _mock_gql_status_update(
+                _mock_gql_upload_task_update(
                     req["mentor"],
                     req["question"],
-                    task_id,
-                    finalization_flag="DONE",
+                    task_list=[
+                        {
+                            "task_name": "finalization",
+                            "task_id": task_id,
+                            "status": "DONE",
+                        }
+                    ],
                     transcript=transcribe_stage_output_dict["transcript"],
                     media=expected_media,
                     timestamp=timestamp,
@@ -768,17 +789,11 @@ def test_transcode_stage(
         from mentor_upload_process.process import transcode_stage
 
         expected_gql = [
-            _mock_gql_status_update(
-                "m1",
-                "q1",
-                task_id,
-                transcoding_flag="IN_PROGRESS",
+            _mock_gql_task_status_update(
+                "m1", "q1", task_id=task_id, new_status="IN_PROGRESS"
             ),
-            _mock_gql_status_update(
-                "m1",
-                "q1",
-                task_id,
-                transcoding_flag="DONE",
+            _mock_gql_task_status_update(
+                "m1", "q1", task_id=task_id, new_status="DONE"
             ),
         ]
 
@@ -821,23 +836,14 @@ def test_raises_if_video_path_not_specified():
     req = {"mentor": "m1", "question": "q1"}
     caught_exception = None
     expected_gql = [
-        _mock_gql_status_update(
-            "m1",
-            "q1",
-            "fake_task_id",
-            upload_flag="FAILED",
+        _mock_gql_task_status_update(
+            "m1", "q1", task_id="fake_task_id", new_status="FAILED"
         ),
-        _mock_gql_status_update(
-            "m1",
-            "q1",
-            "fake_task_id",
-            transcoding_flag="FAILED",
+        _mock_gql_task_status_update(
+            "m1", "q1", task_id="fake_task_id", new_status="FAILED"
         ),
-        _mock_gql_status_update(
-            "m1",
-            "q1",
-            "fake_task_id",
-            transcribing_flag="FAILED",
+        _mock_gql_task_status_update(
+            "m1", "q1", task_id="fake_task_id", new_status="FAILED"
         ),
     ]
     from mentor_upload_process.process import (
@@ -877,23 +883,14 @@ def test_raises_if_video_not_found_for_path():
     req = {"mentor": "m1", "question": "q1", "video_path": "not_exists.mp4"}
     caught_exception = None
     expected_gql = [
-        _mock_gql_status_update(
-            "m1",
-            "q1",
-            "fake_task_id",
-            upload_flag="FAILED",
+        _mock_gql_task_status_update(
+            "m1", "q1", task_id="fake_task_id", new_status="FAILED"
         ),
-        _mock_gql_status_update(
-            "m1",
-            "q1",
-            "fake_task_id",
-            transcoding_flag="FAILED",
+        _mock_gql_task_status_update(
+            "m1", "q1", task_id="fake_task_id", new_status="FAILED"
         ),
-        _mock_gql_status_update(
-            "m1",
-            "q1",
-            "fake_task_id",
-            transcribing_flag="FAILED",
+        _mock_gql_task_status_update(
+            "m1", "q1", task_id="fake_task_id", new_status="FAILED"
         ),
     ]
     from mentor_upload_process.process import (

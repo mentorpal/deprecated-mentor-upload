@@ -14,8 +14,8 @@ from flask import Blueprint, jsonify, request
 from celery import group, chord
 
 from mentor_upload_api.api import (
-    StatusUpdateRequest,
-    update_status,
+    UploadTaskRequest,
+    upload_task_update,
 )
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
@@ -84,21 +84,43 @@ def upload():
         "trim": trim,
     }
     my_chord = begin_tasks_in_parallel(req)
+
     task_ids = []
     for task in my_chord.parent.results:
-        task_ids.append(task.id)
+        task_ids.append(task.id)  # transcode id, transcribe id
     for task in my_chord.parent.parent.results:
-        task_ids.append(task.id)
-    task_ids.append(my_chord.id)
-    update_status(
-        StatusUpdateRequest(
+        task_ids.append(task.id)  # init_id
+    task_ids.append(my_chord.id)  # finalization id
+    print(task_ids)
+    import logging
+
+    logging.warning(task_ids)
+    upload_task_update(
+        UploadTaskRequest(
             mentor=mentor,
             question=question,
-            task_id=task_ids,
-            upload_flag="QUEUED",
-            transcoding_flag="QUEUED",
-            finalization_flag="QUEUED",
-            transcribing_flag="QUEUED",
+            task_list=[
+                {
+                    "task_name": "trim_upload",
+                    "task_id": my_chord.parent.parent.results[0].id,
+                    "status": "QUEUED",
+                },
+                {
+                    "task_name": "transcoding",
+                    "task_id": my_chord.parent.results[0].id,
+                    "status": "QUEUED",
+                },
+                {
+                    "task_name": "transcribing",
+                    "task_id": my_chord.parent.results[1].id,
+                    "status": "QUEUED",
+                },
+                {
+                    "task_name": "finalization",
+                    "task_id": my_chord.id,
+                    "status": "QUEUED",
+                },
+            ],
             transcript="",
             media=[],
         )
@@ -121,13 +143,20 @@ def cancel():
         raise Exception("missing required param body")
     mentor = body.get("mentor")
     question = body.get("question")
-    task_id = body.get("task")
-    req = {"mentor": mentor, "question": question, "task_id": task_id}
-    t = mentor_upload_tasks.tasks.cancel_task.apply_async(
-        queue=mentor_upload_tasks.get_queue_transcribe_stage(),
-        args=[req],
-    )
-    return jsonify({"data": {"id": t.id, "cancelledId": task_id}})
+    task_id_list = body.get("task_ids_to_cancel")
+
+    task_list = []
+
+    for task_id in task_id_list:
+        req = {"mentor": mentor, "question": question, "task_id": task_id}
+        task_list.append(
+            mentor_upload_tasks.tasks.cancel_task.si(req=req).set(
+                queue=mentor_upload_tasks.get_queue_cancel_task()
+            )
+        )
+
+    t = group(task_list).apply_async()
+    return jsonify({"data": {"id": t.id, "cancelledIds": task_id_list}})
 
 
 @answer_blueprint.route("/status/<task_id>/", methods=["GET"])

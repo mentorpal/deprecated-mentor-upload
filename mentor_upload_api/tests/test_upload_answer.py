@@ -7,9 +7,10 @@
 import json
 from typing import List
 from mentor_upload_api.api import (
-    StatusUpdateRequest,
+    upload_task_req_gql,
+    UploadTaskRequest,
     get_graphql_endpoint,
-    status_update_gql,
+    TaskInfo,
 )
 from os import path
 from unittest.mock import patch, Mock
@@ -21,25 +22,18 @@ import pytest
 from .utils import Bunch, fixture_path
 
 
-def _mock_gql_status_update(
+def _mock_gql_upload_task_update(
     mentor: str,
     question: str,
-    task_id: str,
-    transferring_flag: str = None,
-    upload_flag: str = None,
-    transcribing_flag: str = None,
-    transcoding_flag: str = None,
-    finalization_flag: str = None,
+    task_list: List[TaskInfo],
+    transcript: str = None,
+    media=None,
 ) -> dict:
-    gql_query = status_update_gql(
-        StatusUpdateRequest(
+    gql_query = upload_task_req_gql(
+        UploadTaskRequest(
             mentor=mentor,
             question=question,
-            task_id=task_id,
-            upload_flag=upload_flag,
-            transcribing_flag=transcribing_flag,
-            transcoding_flag=transcoding_flag,
-            finalization_flag=finalization_flag,
+            task_list=task_list,
             transcript="",
             media=[],
         )
@@ -116,12 +110,11 @@ def test_upload(
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
-    # mocking the result of the chord
     mock_chord_result = Bunch(
         parent=Bunch(
             results=[
-                Bunch(id=fake_transcribing_task_id),
                 Bunch(id=fake_transcoding_task_id),
+                Bunch(id=fake_transcribing_task_id),
             ],
             parent=Bunch(results=[Bunch(id=fake_init_task_id)]),
         ),
@@ -130,20 +123,37 @@ def test_upload(
     mock_begin_tasks_in_parallel.return_value = mock_chord_result
 
     fake_task_id_collection = [
-        fake_transcribing_task_id,
         fake_transcoding_task_id,
+        fake_transcribing_task_id,
         fake_init_task_id,
         fake_finalization_task_id,
     ]
 
-    expected_status_update_query = _mock_gql_status_update(
+    expected_status_update_query = _mock_gql_upload_task_update(
         mentor=input_mentor,
         question=input_question,
-        task_id=fake_task_id_collection,
-        upload_flag="QUEUED",
-        transcoding_flag="QUEUED",
-        finalization_flag="QUEUED",
-        transcribing_flag="QUEUED",
+        task_list=[
+            {
+                "task_name": "trim_upload",
+                "task_id": fake_init_task_id,
+                "status": "QUEUED",
+            },
+            {
+                "task_name": "transcoding",
+                "task_id": fake_transcoding_task_id,
+                "status": "QUEUED",
+            },
+            {
+                "task_name": "transcribing",
+                "task_id": fake_transcribing_task_id,
+                "status": "QUEUED",
+            },
+            {
+                "task_name": "finalization",
+                "task_id": fake_finalization_task_id,
+                "status": "QUEUED",
+            },
+        ],
     )
     # sends the request to trigger upload()
     res = client.post(
@@ -170,7 +180,7 @@ def test_upload(
 
 
 @pytest.mark.parametrize(
-    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_init_task_id,fake_cancel_finalization_task_id,fake_cancel_upload_transcribe_transcode_task_id",
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_init_task_id,fake_cancel_finalization_task_id,fake_cancel_transcribe_task_id,fake_cancel_transcode_task_id,fake_cancel_init_task_id",
     [
         (
             "https://mentor.org",
@@ -182,7 +192,9 @@ def test_upload(
             "fake_transcribing_task_id",
             "fake_init_task_id",
             "fake_cancel_finalization_task_id",
-            "fake_cancel_upload_transcribe_transcode_task_id",
+            "fake_cancel_transcribe_task_id",
+            "fake_cancel_transcode_task_id",
+            "fake_cancel_init_task_id",
         ),
         (
             "http://a.diff.org",
@@ -194,11 +206,14 @@ def test_upload(
             "fake_transcribing_task_id_2",
             "fake_init_task_id_2",
             "fake_cancel_finalization_task_id_2",
-            "fake_cancel_upload_transcribe_transcode_task_id_2",
+            "fake_cancel_transcribe_task_id_2",
+            "fake_cancel_transcode_task_id_2",
+            "fake_cancel_init_task_id_2",
         ),
     ],
 )
 @responses.activate
+@patch("mentor_upload_api.blueprints.upload.answer.group")
 @patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
 @patch("mentor_upload_tasks.tasks.cancel_task")
 @patch("mentor_upload_tasks.tasks.trim_upload_stage")
@@ -214,6 +229,7 @@ def test_cancel(
     init_stage_task,
     mock_cancel_task,
     mock_begin_tasks_in_parallel,
+    mock_task_group,
     tmpdir,
     upload_domain,
     input_mentor,
@@ -224,7 +240,9 @@ def test_cancel(
     fake_transcribing_task_id,
     fake_init_task_id,
     fake_cancel_finalization_task_id,
-    fake_cancel_upload_transcribe_transcode_task_id,
+    fake_cancel_transcribe_task_id,
+    fake_cancel_transcode_task_id,
+    fake_cancel_init_task_id,
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
@@ -232,8 +250,8 @@ def test_cancel(
     mock_chord_result = Bunch(
         parent=Bunch(
             results=[
-                Bunch(id=fake_transcribing_task_id),
                 Bunch(id=fake_transcoding_task_id),
+                Bunch(id=fake_transcribing_task_id),
             ],
             parent=Bunch(results=[Bunch(id=fake_init_task_id)]),
         ),
@@ -242,20 +260,37 @@ def test_cancel(
     mock_begin_tasks_in_parallel.return_value = mock_chord_result
 
     fake_task_id_collection = [
-        fake_transcribing_task_id,
         fake_transcoding_task_id,
+        fake_transcribing_task_id,
         fake_init_task_id,
         fake_finalization_task_id,
     ]
 
-    expected_status_update_query = _mock_gql_status_update(
+    expected_status_update_query = _mock_gql_upload_task_update(
         mentor=input_mentor,
         question=input_question,
-        task_id=fake_task_id_collection,
-        upload_flag="QUEUED",
-        transcoding_flag="QUEUED",
-        finalization_flag="QUEUED",
-        transcribing_flag="QUEUED",
+        task_list=[
+            {
+                "task_name": "trim_upload",
+                "task_id": fake_init_task_id,
+                "status": "QUEUED",
+            },
+            {
+                "task_name": "transcoding",
+                "task_id": fake_transcoding_task_id,
+                "status": "QUEUED",
+            },
+            {
+                "task_name": "transcribing",
+                "task_id": fake_transcribing_task_id,
+                "status": "QUEUED",
+            },
+            {
+                "task_name": "finalization",
+                "task_id": fake_finalization_task_id,
+                "status": "QUEUED",
+            },
+        ],
     )
     res = client.post(
         f"{upload_domain}/upload/answer",
@@ -272,22 +307,23 @@ def test_cancel(
             "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
         }
     }
-    # TODO: update the cancellation method that this sends to so that it can take a list of ID's to cancel instead of one
-    mock_cancel_task_id = Bunch(id=fake_cancel_finalization_task_id)
-    mock_cancel_task.apply_async.return_value = mock_cancel_task_id
+    # cancelling 1 task
+    mock_task_group().apply_async.return_value = Bunch(id=fake_cancel_init_task_id)
+    mock_cancel_init_task_id = Bunch(id=fake_cancel_init_task_id)
+    mock_cancel_task.si.set.return_value = mock_cancel_init_task_id
     res = client.post(
         f"{upload_domain}/upload/answer/cancel",
         json={
             "mentor": input_mentor,
             "question": input_question,
-            "task": fake_finalization_task_id,
+            "task_ids_to_cancel": [fake_init_task_id],
         },
     )
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_cancel_finalization_task_id,
-            "cancelledId": fake_finalization_task_id,
+            "id": fake_cancel_init_task_id,
+            "cancelledIds": [fake_init_task_id],
         }
     }
 
@@ -337,8 +373,8 @@ def test_env_fixes_ssl_status_url(
     mock_chord_result = Bunch(
         parent=Bunch(
             results=[
-                Bunch(id=fake_transcribe_task_id),
                 Bunch(id=fake_transcode_task_id),
+                Bunch(id=fake_transcribe_task_id),
             ],
             parent=Bunch(results=[Bunch(id=fake_init_task_id)]),
         ),
@@ -346,19 +382,31 @@ def test_env_fixes_ssl_status_url(
     )
     mock_begin_tasks_in_parallel.return_value = mock_chord_result
 
-    expected_status_update_query = _mock_gql_status_update(
+    expected_status_update_query = _mock_gql_upload_task_update(
         mentor=fake_mentor_id,
         question=fake_question_id,
-        task_id=[
-            fake_transcribe_task_id,
-            fake_transcode_task_id,
-            fake_init_task_id,
-            fake_finalization_task_id,
+        task_list=[
+            {
+                "task_name": "trim_upload",
+                "task_id": fake_init_task_id,
+                "status": "QUEUED",
+            },
+            {
+                "task_name": "transcoding",
+                "task_id": fake_transcode_task_id,
+                "status": "QUEUED",
+            },
+            {
+                "task_name": "transcribing",
+                "task_id": fake_transcribe_task_id,
+                "status": "QUEUED",
+            },
+            {
+                "task_name": "finalization",
+                "task_id": fake_finalization_task_id,
+                "status": "QUEUED",
+            },
         ],
-        upload_flag="QUEUED",
-        transcoding_flag="QUEUED",
-        finalization_flag="QUEUED",
-        transcribing_flag="QUEUED",
     )
     res = client.post(
         f"{request_root}/upload/answer",
@@ -374,12 +422,12 @@ def test_env_fixes_ssl_status_url(
     assert res.json == {
         "data": {
             "id": [
-                fake_transcribe_task_id,
                 fake_transcode_task_id,
+                fake_transcribe_task_id,
                 fake_init_task_id,
                 fake_finalization_task_id,
             ],
-            "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_transcribe_task_id,fake_transcode_task_id,fake_init_task_id,fake_finalization_task_id]}",
+            "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_transcode_task_id,fake_transcribe_task_id,fake_init_task_id,fake_finalization_task_id]}",
         }
     }
 
@@ -421,5 +469,5 @@ def test_env_fixes_ssl_status_url(
 #     res = client.get(f"/upload/answer/status/{task_id}")
 #     assert res.status_code == 200
 #     assert res.json == {
-#         "data": {"id": task_id, "state": state, "status": status, "info": expected_info}
+#         "data": {"task_id": task_id, "state": state, "status": status, "info": expected_info}
 #     }

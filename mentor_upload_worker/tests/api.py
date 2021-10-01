@@ -38,16 +38,16 @@ class Media:
 
 
 @dataclass
-class StatusUpdateRequest:
+class TaskInfo:
+    flag: str
+    id: str
+
+
+@dataclass
+class UploadTaskRequest:
     mentor: str
     question: str
-    task_id: str
-    status: str = None
-    transferring_flag: str = None
-    upload_flag: str = None
-    transcribing_flag: str = None
-    transcoding_flag: str = None
-    finalization_flag: str = None
+    task_list: List[TaskInfo]
     transcript: str = None
     media: List[Media] = None
 
@@ -63,24 +63,18 @@ def thumbnail_update_gql(req: MentorThumbnailUpdateRequest) -> GQLQueryBody:
     }
 
 
-def status_update_gql(req: StatusUpdateRequest) -> GQLQueryBody:
+def upload_task_req_gql(req: UploadTaskRequest) -> GQLQueryBody:
     status = {}
-    status["taskId"] = req.task_id
-    if req.status:
-        status["uploadStatus"] = req.status
-    if req.upload_flag:
-        status["uploadFlag"] = req.upload_flag
-    if req.transcribing_flag:
-        status["transcribingFlag"] = req.transcribing_flag
-    if req.transcoding_flag:
-        status["transcodingFlag"] = req.transcoding_flag
-    if req.finalization_flag:
-        status["finalizationFlag"] = req.finalization_flag
+    status["taskList"] = req.task_list
     if req.transcript:
         status["transcript"] = req.transcript
     if req.media:
         status["media"] = req.media
 
+    import logging
+
+    logging.warning("status going to be sent to gql from upload api")
+    logging.warning(status)
     return {
         "query": """mutation UploadStatus($mentorId: ID!, $questionId: ID!, $status: UploadTaskInputType!) {
             api {
@@ -95,9 +89,43 @@ def status_update_gql(req: StatusUpdateRequest) -> GQLQueryBody:
     }
 
 
-def update_status(req: StatusUpdateRequest) -> None:
+@dataclass
+class UpdateTaskStatusRequest:
+    mentor: str
+    question: str
+    task_id: str
+    new_status: str
+
+
+def upload_task_status_req_gql(req: UpdateTaskStatusRequest) -> GQLQueryBody:
+    return {
+        "query": """mutation UpdateUploadTaskStatus($mentorId: ID!, $questionId: ID!, $taskId: String!, $newStatus: String!) {
+            api {
+                uploadTaskStatusUpdate(mentorId: $mentorId, questionId: $questionId, taskId: $taskId, newStatus: $newStatus)
+            }
+        }""",
+        "variables": {
+            "mentorId": req.mentor,
+            "questionId": req.question,
+            "taskId": req.task_id,
+            "newStatus": req.new_status,
+        },
+    }
+
+
+def upload_task_status_update(req: UpdateTaskStatusRequest) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
-    body = status_update_gql(req)
+    body = upload_task_status_req_gql(req)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
+
+
+def upload_task_update(req: UploadTaskRequest) -> None:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = upload_task_req_gql(req)
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
     res.raise_for_status()
     tdjson = res.json()

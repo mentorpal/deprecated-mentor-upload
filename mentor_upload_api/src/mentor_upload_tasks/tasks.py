@@ -17,6 +17,7 @@ from . import (
     get_queue_transcribe_stage,
     get_queue_trim_upload_stage,
     get_queue_transcode_stage,
+    get_queue_cancel_task,
 )
 
 broker_url = (
@@ -74,6 +75,11 @@ celery.conf.update(
                 ),
                 routing_key=get_queue_finalization_stage(),
             ),
+            Queue(
+                get_queue_cancel_task(),
+                exchange=Exchange(get_queue_cancel_task(), "direct", durable=True),
+                routing_key=get_queue_cancel_task(),
+            ),
         ],
         "task_routes": {
             "mentor_upload_tasks.tasks.trim_upload_stage": {
@@ -88,6 +94,7 @@ celery.conf.update(
             "mentor_upload_tasks.tasks.finalization_stage": {
                 "queue": get_queue_finalization_stage()
             },
+            "mentor_upload_tasks.tasks.cancel_task": {"queue": get_queue_cancel_task()},
         },
         "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
     }

@@ -24,6 +24,10 @@ def get_queue_finalization_stage() -> str:
     return environ.get("FINALIZATION_QUEUE_NAME") or "finalization"
 
 
+def get_queue_cancel_task() -> str:
+    return environ.get("CANCEL_TASK_QUEUE_NAME") or "cancel"
+
+
 class TrimRequest(TypedDict):
     start: float
     end: float
