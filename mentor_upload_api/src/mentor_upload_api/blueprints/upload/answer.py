@@ -91,10 +91,6 @@ def upload():
     for task in my_chord.parent.parent.results:
         task_ids.append(task.id)  # init_id
     task_ids.append(my_chord.id)  # finalization id
-    print(task_ids)
-    import logging
-
-    logging.warning(task_ids)
     upload_task_update(
         UploadTaskRequest(
             mentor=mentor,
@@ -159,6 +155,8 @@ def cancel():
     return jsonify({"data": {"id": t.id, "cancelledIds": task_id_list}})
 
 
+# TODO: update this to be able to check for each different stage
+# TODO: need to somehow differentiate which task type the task_id is related to
 @answer_blueprint.route("/status/<task_id>/", methods=["GET"])
 @answer_blueprint.route("/status/<task_id>", methods=["GET"])
 def upload_status(task_id: str):

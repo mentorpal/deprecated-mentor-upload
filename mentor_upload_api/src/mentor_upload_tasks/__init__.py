@@ -9,7 +9,7 @@ from typing import TypedDict
 
 
 def get_queue_trim_upload_stage() -> str:
-    return environ.get("INIT_QUEUE_NAME") or "init"
+    return environ.get("TRIM_UPLOAD_QUEUE_NAME") or "trim_upload"
 
 
 def get_queue_transcribe_stage() -> str:

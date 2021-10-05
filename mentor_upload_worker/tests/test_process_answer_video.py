@@ -266,18 +266,30 @@ def _transcribe_stage_expect_transcode_calls(
     return expected_audio_path
 
 
+def _mock_ffmpeg(mock_ffmpeg_cls: Mock):
+    mock_ffmpeg_inst = Mock()
+
+    def mock_ffmpeg_constructor(inputs: dict, outputs: dict) -> Mock:
+        """
+        when FFMpeg constructor is called,
+        we need to capture the target 'output' file
+        and create a fake output there
+        """
+        if outputs:
+            output_file = list(outputs.keys())[0]
+            Path(output_file).write_text("fake output")
+        return mock_ffmpeg_inst
+
+    mock_ffmpeg_cls.side_effect = mock_ffmpeg_constructor
+
+
 @dataclass
-class _TestProcessExample:
+class _TestTrimUploadStageProcessExample:
     mentor: str
     question: str
     timestamp: str
-    transcript_fake: str
     trim: TrimRequest
-    video_dims: Tuple[int, int]
     video_name: str
-    video_duration_fake: float
-    transcode_stage_output_dict: Dict[str, str] = None
-    transcribe_stage_output_dict: Dict[str, str] = None
 
 
 @responses.activate
@@ -286,97 +298,70 @@ class _TestProcessExample:
     "ex",
     [
         (
-            _TestProcessExample(
+            _TestTrimUploadStageProcessExample(
                 mentor="m1",
                 question="q1",
                 timestamp="20120114T032134Z",
-                transcript_fake="mentor answer for question 1",
                 trim=None,
-                video_dims=(400, 400),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
             )
         ),
         (
-            _TestProcessExample(
+            _TestTrimUploadStageProcessExample(
                 mentor="m1",
                 question="q1",
                 timestamp="20120114T032134Z",
-                transcript_fake="mentor answer for question 1",
                 trim={"start": 0.0, "end": 5.0},
-                video_dims=(1280, 720),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
             )
         ),
         (
-            _TestProcessExample(
+            _TestTrimUploadStageProcessExample(
                 mentor="m1",
                 question="q1",
                 timestamp="20120114T032134Z",
-                transcript_fake="mentor answer for question 1",
                 trim={"start": 5.3, "end": 8.921},
-                video_dims=(480, 640),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
             )
         ),
         (
-            _TestProcessExample(
+            _TestTrimUploadStageProcessExample(
                 mentor="m1",
                 question="q1_idle",
                 timestamp="20120114T032134Z",
-                transcript_fake="",
                 trim={"start": 5.3, "end": 8.921},
-                video_dims=(480, 640),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
             )
         ),
     ],
 )
-def test_init_stage(
+def test_trim_upload_stage(
     mock_ffmpeg_cls: Mock,
     monkeypatch,
     tmpdir,
-    ex: _TestProcessExample,
+    ex: _TestTrimUploadStageProcessExample,
 ):
-    with _test_env(ex.video_name, ex.timestamp, monkeypatch, tmpdir, ex.video_dims):
+    with _test_env(ex.video_name, ex.timestamp, monkeypatch, tmpdir):
         req = {
             "mentor": ex.mentor,
             "question": ex.question,
             "trim": ex.trim,
             "video_path": ex.video_name,
         }
-        mock_ffmpeg_inst = Mock()
-
-        def mock_ffmpeg_constructor(inputs: dict, outputs: dict) -> Mock:
-            """
-            when FFMpeg constructor is called,
-            we need to capture the target 'output' file
-            and create a fake output there
-            """
-            if outputs:
-                output_file = list(outputs.keys())[0]
-                Path(output_file).write_text("fake output")
-            return mock_ffmpeg_inst
-
-        mock_ffmpeg_cls.side_effect = mock_ffmpeg_constructor
+        _mock_ffmpeg(mock_ffmpeg_cls)
 
         expected_gql = [
             _mock_gql_task_status_update(
                 req["mentor"],
                 req["question"],
                 task_id="fake_task_id",
-                new_status="IN_PROGRESS"
-                # upload_flag={"task_id": "fake_task_id", "flag": "IN_PROGRESS"},
+                new_status="IN_PROGRESS",
             ),
             _mock_gql_task_status_update(
                 req["mentor"],
                 req["question"],
                 task_id="fake_task_id",
-                new_status="DONE"
-                # upload_flag={"task_id": "fake_task_id", "flag": "IN_PROGRESS"},
+                new_status="DONE",
             ),
         ]
 
@@ -389,6 +374,16 @@ def test_init_stage(
         _expect_gql(expected_gql)
 
 
+@dataclass
+class _TestTranscribeStageExample:
+    mentor: str
+    question: str
+    timestamp: str
+    transcript_fake: str
+    trim: TrimRequest
+    video_name: str
+
+
 @responses.activate
 @patch("mentor_upload_process.process._delete_video_work_dir")
 @patch.object(transcribe, "init_transcription_service")
@@ -397,51 +392,43 @@ def test_init_stage(
     "ex",
     [
         (
-            _TestProcessExample(
+            _TestTranscribeStageExample(
                 mentor="m1",
                 question="q1",
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
                 trim=None,
-                video_dims=(400, 400),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
             )
         ),
         (
-            _TestProcessExample(
+            _TestTranscribeStageExample(
                 mentor="m1",
                 question="q1",
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
                 trim={"start": 0.0, "end": 5.0},
-                video_dims=(1280, 720),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
             )
         ),
         (
-            _TestProcessExample(
+            _TestTranscribeStageExample(
                 mentor="m1",
                 question="q1",
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
                 trim={"start": 5.3, "end": 8.921},
-                video_dims=(480, 640),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
             )
         ),
         (
-            _TestProcessExample(
+            _TestTranscribeStageExample(
                 mentor="m1",
                 question="q1_idle",
                 timestamp="20120114T032134Z",
                 transcript_fake="",
                 trim={"start": 5.3, "end": 8.921},
-                video_dims=(480, 640),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
             )
         ),
     ],
@@ -452,11 +439,9 @@ def test_transcribing_stage(
     mock_delete_video_work_dir: Mock,
     monkeypatch,
     tmpdir,
-    ex: _TestProcessExample,
+    ex: _TestTranscribeStageExample,
 ):
-    with _test_env(
-        ex.video_name, ex.timestamp, monkeypatch, tmpdir, ex.video_dims
-    ) as work_dir:
+    with _test_env(ex.video_name, ex.timestamp, monkeypatch, tmpdir) as work_dir:
         req = {
             "mentor": ex.mentor,
             "question": ex.question,
@@ -464,27 +449,14 @@ def test_transcribing_stage(
             "video_path": ex.video_name,
         }
         is_idle = req["question"] == "q1_idle"
-        mock_ffmpeg_inst = Mock()
-
-        def mock_ffmpeg_constructor(inputs: dict, outputs: dict) -> Mock:
-            """
-            when FFMpeg constructor is called,
-            we need to capture the target 'output' file
-            and create a fake output there
-            """
-            if outputs:
-                output_file = list(outputs.keys())[0]
-                Path(output_file).write_text("fake output")
-            return mock_ffmpeg_inst
-
-        mock_ffmpeg_cls.side_effect = mock_ffmpeg_constructor
+        _mock_ffmpeg(mock_ffmpeg_cls)
 
         # create file that should have been created by init stage
         video_file = work_dir / ex.video_name
         makedirs(path.dirname(video_file), exist_ok=True)
         open(video_file, "x")
 
-        output_dict_from_init_stage = {
+        output_dict_from_trim_upload_stage = {
             "video_file": video_file,
             "work_dir": work_dir,
         }
@@ -498,7 +470,7 @@ def test_transcribing_stage(
                         sourceFile=re.sub(
                             "mp4$",
                             "mp3",
-                            str(output_dict_from_init_stage["video_file"]),
+                            str(output_dict_from_trim_upload_stage["video_file"]),
                         )
                     ),
                     transcript=ex.transcript_fake,
@@ -530,7 +502,9 @@ def test_transcribing_stage(
 
         from mentor_upload_process.process import transcribe_stage
 
-        assert transcribe_stage([output_dict_from_init_stage], req, "fake_task_id") == {
+        assert transcribe_stage(
+            [output_dict_from_trim_upload_stage], req, "fake_task_id"
+        ) == {
             "transcript": ex.transcript_fake,
         }
 
@@ -705,6 +679,30 @@ def test_finalization_stage(
             mock_s3.upload_file.assert_has_calls(expected_upload_file_call)
 
 
+@dataclass
+class _TestProcessExample:
+    mentor: str
+    question: str
+    timestamp: str
+    transcript_fake: str
+    trim: TrimRequest
+    video_dims: Tuple[int, int]
+    video_name: str
+    video_duration_fake: float
+    transcode_stage_output_dict: Dict[str, str] = None
+    transcribe_stage_output_dict: Dict[str, str] = None
+
+
+@dataclass
+class _TestTranscodeStageExample:
+    mentor: str
+    question: str
+    timestamp: str
+    trim: TrimRequest
+    video_dims: Tuple[int, int]
+    video_name: str
+
+
 @responses.activate
 @patch("ffmpy.FFmpeg")
 @patch("boto3.client")
@@ -712,15 +710,13 @@ def test_finalization_stage(
     "ex",
     [
         (
-            _TestProcessExample(
+            _TestTranscodeStageExample(
                 mentor="m1",
                 question="q1",
                 timestamp="20120114T032134Z",
-                transcript_fake="mentor answer for question 1",
                 trim=None,
                 video_dims=(400, 400),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
             )
         ),
     ],
@@ -730,7 +726,7 @@ def test_transcode_stage(
     mock_ffmpeg_cls: Mock,
     monkeypatch,
     tmpdir,
-    ex: _TestProcessExample,
+    ex: _TestTranscodeStageExample,
 ):
     with _test_env(
         ex.video_name, ex.timestamp, monkeypatch, tmpdir, ex.video_dims
@@ -742,30 +738,18 @@ def test_transcode_stage(
             "trim": None,
         }
         task_id = "t1"
-        timestamp = "20120114T032134Z"
+
+        # setup file that should have been create by init stage
         video_file = work_dir / ex.video_name
         makedirs(path.dirname(video_file), exist_ok=True)
         open(video_file, "x")
 
-        output_dict_from_init_stage = {
+        output_dict_from_trim_upload_stage = {
             "video_file": video_file,
             "work_dir": work_dir,
         }
 
-        mock_ffmpeg_inst = Mock()
-
-        def mock_ffmpeg_constructor(inputs: dict, outputs: dict) -> Mock:
-            """
-            when FFMpeg constructor is called,
-            we need to capture the target 'output' file
-            and create a fake output there
-            """
-            if outputs:
-                output_file = list(outputs.keys())[0]
-                Path(output_file).write_text("fake output")
-            return mock_ffmpeg_inst
-
-        mock_ffmpeg_cls.side_effect = mock_ffmpeg_constructor
+        _mock_ffmpeg(mock_ffmpeg_cls)
         mock_s3 = mock_s3_client(mock_boto3_client)
         from mentor_upload_process.process import transcode_stage
 
@@ -778,12 +762,12 @@ def test_transcode_stage(
             ),
         ]
 
-        expected_media = _transcode_expected_media("m1", "q1", timestamp)
+        expected_media = _transcode_expected_media("m1", "q1", ex.timestamp)
 
-        assert transcode_stage([output_dict_from_init_stage], req, task_id) == {
+        assert transcode_stage([output_dict_from_trim_upload_stage], req, task_id) == {
             "media": expected_media,
-            "video_file": output_dict_from_init_stage["video_file"],
-            "work_dir": output_dict_from_init_stage["work_dir"],
+            "video_file": output_dict_from_trim_upload_stage["video_file"],
+            "work_dir": output_dict_from_trim_upload_stage["work_dir"],
         }
         (
             expected_web_video_path,
@@ -844,7 +828,11 @@ def test_raises_if_video_path_not_specified():
     assert str(caught_exception) == "missing required param 'video_path'"
 
     try:
-        transcode_stage([{}], req, "fake_task_id")
+        transcode_stage(
+            [{"video_file": "fake_video_file", "work_dir": "fake_work_dir"}],
+            req,
+            "fake_task_id",
+        )
 
     except Exception as err:
         caught_exception = err
@@ -852,7 +840,11 @@ def test_raises_if_video_path_not_specified():
     assert str(caught_exception) == "missing required param 'video_path'"
 
     try:
-        transcribe_stage([{}], req, "fake_task_id")
+        transcribe_stage(
+            [{"video_file": "fake_video_file", "work_dir": "fake_work_dir"}],
+            req,
+            "fake_task_id",
+        )
 
     except Exception as err:
         caught_exception = err
@@ -893,7 +885,11 @@ def test_raises_if_video_not_found_for_path():
 
     try:
 
-        transcode_stage(req, "fake_task_id")
+        transcode_stage(
+            [{"video_file": "fake_video_file", "work_dir": "fake_work_dir"}],
+            req,
+            "fake_task_id",
+        )
 
     except Exception as err:
         caught_exception = err
@@ -902,7 +898,11 @@ def test_raises_if_video_not_found_for_path():
 
     try:
 
-        transcribe_stage(req, "fake_task_id")
+        transcribe_stage(
+            [{"video_file": "fake_video_file", "work_dir": "fake_work_dir"}],
+            req,
+            "fake_task_id",
+        )
 
     except Exception as err:
         caught_exception = err

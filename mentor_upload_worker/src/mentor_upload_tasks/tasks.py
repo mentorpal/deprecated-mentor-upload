@@ -23,7 +23,7 @@ from mentor_upload_process import (  # NOQA
 
 
 def get_queue_trim_upload_stage() -> str:
-    return os.environ.get("INIT_QUEUE_NAME") or "init"
+    return os.environ.get("TRIM_UPLOAD_QUEUE_NAME") or "trim_upload"
 
 
 def get_queue_transcribe_stage() -> str:
@@ -133,7 +133,7 @@ def trim_upload_stage(
 
 @celery.task()
 def transcode_stage(
-    dict_tuple: dict, 
+    dict_tuple: dict,
     req: ProcessAnswerRequest,
 ) -> ProcessAnswerResponse:
     task_id = transcode_stage.request.id
@@ -142,7 +142,7 @@ def transcode_stage(
 
 @celery.task()
 def transcribe_stage(
-    dict_tuple: dict, 
+    dict_tuple: dict,
     req: ProcessAnswerRequest,
 ) -> ProcessAnswerResponse:
     task_id = transcribe_stage.request.id

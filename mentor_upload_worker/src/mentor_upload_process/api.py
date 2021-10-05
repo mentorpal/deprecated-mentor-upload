@@ -122,11 +122,6 @@ def upload_task_req_gql(req: UploadTaskRequest) -> GQLQueryBody:
         status["transcript"] = req.transcript
     if req.media:
         status["media"] = req.media
-
-    import logging
-
-    logging.warning("status going to be sent to gql from upload api")
-    logging.warning(status)
     return {
         "query": """mutation UploadStatus($mentorId: ID!, $questionId: ID!, $status: UploadTaskInputType!) {
             api {

@@ -60,7 +60,7 @@ def python_path_env(monkeypatch, tmpdir):
 
 
 @pytest.mark.parametrize(
-    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_init_task_id",
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_trim_upload_task_id",
     [
         (
             "https://mentor.org",
@@ -70,7 +70,7 @@ def python_path_env(monkeypatch, tmpdir):
             "fake_finalization_task_id",
             "fake_transcoding_task_id",
             "fake_transcribing_task_id",
-            "fake_init_task_id",
+            "fake_trim_upload_task_id",
         ),
         (
             "http://a.diff.org",
@@ -80,7 +80,7 @@ def python_path_env(monkeypatch, tmpdir):
             "fake_finalization_task_id_2",
             "fake_transcoding_task_id_2",
             "fake_transcribing_task_id_2",
-            "fake_init_task_id_2",
+            "fake_trim_upload_task_id_2",
         ),
     ],
 )
@@ -96,7 +96,7 @@ def test_upload(
     finalization_stage_task,
     transcribe_stage_task,
     transcode_stage_task,
-    init_stage_task,
+    trim_upload_stage_task,
     mock_begin_tasks_in_parallel,
     tmpdir,
     upload_domain,
@@ -106,7 +106,7 @@ def test_upload(
     fake_finalization_task_id,
     fake_transcoding_task_id,
     fake_transcribing_task_id,
-    fake_init_task_id,
+    fake_trim_upload_task_id,
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
@@ -116,7 +116,7 @@ def test_upload(
                 Bunch(id=fake_transcoding_task_id),
                 Bunch(id=fake_transcribing_task_id),
             ],
-            parent=Bunch(results=[Bunch(id=fake_init_task_id)]),
+            parent=Bunch(results=[Bunch(id=fake_trim_upload_task_id)]),
         ),
         id=fake_finalization_task_id,
     )
@@ -125,7 +125,7 @@ def test_upload(
     fake_task_id_collection = [
         fake_transcoding_task_id,
         fake_transcribing_task_id,
-        fake_init_task_id,
+        fake_trim_upload_task_id,
         fake_finalization_task_id,
     ]
 
@@ -135,7 +135,7 @@ def test_upload(
         task_list=[
             {
                 "task_name": "trim_upload",
-                "task_id": fake_init_task_id,
+                "task_id": fake_trim_upload_task_id,
                 "status": "QUEUED",
             },
             {
@@ -180,7 +180,7 @@ def test_upload(
 
 
 @pytest.mark.parametrize(
-    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_init_task_id,fake_cancel_finalization_task_id,fake_cancel_transcribe_task_id,fake_cancel_transcode_task_id,fake_cancel_init_task_id",
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_trim_upload_task_id,fake_cancel_finalization_task_id,fake_cancel_transcribe_task_id,fake_cancel_transcode_task_id,fake_cancel_trim_upload_task_id",
     [
         (
             "https://mentor.org",
@@ -190,11 +190,11 @@ def test_upload(
             "fake_finalization_task_id",
             "fake_transcoding_task_id",
             "fake_transcribing_task_id",
-            "fake_init_task_id",
+            "fake_trim_upload_task_id",
             "fake_cancel_finalization_task_id",
             "fake_cancel_transcribe_task_id",
             "fake_cancel_transcode_task_id",
-            "fake_cancel_init_task_id",
+            "fake_cancel_trim_upload_task_id",
         ),
         (
             "http://a.diff.org",
@@ -204,11 +204,11 @@ def test_upload(
             "fake_finalization_task_id_2",
             "fake_transcoding_task_id_2",
             "fake_transcribing_task_id_2",
-            "fake_init_task_id_2",
+            "fake_trim_upload_task_id_2",
             "fake_cancel_finalization_task_id_2",
             "fake_cancel_transcribe_task_id_2",
             "fake_cancel_transcode_task_id_2",
-            "fake_cancel_init_task_id_2",
+            "fake_cancel_trim_upload_task_id_2",
         ),
     ],
 )
@@ -226,7 +226,7 @@ def test_cancel(
     finalization_stage_task,
     transcribe_stage_task,
     transcode_stage_task,
-    init_stage_task,
+    trim_upload_stage_task,
     mock_cancel_task,
     mock_begin_tasks_in_parallel,
     mock_task_group,
@@ -238,11 +238,11 @@ def test_cancel(
     fake_finalization_task_id,
     fake_transcoding_task_id,
     fake_transcribing_task_id,
-    fake_init_task_id,
+    fake_trim_upload_task_id,
     fake_cancel_finalization_task_id,
     fake_cancel_transcribe_task_id,
     fake_cancel_transcode_task_id,
-    fake_cancel_init_task_id,
+    fake_cancel_trim_upload_task_id,
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
@@ -253,7 +253,7 @@ def test_cancel(
                 Bunch(id=fake_transcoding_task_id),
                 Bunch(id=fake_transcribing_task_id),
             ],
-            parent=Bunch(results=[Bunch(id=fake_init_task_id)]),
+            parent=Bunch(results=[Bunch(id=fake_trim_upload_task_id)]),
         ),
         id=fake_finalization_task_id,
     )
@@ -262,7 +262,7 @@ def test_cancel(
     fake_task_id_collection = [
         fake_transcoding_task_id,
         fake_transcribing_task_id,
-        fake_init_task_id,
+        fake_trim_upload_task_id,
         fake_finalization_task_id,
     ]
 
@@ -272,7 +272,7 @@ def test_cancel(
         task_list=[
             {
                 "task_name": "trim_upload",
-                "task_id": fake_init_task_id,
+                "task_id": fake_trim_upload_task_id,
                 "status": "QUEUED",
             },
             {
@@ -308,22 +308,24 @@ def test_cancel(
         }
     }
     # cancelling 1 task
-    mock_task_group().apply_async.return_value = Bunch(id=fake_cancel_init_task_id)
-    mock_cancel_init_task_id = Bunch(id=fake_cancel_init_task_id)
-    mock_cancel_task.si.set.return_value = mock_cancel_init_task_id
+    mock_task_group().apply_async.return_value = Bunch(
+        id=fake_cancel_trim_upload_task_id
+    )
+    mock_cancel_trim_upload_task_id = Bunch(id=fake_cancel_trim_upload_task_id)
+    mock_cancel_task.si.set.return_value = mock_cancel_trim_upload_task_id
     res = client.post(
         f"{upload_domain}/upload/answer/cancel",
         json={
             "mentor": input_mentor,
             "question": input_question,
-            "task_ids_to_cancel": [fake_init_task_id],
+            "task_ids_to_cancel": [fake_trim_upload_task_id],
         },
     )
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_cancel_init_task_id,
-            "cancelledIds": [fake_init_task_id],
+            "id": fake_cancel_trim_upload_task_id,
+            "cancelledIds": [fake_trim_upload_task_id],
         }
     }
 
@@ -352,7 +354,7 @@ def test_env_fixes_ssl_status_url(
     finalization_stage_task,
     transcribe_stage_task,
     transcode_stage_task,
-    init_stage_task,
+    trim_upload_stage_task,
     mock_begin_tasks_in_parallel: Mock,
     request_root: str,
     env_val: str,
@@ -366,7 +368,7 @@ def test_env_fixes_ssl_status_url(
     if env_val is not None:
         monkeypatch.setenv("STATUS_URL_FORCE_HTTPS", env_val)
 
-    fake_init_task_id = "fake_init_task_id"
+    fake_trim_upload_task_id = "fake_trim_upload_task_id"
     fake_transcribe_task_id = "fake_transcribe_task_id"
     fake_transcode_task_id = "fake_transcode_task_id"
     fake_finalization_task_id = "fake_finalization_task_id"
@@ -376,7 +378,7 @@ def test_env_fixes_ssl_status_url(
                 Bunch(id=fake_transcode_task_id),
                 Bunch(id=fake_transcribe_task_id),
             ],
-            parent=Bunch(results=[Bunch(id=fake_init_task_id)]),
+            parent=Bunch(results=[Bunch(id=fake_trim_upload_task_id)]),
         ),
         id=fake_finalization_task_id,
     )
@@ -388,7 +390,7 @@ def test_env_fixes_ssl_status_url(
         task_list=[
             {
                 "task_name": "trim_upload",
-                "task_id": fake_init_task_id,
+                "task_id": fake_trim_upload_task_id,
                 "status": "QUEUED",
             },
             {
@@ -424,15 +426,16 @@ def test_env_fixes_ssl_status_url(
             "id": [
                 fake_transcode_task_id,
                 fake_transcribe_task_id,
-                fake_init_task_id,
+                fake_trim_upload_task_id,
                 fake_finalization_task_id,
             ],
-            "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_transcode_task_id,fake_transcribe_task_id,fake_init_task_id,fake_finalization_task_id]}",
+            "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_transcode_task_id,fake_transcribe_task_id,fake_trim_upload_task_id,fake_finalization_task_id]}",
         }
     }
 
 
-# TODO: related to upload_status(task_id: str) in answer.py
+# TODO: update along with upload_status(task_id: str) in answer.py
+# @pytest.mark.only
 # @pytest.mark.parametrize(
 #     "task_id,state,status,info,expected_info",
 #     [
@@ -456,7 +459,7 @@ def test_env_fixes_ssl_status_url(
 #     finalization_stage_task,
 #     transcribe_stage_task,
 #     transcode_stage_task,
-#     init_stage_task,
+#     trim_upload_stage_task,
 #     task_id,
 #     state,
 #     status,
@@ -465,9 +468,14 @@ def test_env_fixes_ssl_status_url(
 #     client,
 # ):
 #     mock_task = Bunch(id=task_id, state=state, status=status, info=info)
-#     init_stage_task.AsyncResult.return_value = mock_task
+#     trim_upload_stage_task.AsyncResult.return_value = mock_task
 #     res = client.get(f"/upload/answer/status/{task_id}")
 #     assert res.status_code == 200
 #     assert res.json == {
-#         "data": {"task_id": task_id, "state": state, "status": status, "info": expected_info}
+#         "data": {
+#             "task_id": task_id,
+#             "state": state,
+#             "status": status,
+#             "info": expected_info,
+#         }
 #     }

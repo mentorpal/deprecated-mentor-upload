@@ -77,20 +77,10 @@ def _video_work_dir(source_path: str):
     media_work_dir = (
         Path(environ.get("TRANSCODE_WORK_DIR") or mkdtemp()) / _new_work_dir_name()
     )
-    # try:
     makedirs(media_work_dir)
     video_file = media_work_dir / path.basename(source_path)
     copyfile(source_path, video_file)
     yield (video_file, media_work_dir)
-
-    # finally:
-    #     try:
-    #         rmtree(str(media_work_dir))
-    #     except Exception as x:
-    #         import logging
-
-    #         logging.error(f"failed to delete media work dir {media_work_dir}")
-    #         logging.exception(x)
 
 
 @contextmanager
@@ -194,28 +184,56 @@ def trim_upload_stage(req: ProcessAnswerRequest, task_id: str):
             )
 
 
-def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
+def extract_params_for_transcode_transcribe_stages(
+    dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
+):
     params = req
-
-    import logging
-
-    logging.warning("dict tuple in transcode")
-    logging.warning(dict_tuple)
-
     for dic in dict_tuple:
         if "video_file" in dic:
             params["video_file"] = dic["video_file"]
         if "work_dir" in dic:
             params["work_dir"] = dic["work_dir"]
 
-    logging.warning("params after processing in transcode")
-    logging.warning(params)
+    if "video_file" not in params:
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=req.get("mentor"),
+                question=req.get("question"),
+                task_id=task_id,
+                new_status="FAILED",
+            )
+        )
+        raise Exception("missing required param 'video_file'")
+    if "work_dir" not in params:
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=req.get("mentor"),
+                question=req.get("question"),
+                task_id=task_id,
+                new_status="FAILED",
+            )
+        )
+        raise Exception("missing required param 'work_dir'")
+    if "video_path" not in params:
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=req.get("mentor"),
+                question=req.get("question"),
+                task_id=task_id,
+                new_status="FAILED",
+            )
+        )
+        raise Exception("missing required param 'video_path'")
+    return params
 
+
+def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
+    params = extract_params_for_transcode_transcribe_stages(dict_tuple, req, task_id)
     try:
         mentor = params.get("mentor")
         question = params.get("question")
         work_dir = Path(params.get("work_dir"))
-        video_file = Path(params.get("video_file") )
+        video_file = Path(params.get("video_file"))
         MediaUpload = Tuple[  # noqa: N806
             str, str, str, str, str
         ]  # media_type, tag, file_name, content_type, file
@@ -291,27 +309,12 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
 
 
 def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
-    params = req
-
-    import logging
-
-    logging.warning("dict tuple in transcribe")
-    logging.warning(dict_tuple)
-    for dic in dict_tuple:
-        if "video_file" in dic:
-            params["video_file"] = dic["video_file"]
-        if "work_dir" in dic:
-            params["work_dir"] = dic["work_dir"]
-
-    mentor = params.get("mentor")
-    question = params.get("question")
-    work_dir = params.get("work_dir")
-    video_file = params.get("video_file")
-
-    logging.warning("params after processing in transcribe")
-    logging.warning(params)
-
+    params = extract_params_for_transcode_transcribe_stages(dict_tuple, req, task_id)
     try:
+        mentor = params.get("mentor")
+        question = params.get("question")
+        work_dir = params.get("work_dir")
+        video_file = params.get("video_file")
         is_idle = is_idle_question(question)
         audio_file = video_to_audio(video_file)
         transcript = ""
@@ -358,10 +361,6 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
 def extract_params_for_finalization_stage(
     dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
 ):
-    import logging
-
-    logging.warning("dict tuple in finalization")
-    logging.warning(dict_tuple)
     params = req
     params["media"] = []
     dict_tuple = dict_tuple[0]
@@ -423,11 +422,6 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
     mentor = params.get("mentor")
     question = params.get("question")
     work_dir = Path(params.get("work_dir"))
-
-    import logging
-
-    logging.warning("params in finalization stage")
-    logging.warning(params)
     try:
         video_path_full = upload_path(params["video_path"])
         upload_task_status_update(
