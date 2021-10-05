@@ -77,12 +77,12 @@ def _video_work_dir(source_path: str):
     media_work_dir = (
         Path(environ.get("TRANSCODE_WORK_DIR") or mkdtemp()) / _new_work_dir_name()
     )
-    #try:
+    # try:
     makedirs(media_work_dir)
     video_file = media_work_dir / path.basename(source_path)
     copyfile(source_path, video_file)
     yield (video_file, media_work_dir)
-    
+
     # finally:
     #     try:
     #         rmtree(str(media_work_dir))
@@ -91,6 +91,7 @@ def _video_work_dir(source_path: str):
 
     #         logging.error(f"failed to delete media work dir {media_work_dir}")
     #         logging.exception(x)
+
 
 @contextmanager
 def _delete_video_work_dir(work_dir: str):
@@ -182,6 +183,7 @@ def trim_upload_stage(req: ProcessAnswerRequest, task_id: str):
             import logging
 
             logging.exception(x)
+            _delete_video_work_dir(work_dir)
             upload_task_status_update(
                 UpdateTaskStatusRequest(
                     mentor=req.get("mentor"),
@@ -196,6 +198,7 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
     params = req
 
     import logging
+
     logging.warning("dict tuple in transcode")
     logging.warning(dict_tuple)
 
@@ -205,15 +208,14 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
         if "work_dir" in dic:
             params["work_dir"] = dic["work_dir"]
 
-    mentor = params.get("mentor")
-    question = params.get("question")
-    work_dir = params.get("work_dir")
-    video_file = params.get("video_file")
-
     logging.warning("params after processing in transcode")
     logging.warning(params)
 
     try:
+        mentor = params.get("mentor")
+        question = params.get("question")
+        work_dir = Path(params.get("work_dir"))
+        video_file = Path(params.get("video_file") )
         MediaUpload = Tuple[  # noqa: N806
             str, str, str, str, str
         ]  # media_type, tag, file_name, content_type, file
@@ -226,16 +228,14 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                 new_status="IN_PROGRESS",
             )
         )
-        video_mobile_file = work_dir + "mobile.mp4"
+        video_mobile_file = work_dir / "mobile.mp4"
         video_encode_for_mobile(video_file, video_mobile_file)
         media_uploads.append(
             ("video", "mobile", "mobile.mp4", "video/mp4", video_mobile_file)
         )
-        video_web_file = work_dir + "web.mp4"
+        video_web_file = work_dir / "web.mp4"
         video_encode_for_web(video_file, video_web_file)
-        media_uploads.append(
-            ("video", "web", "web.mp4", "video/mp4", video_web_file)
-        )
+        media_uploads.append(("video", "web", "web.mp4", "video/mp4", video_web_file))
 
         media = []
         s3 = _create_s3_client()
@@ -270,11 +270,16 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                 new_status="DONE",
             )
         )
-        return {"media": media, "video_file": video_file, "work_dir": work_dir}
+        return {
+            "media": media,
+            "video_file": str(video_file),
+            "work_dir": str(work_dir),
+        }
     except Exception as x:
         import logging
 
         logging.exception(x)
+        _delete_video_work_dir(work_dir)
         upload_task_status_update(
             UpdateTaskStatusRequest(
                 mentor=req.get("mentor"),
@@ -289,6 +294,7 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
     params = req
 
     import logging
+
     logging.warning("dict tuple in transcribe")
     logging.warning(dict_tuple)
     for dic in dict_tuple:
@@ -338,6 +344,7 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
         import logging
 
         logging.exception(x)
+        _delete_video_work_dir(work_dir)
         upload_task_status_update(
             UpdateTaskStatusRequest(
                 mentor=mentor,
@@ -352,6 +359,7 @@ def extract_params_for_finalization_stage(
     dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
 ):
     import logging
+
     logging.warning("dict tuple in finalization")
     logging.warning(dict_tuple)
     params = req
@@ -367,8 +375,6 @@ def extract_params_for_finalization_stage(
         if "media" in dic:
             for media in dic["media"]:
                 params["media"].append(media)
-        if "video_file" in dic:
-            params["video_file"] = dic["video_file"]
         if "work_dir" in dic:
             params["work_dir"] = dic["work_dir"]
 
@@ -407,8 +413,8 @@ def extract_params_for_finalization_stage(
 
 
 def get_video_and_vtt_file_paths(work_dir: str):
-    video_web_file = work_dir + "web.mp4"
-    vtt_file = work_dir + "subtitles.vtt"
+    video_web_file = work_dir / "web.mp4"
+    vtt_file = work_dir / "subtitles.vtt"
     return video_web_file, vtt_file
 
 
@@ -416,10 +422,10 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
     params = extract_params_for_finalization_stage(dict_tuple, req, task_id)
     mentor = params.get("mentor")
     question = params.get("question")
-    work_dir = params.get("work_dir")
-    video_file = params.get("video_file")
+    work_dir = Path(params.get("work_dir"))
 
     import logging
+
     logging.warning("params in finalization stage")
     logging.warning(params)
     try:
@@ -498,6 +504,7 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
         import logging
 
         logging.exception(x)
+        _delete_video_work_dir(work_dir)
         upload_task_status_update(
             UpdateTaskStatusRequest(
                 mentor=req.get("mentor"),
@@ -507,18 +514,16 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
             )
         )
     finally:
-        video_path_full = video_path_full
         try:
             #  We are deleting the uploaded video file from a shared network mount here
             #  We generally do want to clean these up, but maybe should have a flag
             # in the job request like "disable_delete_file_on_complete" (default False)
+            _delete_video_work_dir(work_dir)
             remove(video_path_full)
         except Exception as x:
             import logging
 
-            logging.error(
-                f"failed to delete uploaded video file '{video_path_full}'"
-            )
+            logging.error(f"failed to delete uploaded video file '{video_path_full}'")
             logging.exception(x)
 
 

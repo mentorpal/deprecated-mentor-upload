@@ -34,7 +34,6 @@ from mentor_upload_process.api import (
     TaskInfo,
 )
 from mentor_upload_process.media_tools import (
-    output_args_trim_video,
     output_args_video_encode_for_mobile,
     output_args_video_encode_for_web,
     output_args_video_to_audio,
@@ -47,7 +46,11 @@ TEST_STATIC_URL_BASE = "http://static-somedomain.mentorpal.org"
 
 @contextmanager
 def _test_env(
-    video_file: str, timestamp: str, video_dims: Tuple[int, int], monkeypatch, tmpdir
+    video_file: str,
+    timestamp: str,
+    monkeypatch,
+    tmpdir,
+    video_dims: Tuple[int, int] = None,
 ):
     patcher_find_video_dims = patch("mentor_upload_process.media_tools.find_video_dims")
     patcher_new_work_dir_name = patch(
@@ -131,7 +134,6 @@ def _transcode_expected_media(
     )
 
 
-# Note: This is for updating the upload task as a whole.
 def _mock_gql_upload_task_update(
     mentor: str,
     question: str,
@@ -169,7 +171,6 @@ def _mock_gql_upload_task_update(
     return gql_query
 
 
-# Note: this is for updating a single upload task status
 def _mock_gql_task_status_update(
     mentor: str, question: str, task_id: str, new_status: str
 ) -> dict:
@@ -265,74 +266,6 @@ def _transcribe_stage_expect_transcode_calls(
     return expected_audio_path
 
 
-def _expect_transcode_calls(
-    video_path: str,
-    mock_ffmpeg_cls: Mock,
-    video_dims: Tuple[int, int],
-    trim: Dict[str, int] = {},
-) -> Tuple[str, str, str, str, str]:
-    """
-    There are currently 3 transcode calls that need to happen in the upload process:
-
-     - convert the uploaded video to an audio file (for transcription)
-     - convert the uploaded video to a web-optimized video
-     - convert the uploaded video to a mobile-optimized video
-    """
-    expected_audio_path = re.sub("mp4$", "mp3", video_path)
-    expected_vtt_path = path.join(path.split(video_path)[0], "subtitles.vtt")
-    expected_trim_path = (
-        path.join(path.split(video_path)[0], "trim.mp4") if trim else ""
-    )
-    expected_mobile_video_path = path.join(path.split(video_path)[0], "mobile.mp4")
-    expected_web_video_path = path.join(path.split(video_path)[0], "web.mp4")
-    expected_trim_path = path.join(path.split(video_path)[0], "trim.mp4")
-    mock_ffmpeg_cls.assert_has_calls(
-        (
-            [
-                call(
-                    inputs={video_path: None},
-                    outputs={
-                        expected_trim_path: output_args_trim_video(
-                            trim.get("start", 0), trim.get("end", 0)
-                        )
-                    },
-                ),
-            ]
-            if trim
-            else []
-        )
-        + [
-            call(
-                inputs={video_path: None},
-                outputs={
-                    expected_mobile_video_path: output_args_video_encode_for_mobile(
-                        video_path, video_dims=video_dims
-                    )
-                },
-            ),
-            call(
-                inputs={video_path: None},
-                outputs={
-                    expected_web_video_path: output_args_video_encode_for_web(
-                        video_path, video_dims=video_dims
-                    )
-                },
-            ),
-            call(
-                inputs={video_path: None},
-                outputs={expected_audio_path: output_args_video_to_audio()},
-            ),
-        ],
-    )
-    return (
-        expected_audio_path,
-        expected_vtt_path,
-        expected_trim_path,
-        expected_web_video_path,
-        expected_mobile_video_path,
-    )
-
-
 @dataclass
 class _TestProcessExample:
     mentor: str
@@ -343,6 +276,8 @@ class _TestProcessExample:
     video_dims: Tuple[int, int]
     video_name: str
     video_duration_fake: float
+    transcode_stage_output_dict: Dict[str, str] = None
+    transcribe_stage_output_dict: Dict[str, str] = None
 
 
 @responses.activate
@@ -406,7 +341,7 @@ def test_init_stage(
     tmpdir,
     ex: _TestProcessExample,
 ):
-    with _test_env(ex.video_name, ex.timestamp, ex.video_dims, monkeypatch, tmpdir):
+    with _test_env(ex.video_name, ex.timestamp, monkeypatch, tmpdir, ex.video_dims):
         req = {
             "mentor": ex.mentor,
             "question": ex.question,
@@ -455,6 +390,7 @@ def test_init_stage(
 
 
 @responses.activate
+@patch("mentor_upload_process.process._delete_video_work_dir")
 @patch.object(transcribe, "init_transcription_service")
 @patch("ffmpy.FFmpeg")
 @pytest.mark.parametrize(
@@ -513,12 +449,13 @@ def test_init_stage(
 def test_transcribing_stage(
     mock_ffmpeg_cls: Mock,
     mock_init_transcription_service: Mock,
+    mock_delete_video_work_dir: Mock,
     monkeypatch,
     tmpdir,
     ex: _TestProcessExample,
 ):
     with _test_env(
-        ex.video_name, ex.timestamp, ex.video_dims, monkeypatch, tmpdir
+        ex.video_name, ex.timestamp, monkeypatch, tmpdir, ex.video_dims
     ) as work_dir:
         req = {
             "mentor": ex.mentor,
@@ -541,13 +478,28 @@ def test_transcribing_stage(
             return mock_ffmpeg_inst
 
         mock_ffmpeg_cls.side_effect = mock_ffmpeg_constructor
+
+        # create file that should have been created by init stage
+        video_file = work_dir / ex.video_name
+        makedirs(path.dirname(video_file), exist_ok=True)
+        open(video_file, "x")
+
+        output_dict_from_init_stage = {
+            "video_file": video_file,
+            "work_dir": work_dir,
+        }
+
         mock_transcriptions = MockTranscriptions(mock_init_transcription_service, ".")
         mock_transcriptions.mock_transcribe_result(
             [
                 MockTranscribeJob(
                     batch_id="b1",
                     request=transcribe.TranscribeJobRequest(
-                        sourceFile=re.sub("mp4$", "mp3", ex.video_name)
+                        sourceFile=re.sub(
+                            "mp4$",
+                            "mp3",
+                            str(output_dict_from_init_stage["video_file"]),
+                        )
                     ),
                     transcript=ex.transcript_fake,
                 )
@@ -578,7 +530,7 @@ def test_transcribing_stage(
 
         from mentor_upload_process.process import transcribe_stage
 
-        assert transcribe_stage(req, "fake_task_id") == {
+        assert transcribe_stage([output_dict_from_init_stage], req, "fake_task_id") == {
             "transcript": ex.transcript_fake,
         }
 
@@ -590,7 +542,18 @@ def test_transcribing_stage(
         _expect_gql(expected_gql)
 
 
+@dataclass
+class _TestFinalizationExample:
+    mentor: str
+    question: str
+    timestamp: str
+    video_name: str
+    transcode_stage_output_dict: Dict[str, str] = None
+    transcribe_stage_output_dict: Dict[str, str] = None
+
+
 @responses.activate
+@patch("mentor_upload_process.process._delete_video_work_dir")
 @patch("mentor_upload_process.process.get_video_and_vtt_file_paths")
 @patch("boto3.client")
 @patch("mentor_upload_process.process.transcript_to_vtt")
@@ -598,27 +561,41 @@ def test_transcribing_stage(
     "ex",
     [
         (
-            _TestProcessExample(
+            _TestFinalizationExample(
                 mentor="m1",
                 question="q1",
                 timestamp="20120114T032134Z",
-                transcript_fake="mentor answer for question 1",
-                trim=None,
-                video_dims=(400, 400),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
+                transcode_stage_output_dict={
+                    "media": [
+                        {"type": "video", "tag": "mobile", "url": "mobile.mp4"},
+                        {"type": "video", "tag": "web", "url": "web.mp4"},
+                    ],
+                    "work_dir": "fake_work_dir",
+                    "video_file": "fake_video_file",
+                },
+                transcribe_stage_output_dict={
+                    "transcript": "fake_transcript",
+                },
             )
         ),
         (
-            _TestProcessExample(
+            _TestFinalizationExample(
                 mentor="m1",
                 question="q1_idle",
                 timestamp="20120114T032134Z",
-                transcript_fake="",
-                trim={"start": 5.3, "end": 8.921},
-                video_dims=(480, 640),
                 video_name="video1.mp4",
-                video_duration_fake=13.5,
+                transcode_stage_output_dict={
+                    "media": [
+                        {"type": "video", "tag": "mobile", "url": "mobile.mp4"},
+                        {"type": "video", "tag": "web", "url": "web.mp4"},
+                    ],
+                    "work_dir": "fake_work_dir",
+                    "video_file": "fake_video_file",
+                },
+                transcribe_stage_output_dict={
+                    "transcript": "",
+                },
             )
         ),
     ],
@@ -627,14 +604,14 @@ def test_finalization_stage(
     mock_transcript_to_vtt: Mock,
     mock_boto3_client: Mock,
     mock_get_video_and_vtt_file: Mock,
+    mock_delete_work_dir: Mock,
     monkeypatch,
     tmpdir,
-    ex: _TestProcessExample,
+    ex: _TestFinalizationExample,
 ):
     with _test_env(
         ex.video_name,
         ex.timestamp,
-        ex.video_dims,
         monkeypatch,
         tmpdir,
     ):
@@ -646,25 +623,18 @@ def test_finalization_stage(
             f.write("vtt_str")
 
         mock_get_video_and_vtt_file.return_value = ("", vtt_file)
-        req = {"mentor": ex.mentor, "question": ex.question}
+        req = {
+            "mentor": ex.mentor,
+            "question": ex.question,
+            "video_path": ex.video_name,
+        }
         mentor = req["mentor"]
         question = req["question"]
         task_id = "t1"
         timestamp = ex.timestamp
         is_idle = question == "q1_idle"
-        transcode_stage_output_dict = {
-            "media": [
-                {"type": "video", "tag": "mobile", "url": "mobile.mp4"},
-                {"type": "video", "tag": "web", "url": "web.mp4"},
-            ],
-            "video_path": ex.video_name,
-        }
 
-        transcribe_stage_output_dict = {
-            "transcript": ex.transcript_fake,
-        }
-
-        expected_media = list(transcode_stage_output_dict["media"])
+        expected_media = list(ex.transcode_stage_output_dict["media"])
 
         base_path = f"videos/{mentor}/{question}/{timestamp}/"
         if not is_idle:
@@ -675,7 +645,7 @@ def test_finalization_stage(
         expected_update_answer_gql_query, expected_med = _mock_gql_answer_update(
             mentor,
             question,
-            transcribe_stage_output_dict["transcript"],
+            ex.transcribe_stage_output_dict["transcript"],
             timestamp,
             media=expected_media,
         )
@@ -683,12 +653,15 @@ def test_finalization_stage(
         from mentor_upload_process.process import finalization_stage
 
         assert finalization_stage(
-            [(transcode_stage_output_dict, transcribe_stage_output_dict)], req, task_id
+            [(ex.transcode_stage_output_dict, ex.transcribe_stage_output_dict)],
+            req,
+            task_id,
         ) == {
             "mentor": req["mentor"],
             "question": req["question"],
             "video_path": "video1.mp4",
-            "transcript": transcribe_stage_output_dict["transcript"],
+            "work_dir": ex.transcode_stage_output_dict["work_dir"],
+            "transcript": ex.transcribe_stage_output_dict["transcript"],
             "media": expected_media,
         }
 
@@ -711,7 +684,7 @@ def test_finalization_stage(
                             "status": "DONE",
                         }
                     ],
-                    transcript=transcribe_stage_output_dict["transcript"],
+                    transcript=ex.transcribe_stage_output_dict["transcript"],
                     media=expected_media,
                     timestamp=timestamp,
                 ),
@@ -760,7 +733,7 @@ def test_transcode_stage(
     ex: _TestProcessExample,
 ):
     with _test_env(
-        ex.video_name, ex.timestamp, ex.video_dims, monkeypatch, tmpdir
+        ex.video_name, ex.timestamp, monkeypatch, tmpdir, ex.video_dims
     ) as work_dir:
         req = {
             "mentor": "m1",
@@ -770,6 +743,14 @@ def test_transcode_stage(
         }
         task_id = "t1"
         timestamp = "20120114T032134Z"
+        video_file = work_dir / ex.video_name
+        makedirs(path.dirname(video_file), exist_ok=True)
+        open(video_file, "x")
+
+        output_dict_from_init_stage = {
+            "video_file": video_file,
+            "work_dir": work_dir,
+        }
 
         mock_ffmpeg_inst = Mock()
 
@@ -799,9 +780,10 @@ def test_transcode_stage(
 
         expected_media = _transcode_expected_media("m1", "q1", timestamp)
 
-        assert transcode_stage(req, task_id) == {
+        assert transcode_stage([output_dict_from_init_stage], req, task_id) == {
             "media": expected_media,
-            "video_path": req["video_path"],
+            "video_file": output_dict_from_init_stage["video_file"],
+            "work_dir": output_dict_from_init_stage["work_dir"],
         }
         (
             expected_web_video_path,
@@ -862,7 +844,7 @@ def test_raises_if_video_path_not_specified():
     assert str(caught_exception) == "missing required param 'video_path'"
 
     try:
-        transcode_stage(req, "fake_task_id")
+        transcode_stage([{}], req, "fake_task_id")
 
     except Exception as err:
         caught_exception = err
@@ -870,7 +852,7 @@ def test_raises_if_video_path_not_specified():
     assert str(caught_exception) == "missing required param 'video_path'"
 
     try:
-        transcribe_stage(req, "fake_task_id")
+        transcribe_stage([{}], req, "fake_task_id")
 
     except Exception as err:
         caught_exception = err
