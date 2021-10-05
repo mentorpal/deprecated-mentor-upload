@@ -65,6 +65,8 @@ class UpdateTaskStatusRequest:
     question: str
     task_id: str
     new_status: str
+    transcript: str = None
+    media: Media = None
 
 
 @dataclass
@@ -196,18 +198,22 @@ def upload_task_update(req: UploadTaskRequest) -> None:
 
 
 def upload_task_status_req_gql(req: UpdateTaskStatusRequest) -> GQLQueryBody:
+    variables = {}
+    variables["mentorId"] = req.mentor
+    variables["questionId"] = req.question
+    variables["taskId"] = req.task_id
+    variables["newStatus"] = req.new_status
+    if req.transcript:
+        variables["transcript"] = req.transcript
+    if req.media:
+        variables["media"] = req.media
     return {
-        "query": """mutation UpdateUploadTaskStatus($mentorId: ID!, $questionId: ID!, $taskId: String!, $newStatus: String!) {
+        "query": """mutation UpdateUploadTaskStatus($mentorId: ID!, $questionId: ID!, $taskId: String!, $newStatus: String!, $transcript: String, $media: [AnswerMediaInputType]) {
             api {
-                uploadTaskStatusUpdate(mentorId: $mentorId, questionId: $questionId, taskId: $taskId, newStatus: $newStatus)
+                uploadTaskStatusUpdate(mentorId: $mentorId, questionId: $questionId, taskId: $taskId, newStatus: $newStatus, transcript: $transcript, media: $media)
             }
         }""",
-        "variables": {
-            "mentorId": req.mentor,
-            "questionId": req.question,
-            "taskId": req.task_id,
-            "newStatus": req.new_status,
-        },
+        "variables": variables,
     }
 
 

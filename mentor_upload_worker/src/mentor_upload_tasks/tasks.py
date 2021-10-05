@@ -168,3 +168,8 @@ def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
     t = process.cancel_task(req)
     celery.control.revoke(req.get("task_id"), terminate=True)
     return t
+
+
+@celery.task()
+def on_chord_error(request, exc, traceback):
+    print("Task {0!r} raised error: {1!r}".format(request.id, exc))

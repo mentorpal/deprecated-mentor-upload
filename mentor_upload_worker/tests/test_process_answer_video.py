@@ -23,15 +23,12 @@ from transcribe.mock import MockTranscribeJob, MockTranscriptions
 
 from mentor_upload_process import TrimRequest
 from mentor_upload_process.api import (
-    upload_task_req_gql,
     upload_task_status_req_gql,
     UpdateTaskStatusRequest,
-    UploadTaskRequest,
     answer_update_gql,
     fetch_question_name_gql,
     get_graphql_endpoint,
     AnswerUpdateRequest,
-    TaskInfo,
 )
 from mentor_upload_process.media_tools import (
     output_args_video_encode_for_mobile,
@@ -134,49 +131,22 @@ def _transcode_expected_media(
     )
 
 
-def _mock_gql_upload_task_update(
+def _mock_gql_task_status_update(
     mentor: str,
     question: str,
-    task_list: List[TaskInfo],
+    task_id: str,
+    new_status: str,
     transcript: str = None,
-    timestamp: str = None,
     media=None,
-) -> dict:
-    if media is None and timestamp is not None:
-        media = []
-        base_path = f"videos/{mentor}/{question}/{timestamp}/"
-        media = [
-            {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
-            {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
-        ]
-        if question != "q1_idle":
-            media.append(
-                {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"}
-            )
-    gql_query = upload_task_req_gql(
-        UploadTaskRequest(
-            mentor=mentor,
-            question=question,
-            task_list=task_list,
-            transcript=transcript,
-            media=media,
-        )
-    )
-    responses.add(
-        responses.POST,
-        get_graphql_endpoint(),
-        json=gql_query,
-        status=200,
-    )
-    return gql_query
-
-
-def _mock_gql_task_status_update(
-    mentor: str, question: str, task_id: str, new_status: str
 ) -> dict:
     gql_query = upload_task_status_req_gql(
         UpdateTaskStatusRequest(
-            mentor=mentor, question=question, task_id=task_id, new_status=new_status
+            mentor=mentor,
+            question=question,
+            task_id=task_id,
+            new_status=new_status,
+            transcript=transcript,
+            media=media,
         )
     )
     responses.add(
@@ -648,19 +618,13 @@ def test_finalization_stage(
                     new_status="IN_PROGRESS",
                 ),
                 expected_update_answer_gql_query,
-                _mock_gql_upload_task_update(
+                _mock_gql_task_status_update(
                     req["mentor"],
                     req["question"],
-                    task_list=[
-                        {
-                            "task_name": "finalization",
-                            "task_id": task_id,
-                            "status": "DONE",
-                        }
-                    ],
+                    task_id=task_id,
+                    new_status="DONE",
                     transcript=ex.transcribe_stage_output_dict["transcript"],
                     media=expected_media,
-                    timestamp=timestamp,
                 ),
             ]
         )

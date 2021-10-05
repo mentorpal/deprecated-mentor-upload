@@ -137,3 +137,8 @@ def process_transfer_video(req: ProcessTransferRequest):
 @celery.task()
 def cancel_task(req: CancelTaskRequest):
     celery.control.revoke(req.get("task_id"), terminate=True)
+
+
+@celery.task()
+def on_chord_error(request, exc, traceback):
+    print("Task {0!r} raised error: {1!r}".format(request.id, exc))

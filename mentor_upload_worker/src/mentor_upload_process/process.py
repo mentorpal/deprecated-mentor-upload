@@ -42,8 +42,6 @@ from .api import (
     AnswerUpdateRequest,
     upload_task_status_update,
     UpdateTaskStatusRequest,
-    UploadTaskRequest,
-    upload_task_update,
     MediaUpdateRequest,
 )
 
@@ -478,17 +476,12 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
                 mentor=mentor, question=question, transcript=transcript, media=media
             )
         )
-        upload_task_update(
-            UploadTaskRequest(
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
                 mentor=mentor,
                 question=question,
-                task_list=[
-                    {
-                        "task_name": "finalization",
-                        "task_id": task_id,
-                        "status": "DONE",
-                    }
-                ],
+                task_id=task_id,
+                new_status="DONE",
                 transcript=transcript,
                 media=media,
             )
@@ -529,17 +522,12 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
     media = answer.get("media", [])
     if not answer.get("hasUntransferredMedia", False):
         return
-    upload_task_update(
-        UploadTaskRequest(
+    upload_task_status_update(
+        UpdateTaskStatusRequest(
             mentor=mentor,
             question=question,
-            task_list=[
-                {
-                    "task_name": "transferring",
-                    "task_id": task_id,
-                    "status": "IN_PROGRESS",
-                }
-            ],
+            task_id=task_id,
+            new_status="IN_PROGRESS",
             transcript=transcript,
             media=media,
         )
@@ -563,17 +551,12 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                 )
                 m["needsTransfer"] = False
                 m["url"] = item_path
-                upload_task_update(
-                    UploadTaskRequest(
+                upload_task_status_update(
+                    UpdateTaskStatusRequest(
                         mentor=mentor,
                         question=question,
-                        task_list=[
-                            {
-                                "task_name": "transferring",
-                                "task_id": task_id,
-                                "status": "IN_PROGRESS",
-                            }
-                        ],
+                        task_id=task_id,
+                        new_status="IN_PROGRESS",
                         transcript=transcript,
                         media=media,
                     )
@@ -585,17 +568,12 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                 import logging
 
                 logging.exception(x)
-                upload_task_update(
-                    UploadTaskRequest(
+                upload_task_status_update(
+                    UpdateTaskStatusRequest(
                         mentor=mentor,
                         question=question,
-                        task_list=[
-                            {
-                                "task_name": "transferring",
-                                "task_id": task_id,
-                                "status": "FAILED",
-                            }
-                        ],
+                        task_id=task_id,
+                        new_status="FAILED",
                         transcript=transcript,
                         media=media,
                     )
@@ -608,13 +586,12 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
 
                     logging.error(f"failed to delete file '{file_path}'")
                     logging.exception(x)
-    upload_task_update(
-        UploadTaskRequest(
+    upload_task_status_update(
+        UpdateTaskStatusRequest(
             mentor=mentor,
             question=question,
-            task_list=[
-                {"task_name": "transferring", "task_id": task_id, "status": "DONE"}
-            ],
+            task_id=task_id,
+            new_status="DONE",
             transcript=transcript,
             media=media,
         )

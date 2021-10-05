@@ -58,7 +58,7 @@ def begin_tasks_in_parallel(req):
         body=mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(
             queue=mentor_upload_tasks.get_queue_finalization_stage()
         ),
-    )
+    ).on_error(mentor_upload_tasks.tasks.on_chord_error.s())
     return my_chord.delay()
 
 
