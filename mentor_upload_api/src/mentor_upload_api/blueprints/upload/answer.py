@@ -155,14 +155,22 @@ def cancel():
     return jsonify({"data": {"id": t.id, "cancelledIds": task_id_list}})
 
 
-# TODO: update this to be able to check for each different stage
-# TODO: need to somehow differentiate which task type the task_id is related to
-@answer_blueprint.route("/status/<task_id>/", methods=["GET"])
-@answer_blueprint.route("/status/<task_id>", methods=["GET"])
-def upload_status(task_id: str):
-    t = mentor_upload_tasks.tasks.upload_transcribe_transcode_answer_video.AsyncResult(
-        task_id
-    )
+@answer_blueprint.route("/status/<task_name>/<task_id>/", methods=["GET"])
+@answer_blueprint.route("/status/<task_name>/<task_id>", methods=["GET"])
+def task_status(task_name: str, task_id: str):
+    if task_name == "transcribe":
+        t = mentor_upload_tasks.tasks.transcribe_stage.AsyncResult(task_id)
+    elif task_name == "transcode":
+        t = mentor_upload_tasks.tasks.transcode_stage.AsyncResult(task_id)
+    elif task_name == "trim_upload":
+        t = mentor_upload_tasks.tasks.trim_upload_stage.AsyncResult(task_id)
+    elif task_name == "finalization":
+        t = mentor_upload_tasks.tasks.finalization_stage.AsyncResult(task_id)
+    else:
+        import logging
+
+        logging.exception("unrecognized task_name")
+
     return jsonify(
         {
             "data": {

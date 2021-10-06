@@ -434,48 +434,51 @@ def test_env_fixes_ssl_status_url(
     }
 
 
-# TODO: update along with upload_status(task_id: str) in answer.py
-# @pytest.mark.only
-# @pytest.mark.parametrize(
-#     "task_id,state,status,info,expected_info",
-#     [
-#         ("fake-task-id-123", "PENDING", "working", None, None),
-#         ("fake-task-id-234", "STARTED", "working harder", None, None),
-#         ("fake-task-id-456", "SUCCESS", "done!", None, None),
-#         (
-#             "fake-task-id-678",
-#             "FAILURE",
-#             "error!",
-#             Exception("error message"),
-#             "error message",
-#         ),
-#     ],
-# )
-# @patch("mentor_upload_tasks.tasks.trim_upload_stage")
-# @patch("mentor_upload_tasks.tasks.transcode_stage")
-# @patch("mentor_upload_tasks.tasks.transcribe_stage")
-# @patch("mentor_upload_tasks.tasks.finalization_stage")
-# def test_it_returns_status_for_a_upload_job(
-#     finalization_stage_task,
-#     transcribe_stage_task,
-#     transcode_stage_task,
-#     trim_upload_stage_task,
-#     task_id,
-#     state,
-#     status,
-#     info,
-#     expected_info,
-#     client,
-# ):
-#     mock_task = Bunch(id=task_id, state=state, status=status, info=info)
-#     trim_upload_stage_task.AsyncResult.return_value = mock_task
-#     res = client.get(f"/upload/answer/status/{task_id}")
-#     assert res.status_code == 200
-#     assert res.json == {
-#         "data": {
-#             "task_id": task_id,
-#             "state": state,
-#             "status": status,
-#             "info": expected_info,
-#         }
-#     }
+@pytest.mark.parametrize(
+    "task_name,task_id,state,status,info,expected_info",
+    [
+        ("trim_upload", "fake-task-id-123", "PENDING", "working", None, None),
+        ("finalization", "fake-task-id-234", "STARTED", "working harder", None, None),
+        ("transcode", "fake-task-id-456", "SUCCESS", "done!", None, None),
+        (
+            "transcribe",
+            "fake-task-id-678",
+            "FAILURE",
+            "error!",
+            Exception("error message"),
+            "error message",
+        ),
+    ],
+)
+@patch("mentor_upload_tasks.tasks.trim_upload_stage")
+@patch("mentor_upload_tasks.tasks.transcode_stage")
+@patch("mentor_upload_tasks.tasks.transcribe_stage")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
+def test_it_returns_status_for_a_upload_job(
+    finalization_stage_task,
+    transcribe_stage_task,
+    transcode_stage_task,
+    trim_upload_stage_task,
+    task_name,
+    task_id,
+    state,
+    status,
+    info,
+    expected_info,
+    client,
+):
+    mock_task = Bunch(id=task_id, state=state, status=status, info=info)
+    trim_upload_stage_task.AsyncResult.return_value = mock_task
+    transcode_stage_task.AsyncResult.return_value = mock_task
+    transcribe_stage_task.AsyncResult.return_value = mock_task
+    finalization_stage_task.AsyncResult.return_value = mock_task
+    res = client.get(f"/upload/answer/status/{task_name}/{task_id}")
+    assert res.status_code == 200
+    assert res.json == {
+        "data": {
+            "id": task_id,
+            "state": state,
+            "status": status,
+            "info": expected_info,
+        }
+    }
