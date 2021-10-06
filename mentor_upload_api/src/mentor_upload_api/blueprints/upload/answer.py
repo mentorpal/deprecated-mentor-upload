@@ -125,7 +125,7 @@ def upload():
     return jsonify(
         {
             "data": {
-                "task_list": task_list,
+                "taskList": task_list,
                 "statusUrl": _to_status_url(request.url_root, task_ids),
             }
         }

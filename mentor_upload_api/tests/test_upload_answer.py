@@ -165,7 +165,7 @@ def test_upload(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "task_list": task_list,
+            "taskList": task_list,
             "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
         }
     }
@@ -299,7 +299,7 @@ def test_cancel(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "task_list": task_list,
+            "taskList": task_list,
             "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
         }
     }
@@ -417,7 +417,7 @@ def test_env_fixes_ssl_status_url(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "task_list": task_list,
+            "taskList": task_list,
             "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_transcode_task_id,fake_transcribe_task_id,fake_trim_upload_task_id,fake_finalization_task_id]}",
         }
     }
