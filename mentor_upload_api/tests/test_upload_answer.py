@@ -128,32 +128,30 @@ def test_upload(
         fake_trim_upload_task_id,
         fake_finalization_task_id,
     ]
-
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": fake_trim_upload_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcoding",
+            "task_id": fake_transcoding_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcribing",
+            "task_id": fake_transcribing_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "finalization",
+            "task_id": fake_finalization_task_id,
+            "status": "QUEUED",
+        },
+    ]
     expected_status_update_query = _mock_gql_upload_task_update(
-        mentor=input_mentor,
-        question=input_question,
-        task_list=[
-            {
-                "task_name": "trim_upload",
-                "task_id": fake_trim_upload_task_id,
-                "status": "QUEUED",
-            },
-            {
-                "task_name": "transcoding",
-                "task_id": fake_transcoding_task_id,
-                "status": "QUEUED",
-            },
-            {
-                "task_name": "transcribing",
-                "task_id": fake_transcribing_task_id,
-                "status": "QUEUED",
-            },
-            {
-                "task_name": "finalization",
-                "task_id": fake_finalization_task_id,
-                "status": "QUEUED",
-            },
-        ],
+        mentor=input_mentor, question=input_question, task_list=task_list
     )
     # sends the request to trigger upload()
     res = client.post(
@@ -167,7 +165,7 @@ def test_upload(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_task_id_collection,
+            "task_list": task_list,
             "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
         }
     }
@@ -265,32 +263,30 @@ def test_cancel(
         fake_trim_upload_task_id,
         fake_finalization_task_id,
     ]
-
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": fake_trim_upload_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcoding",
+            "task_id": fake_transcoding_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcribing",
+            "task_id": fake_transcribing_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "finalization",
+            "task_id": fake_finalization_task_id,
+            "status": "QUEUED",
+        },
+    ]
     expected_status_update_query = _mock_gql_upload_task_update(
-        mentor=input_mentor,
-        question=input_question,
-        task_list=[
-            {
-                "task_name": "trim_upload",
-                "task_id": fake_trim_upload_task_id,
-                "status": "QUEUED",
-            },
-            {
-                "task_name": "transcoding",
-                "task_id": fake_transcoding_task_id,
-                "status": "QUEUED",
-            },
-            {
-                "task_name": "transcribing",
-                "task_id": fake_transcribing_task_id,
-                "status": "QUEUED",
-            },
-            {
-                "task_name": "finalization",
-                "task_id": fake_finalization_task_id,
-                "status": "QUEUED",
-            },
-        ],
+        mentor=input_mentor, question=input_question, task_list=task_list
     )
     res = client.post(
         f"{upload_domain}/upload/answer",
@@ -303,11 +299,11 @@ def test_cancel(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_task_id_collection,
+            "task_list": task_list,
             "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
         }
     }
-    # cancelling 1 task
+
     mock_task_group().apply_async.return_value = Bunch(
         id=fake_cancel_trim_upload_task_id
     )
@@ -383,32 +379,30 @@ def test_env_fixes_ssl_status_url(
         id=fake_finalization_task_id,
     )
     mock_begin_tasks_in_parallel.return_value = mock_chord_result
-
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": fake_trim_upload_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcoding",
+            "task_id": fake_transcode_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcribing",
+            "task_id": fake_transcribe_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "finalization",
+            "task_id": fake_finalization_task_id,
+            "status": "QUEUED",
+        },
+    ]
     expected_status_update_query = _mock_gql_upload_task_update(
-        mentor=fake_mentor_id,
-        question=fake_question_id,
-        task_list=[
-            {
-                "task_name": "trim_upload",
-                "task_id": fake_trim_upload_task_id,
-                "status": "QUEUED",
-            },
-            {
-                "task_name": "transcoding",
-                "task_id": fake_transcode_task_id,
-                "status": "QUEUED",
-            },
-            {
-                "task_name": "transcribing",
-                "task_id": fake_transcribe_task_id,
-                "status": "QUEUED",
-            },
-            {
-                "task_name": "finalization",
-                "task_id": fake_finalization_task_id,
-                "status": "QUEUED",
-            },
-        ],
+        mentor=fake_mentor_id, question=fake_question_id, task_list=task_list
     )
     res = client.post(
         f"{request_root}/upload/answer",
@@ -423,12 +417,7 @@ def test_env_fixes_ssl_status_url(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": [
-                fake_transcode_task_id,
-                fake_transcribe_task_id,
-                fake_trim_upload_task_id,
-                fake_finalization_task_id,
-            ],
+            "task_list": task_list,
             "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_transcode_task_id,fake_transcribe_task_id,fake_trim_upload_task_id,fake_finalization_task_id]}",
         }
     }

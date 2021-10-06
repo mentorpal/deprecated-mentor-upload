@@ -91,32 +91,33 @@ def upload():
     for task in my_chord.parent.parent.results:
         task_ids.append(task.id)  # init_id
     task_ids.append(my_chord.id)  # finalization id
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": my_chord.parent.parent.results[0].id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcoding",
+            "task_id": my_chord.parent.results[0].id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcribing",
+            "task_id": my_chord.parent.results[1].id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "finalization",
+            "task_id": my_chord.id,
+            "status": "QUEUED",
+        },
+    ]
     upload_task_update(
         UploadTaskRequest(
             mentor=mentor,
             question=question,
-            task_list=[
-                {
-                    "task_name": "trim_upload",
-                    "task_id": my_chord.parent.parent.results[0].id,
-                    "status": "QUEUED",
-                },
-                {
-                    "task_name": "transcoding",
-                    "task_id": my_chord.parent.results[0].id,
-                    "status": "QUEUED",
-                },
-                {
-                    "task_name": "transcribing",
-                    "task_id": my_chord.parent.results[1].id,
-                    "status": "QUEUED",
-                },
-                {
-                    "task_name": "finalization",
-                    "task_id": my_chord.id,
-                    "status": "QUEUED",
-                },
-            ],
+            task_list=task_list,
             transcript="",
             media=[],
         )
@@ -124,7 +125,7 @@ def upload():
     return jsonify(
         {
             "data": {
-                "id": task_ids,
+                "task_list": task_list,
                 "statusUrl": _to_status_url(request.url_root, task_ids),
             }
         }

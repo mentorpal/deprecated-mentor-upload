@@ -40,7 +40,9 @@ def transfer():
     return jsonify(
         {
             "data": {
-                "id": t.id,
+                "task_list": [
+                    {"task_name": "transfer", "task_id": t.id, "status": "QUEUED"}
+                ],
                 "statusUrl": _to_status_url(request.url_root, t.id),
             }
         }
