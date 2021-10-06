@@ -13,7 +13,11 @@ from . import (
     CancelTaskRequest,
     ProcessAnswerRequest,
     ProcessTransferRequest,
-    get_queue_uploads,
+    get_queue_finalization_stage,
+    get_queue_transcribe_stage,
+    get_queue_trim_upload_stage,
+    get_queue_transcode_stage,
+    get_queue_cancel_task,
 )
 
 broker_url = (
@@ -33,24 +37,95 @@ celery.conf.update(
             or "redis://redis:6379/0"
         ),
         "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
-        "task_default_queue": get_queue_uploads(),
-        "task_default_exchange": get_queue_uploads(),
-        "task_default_routing_key": get_queue_uploads(),
+        "task_default_queue": get_queue_finalization_stage(),
+        "task_default_exchange": get_queue_finalization_stage(),
+        "task_default_routing_key": get_queue_finalization_stage(),
         "task_queues": [
             Queue(
-                get_queue_uploads(),
-                exchange=Exchange(get_queue_uploads(), "direct", durable=True),
-                routing_key=get_queue_uploads(),
-            )
+                get_queue_trim_upload_stage(),
+                exchange=Exchange(
+                    get_queue_trim_upload_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_trim_upload_stage(),
+            ),
+            Queue(
+                get_queue_transcode_stage(),
+                exchange=Exchange(
+                    get_queue_transcode_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_transcode_stage(),
+            ),
+            Queue(
+                get_queue_transcribe_stage(),
+                exchange=Exchange(
+                    get_queue_transcribe_stage(),
+                    "direct",
+                    durable=True,
+                ),
+                routing_key=get_queue_transcribe_stage(),
+            ),
+            Queue(
+                get_queue_finalization_stage(),
+                exchange=Exchange(
+                    get_queue_finalization_stage(), "direct", durable=True
+                ),
+                routing_key=get_queue_finalization_stage(),
+            ),
+            Queue(
+                get_queue_cancel_task(),
+                exchange=Exchange(get_queue_cancel_task(), "direct", durable=True),
+                routing_key=get_queue_cancel_task(),
+            ),
         ],
-        "task_routes": {"mentor_upload_tasks.tasks.*": {"queue": get_queue_uploads()}},
+        "task_routes": {
+            "mentor_upload_tasks.tasks.trim_upload_stage": {
+                "queue": get_queue_trim_upload_stage()
+            },
+            "mentor_upload_tasks.tasks.transcribe_stage": {
+                "queue": get_queue_transcribe_stage()
+            },
+            "mentor_upload_tasks.tasks.transcode_stage": {
+                "queue": get_queue_transcode_stage()
+            },
+            "mentor_upload_tasks.tasks.finalization_stage": {
+                "queue": get_queue_finalization_stage()
+            },
+            "mentor_upload_tasks.tasks.cancel_task": {"queue": get_queue_cancel_task()},
+        },
         "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
     }
 )
 
 
 @celery.task()
-def process_answer_video(req: ProcessAnswerRequest):
+def trim_upload_stage(
+    req: ProcessAnswerRequest,
+):
+    pass
+
+
+@celery.task()
+def transcode_stage(
+    dict_tuple: dict,
+    req: ProcessAnswerRequest,
+):
+    pass
+
+
+@celery.task()
+def transcribe_stage(
+    dict_tuple: dict,
+    req: ProcessAnswerRequest,
+):
+    pass
+
+
+@celery.task()
+def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest):
     pass
 
 
@@ -62,3 +137,8 @@ def process_transfer_video(req: ProcessTransferRequest):
 @celery.task()
 def cancel_task(req: CancelTaskRequest):
     celery.control.revoke(req.get("task_id"), terminate=True)
+
+
+@celery.task()
+def on_chord_error(request, exc, traceback):
+    print("Task {0!r} raised error: {1!r}".format(request.id, exc))

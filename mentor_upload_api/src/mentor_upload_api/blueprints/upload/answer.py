@@ -5,14 +5,17 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
+
 from os import environ, path, makedirs
 import uuid
 
 from flask import Blueprint, jsonify, request
 
+from celery import group, chord
+
 from mentor_upload_api.api import (
-    StatusUpdateRequest,
-    update_status,
+    UploadTaskRequest,
+    upload_task_update,
 )
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
@@ -26,6 +29,37 @@ def _to_status_url(root: str, id: str) -> str:
 
 def get_upload_root() -> str:
     return environ.get("UPLOAD_ROOT") or "./uploads"
+
+
+def begin_tasks_in_parallel(req):
+    parallel_group = group(
+        mentor_upload_tasks.tasks.transcode_stage.s(req=req).set(
+            queue=mentor_upload_tasks.get_queue_transcode_stage()
+        ),
+        mentor_upload_tasks.tasks.transcribe_stage.s(req=req).set(
+            queue=mentor_upload_tasks.get_queue_transcribe_stage()
+        ),
+    )
+    my_chord = chord(
+        group(
+            [
+                chord(
+                    group(
+                        [
+                            mentor_upload_tasks.tasks.trim_upload_stage.s(req=req).set(
+                                queue=mentor_upload_tasks.get_queue_trim_upload_stage()
+                            )
+                        ]
+                    ),
+                    body=parallel_group,
+                )
+            ]
+        ),
+        body=mentor_upload_tasks.tasks.finalization_stage.s(req=req).set(
+            queue=mentor_upload_tasks.get_queue_finalization_stage()
+        ),
+    ).on_error(mentor_upload_tasks.tasks.on_chord_error.s())
+    return my_chord.delay()
 
 
 @answer_blueprint.route("/", methods=["POST"])
@@ -49,15 +83,41 @@ def upload():
         "video_path": file_name,
         "trim": trim,
     }
-    t = mentor_upload_tasks.tasks.process_answer_video.apply_async(
-        queue=mentor_upload_tasks.get_queue_uploads(), args=[req]
-    )
-    update_status(
-        StatusUpdateRequest(
+    my_chord = begin_tasks_in_parallel(req)
+
+    task_ids = []
+    for task in my_chord.parent.results:
+        task_ids.append(task.id)  # transcode id, transcribe id
+    for task in my_chord.parent.parent.results:
+        task_ids.append(task.id)  # init_id
+    task_ids.append(my_chord.id)  # finalization id
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": my_chord.parent.parent.results[0].id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcoding",
+            "task_id": my_chord.parent.results[0].id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcribing",
+            "task_id": my_chord.parent.results[1].id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "finalization",
+            "task_id": my_chord.id,
+            "status": "QUEUED",
+        },
+    ]
+    upload_task_update(
+        UploadTaskRequest(
             mentor=mentor,
             question=question,
-            task_id=t.id,
-            status="QUEUING",
+            task_list=task_list,
             transcript="",
             media=[],
         )
@@ -65,8 +125,8 @@ def upload():
     return jsonify(
         {
             "data": {
-                "id": t.id,
-                "statusUrl": _to_status_url(request.url_root, t.id),
+                "taskList": task_list,
+                "statusUrl": _to_status_url(request.url_root, task_ids),
             }
         }
     )
@@ -80,18 +140,38 @@ def cancel():
         raise Exception("missing required param body")
     mentor = body.get("mentor")
     question = body.get("question")
-    task_id = body.get("task")
-    req = {"mentor": mentor, "question": question, "task_id": task_id}
-    t = mentor_upload_tasks.tasks.cancel_task.apply_async(
-        queue=mentor_upload_tasks.get_queue_uploads(), args=[req]
-    )
-    return jsonify({"data": {"id": t.id, "cancelledId": task_id}})
+    task_id_list = body.get("task_ids_to_cancel")
+
+    task_list = []
+
+    for task_id in task_id_list:
+        req = {"mentor": mentor, "question": question, "task_id": task_id}
+        task_list.append(
+            mentor_upload_tasks.tasks.cancel_task.si(req=req).set(
+                queue=mentor_upload_tasks.get_queue_cancel_task()
+            )
+        )
+
+    t = group(task_list).apply_async()
+    return jsonify({"data": {"id": t.id, "cancelledIds": task_id_list}})
 
 
-@answer_blueprint.route("/status/<task_id>/", methods=["GET"])
-@answer_blueprint.route("/status/<task_id>", methods=["GET"])
-def upload_status(task_id: str):
-    t = mentor_upload_tasks.tasks.process_answer_video.AsyncResult(task_id)
+@answer_blueprint.route("/status/<task_name>/<task_id>/", methods=["GET"])
+@answer_blueprint.route("/status/<task_name>/<task_id>", methods=["GET"])
+def task_status(task_name: str, task_id: str):
+    if task_name == "transcribe":
+        t = mentor_upload_tasks.tasks.transcribe_stage.AsyncResult(task_id)
+    elif task_name == "transcode":
+        t = mentor_upload_tasks.tasks.transcode_stage.AsyncResult(task_id)
+    elif task_name == "trim_upload":
+        t = mentor_upload_tasks.tasks.trim_upload_stage.AsyncResult(task_id)
+    elif task_name == "finalization":
+        t = mentor_upload_tasks.tasks.finalization_stage.AsyncResult(task_id)
+    else:
+        import logging
+
+        logging.exception("unrecognized task_name")
+
     return jsonify(
         {
             "data": {

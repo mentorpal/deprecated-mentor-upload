@@ -7,9 +7,10 @@
 import json
 from typing import List
 from mentor_upload_api.api import (
-    StatusUpdateRequest,
+    upload_task_req_gql,
+    UploadTaskRequest,
     get_graphql_endpoint,
-    status_update_gql,
+    TaskInfo,
 )
 from os import path
 from unittest.mock import patch, Mock
@@ -21,18 +22,18 @@ import pytest
 from .utils import Bunch, fixture_path
 
 
-def _mock_gql_status_update(
+def _mock_gql_upload_task_update(
     mentor: str,
     question: str,
-    task_id: str,
-    status: str,
+    task_list: List[TaskInfo],
+    transcript: str = None,
+    media=None,
 ) -> dict:
-    gql_query = status_update_gql(
-        StatusUpdateRequest(
+    gql_query = upload_task_req_gql(
+        UploadTaskRequest(
             mentor=mentor,
             question=question,
-            task_id=task_id,
-            status=status,
+            task_list=task_list,
             transcript="",
             media=[],
         )
@@ -59,35 +60,100 @@ def python_path_env(monkeypatch, tmpdir):
 
 
 @pytest.mark.parametrize(
-    "upload_domain,input_mentor,input_question,input_video,fake_task_id",
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_trim_upload_task_id",
     [
-        ("https://mentor.org", "mentor1", "q1", "video.mp4", "fake_task_id_1"),
-        ("http://a.diff.org", "mentor2", "q2", "video.mp4", "fake_task_id_2"),
+        (
+            "https://mentor.org",
+            "mentor1",
+            "q1",
+            "video.mp4",
+            "fake_finalization_task_id",
+            "fake_transcoding_task_id",
+            "fake_transcribing_task_id",
+            "fake_trim_upload_task_id",
+        ),
+        (
+            "http://a.diff.org",
+            "mentor2",
+            "q2",
+            "video.mp4",
+            "fake_finalization_task_id_2",
+            "fake_transcoding_task_id_2",
+            "fake_transcribing_task_id_2",
+            "fake_trim_upload_task_id_2",
+        ),
     ],
 )
 @responses.activate
-@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
+@patch("mentor_upload_tasks.tasks.trim_upload_stage")
+@patch("mentor_upload_tasks.tasks.transcode_stage")
+@patch("mentor_upload_tasks.tasks.transcribe_stage")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
 @patch.object(uuid, "uuid4")
 def test_upload(
     mock_uuid,
-    mock_upload_task,
+    finalization_stage_task,
+    transcribe_stage_task,
+    transcode_stage_task,
+    trim_upload_stage_task,
+    mock_begin_tasks_in_parallel,
     tmpdir,
     upload_domain,
     input_mentor,
     input_question,
     input_video,
-    fake_task_id,
+    fake_finalization_task_id,
+    fake_transcoding_task_id,
+    fake_transcribing_task_id,
+    fake_trim_upload_task_id,
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
-    mock_task = Bunch(id=fake_task_id)
-    mock_upload_task.apply_async.return_value = mock_task
-    expected_status_update_query = _mock_gql_status_update(
-        mentor=input_mentor,
-        question=input_question,
-        task_id=fake_task_id,
-        status="QUEUING",
+    mock_chord_result = Bunch(
+        parent=Bunch(
+            results=[
+                Bunch(id=fake_transcoding_task_id),
+                Bunch(id=fake_transcribing_task_id),
+            ],
+            parent=Bunch(results=[Bunch(id=fake_trim_upload_task_id)]),
+        ),
+        id=fake_finalization_task_id,
     )
+    mock_begin_tasks_in_parallel.return_value = mock_chord_result
+
+    fake_task_id_collection = [
+        fake_transcoding_task_id,
+        fake_transcribing_task_id,
+        fake_trim_upload_task_id,
+        fake_finalization_task_id,
+    ]
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": fake_trim_upload_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcoding",
+            "task_id": fake_transcoding_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcribing",
+            "task_id": fake_transcribing_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "finalization",
+            "task_id": fake_finalization_task_id,
+            "status": "QUEUED",
+        },
+    ]
+    expected_status_update_query = _mock_gql_upload_task_update(
+        mentor=input_mentor, question=input_question, task_list=task_list
+    )
+    # sends the request to trigger upload()
     res = client.post(
         f"{upload_domain}/upload/answer",
         data={
@@ -99,8 +165,8 @@ def test_upload(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_task_id,
-            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id}",
+            "taskList": task_list,
+            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
         }
     }
     root_ext = path.splitext(input_video)
@@ -112,51 +178,115 @@ def test_upload(
 
 
 @pytest.mark.parametrize(
-    "upload_domain,input_mentor,input_question,input_video,fake_task_id,fake_cancel_task_id",
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_trim_upload_task_id,fake_cancel_finalization_task_id,fake_cancel_transcribe_task_id,fake_cancel_transcode_task_id,fake_cancel_trim_upload_task_id",
     [
         (
             "https://mentor.org",
             "mentor1",
             "q1",
             "video.mp4",
-            "fake_task_id_1",
-            "fake_cancel_task_id_1",
+            "fake_finalization_task_id",
+            "fake_transcoding_task_id",
+            "fake_transcribing_task_id",
+            "fake_trim_upload_task_id",
+            "fake_cancel_finalization_task_id",
+            "fake_cancel_transcribe_task_id",
+            "fake_cancel_transcode_task_id",
+            "fake_cancel_trim_upload_task_id",
         ),
         (
             "http://a.diff.org",
             "mentor2",
             "q2",
             "video.mp4",
-            "fake_task_id_2",
-            "fake_cancel_task_id_2",
+            "fake_finalization_task_id_2",
+            "fake_transcoding_task_id_2",
+            "fake_transcribing_task_id_2",
+            "fake_trim_upload_task_id_2",
+            "fake_cancel_finalization_task_id_2",
+            "fake_cancel_transcribe_task_id_2",
+            "fake_cancel_transcode_task_id_2",
+            "fake_cancel_trim_upload_task_id_2",
         ),
     ],
 )
 @responses.activate
+@patch("mentor_upload_api.blueprints.upload.answer.group")
+@patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
 @patch("mentor_upload_tasks.tasks.cancel_task")
-@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch("mentor_upload_tasks.tasks.trim_upload_stage")
+@patch("mentor_upload_tasks.tasks.transcode_stage")
+@patch("mentor_upload_tasks.tasks.transcribe_stage")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
 @patch.object(uuid, "uuid4")
 def test_cancel(
     mock_uuid,
-    mock_upload_task,
+    finalization_stage_task,
+    transcribe_stage_task,
+    transcode_stage_task,
+    trim_upload_stage_task,
     mock_cancel_task,
+    mock_begin_tasks_in_parallel,
+    mock_task_group,
     tmpdir,
     upload_domain,
     input_mentor,
     input_question,
     input_video,
-    fake_task_id,
-    fake_cancel_task_id,
+    fake_finalization_task_id,
+    fake_transcoding_task_id,
+    fake_transcribing_task_id,
+    fake_trim_upload_task_id,
+    fake_cancel_finalization_task_id,
+    fake_cancel_transcribe_task_id,
+    fake_cancel_transcode_task_id,
+    fake_cancel_trim_upload_task_id,
     client,
 ):
     mock_uuid.return_value = "fake_uuid"
-    mock_task = Bunch(id=fake_task_id)
-    mock_upload_task.apply_async.return_value = mock_task
-    expected_status_update_query = _mock_gql_status_update(
-        mentor=input_mentor,
-        question=input_question,
-        task_id=fake_task_id,
-        status="QUEUING",
+    # mocking the result of the chord
+    mock_chord_result = Bunch(
+        parent=Bunch(
+            results=[
+                Bunch(id=fake_transcoding_task_id),
+                Bunch(id=fake_transcribing_task_id),
+            ],
+            parent=Bunch(results=[Bunch(id=fake_trim_upload_task_id)]),
+        ),
+        id=fake_finalization_task_id,
+    )
+    mock_begin_tasks_in_parallel.return_value = mock_chord_result
+
+    fake_task_id_collection = [
+        fake_transcoding_task_id,
+        fake_transcribing_task_id,
+        fake_trim_upload_task_id,
+        fake_finalization_task_id,
+    ]
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": fake_trim_upload_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcoding",
+            "task_id": fake_transcoding_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcribing",
+            "task_id": fake_transcribing_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "finalization",
+            "task_id": fake_finalization_task_id,
+            "status": "QUEUED",
+        },
+    ]
+    expected_status_update_query = _mock_gql_upload_task_update(
+        mentor=input_mentor, question=input_question, task_list=task_list
     )
     res = client.post(
         f"{upload_domain}/upload/answer",
@@ -169,25 +299,29 @@ def test_cancel(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_task_id,
-            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id}",
+            "taskList": task_list,
+            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
         }
     }
-    mock_cancel_task_id = Bunch(id=fake_cancel_task_id)
-    mock_cancel_task.apply_async.return_value = mock_cancel_task_id
+
+    mock_task_group().apply_async.return_value = Bunch(
+        id=fake_cancel_trim_upload_task_id
+    )
+    mock_cancel_trim_upload_task_id = Bunch(id=fake_cancel_trim_upload_task_id)
+    mock_cancel_task.si.set.return_value = mock_cancel_trim_upload_task_id
     res = client.post(
         f"{upload_domain}/upload/answer/cancel",
         json={
             "mentor": input_mentor,
             "question": input_question,
-            "task": fake_task_id,
+            "task_ids_to_cancel": [fake_trim_upload_task_id],
         },
     )
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_cancel_task_id,
-            "cancelledId": fake_task_id,
+            "id": fake_cancel_trim_upload_task_id,
+            "cancelledIds": [fake_trim_upload_task_id],
         }
     }
 
@@ -207,28 +341,68 @@ def test_cancel(
     ],
 )
 @responses.activate
-@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
+@patch("mentor_upload_tasks.tasks.trim_upload_stage")
+@patch("mentor_upload_tasks.tasks.transcode_stage")
+@patch("mentor_upload_tasks.tasks.transcribe_stage")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
 def test_env_fixes_ssl_status_url(
-    mock_upload_task: Mock,
+    finalization_stage_task,
+    transcribe_stage_task,
+    transcode_stage_task,
+    trim_upload_stage_task,
+    mock_begin_tasks_in_parallel: Mock,
     request_root: str,
     env_val: str,
     expected_status_url_root: str,
     monkeypatch,
     client,
 ):
-    fake_task_id = "fake_task_id"
     fake_mentor_id = "mentor1"
     fake_question_id = "question1"
     fake_video = open(path.join(fixture_path("input_videos"), "video.mp4"), "rb")
     if env_val is not None:
         monkeypatch.setenv("STATUS_URL_FORCE_HTTPS", env_val)
-    mock_task = Bunch(id=fake_task_id)
-    mock_upload_task.apply_async.return_value = mock_task
-    expected_status_update_query = _mock_gql_status_update(
-        mentor=fake_mentor_id,
-        question=fake_question_id,
-        task_id=fake_task_id,
-        status="QUEUING",
+
+    fake_trim_upload_task_id = "fake_trim_upload_task_id"
+    fake_transcribe_task_id = "fake_transcribe_task_id"
+    fake_transcode_task_id = "fake_transcode_task_id"
+    fake_finalization_task_id = "fake_finalization_task_id"
+    mock_chord_result = Bunch(
+        parent=Bunch(
+            results=[
+                Bunch(id=fake_transcode_task_id),
+                Bunch(id=fake_transcribe_task_id),
+            ],
+            parent=Bunch(results=[Bunch(id=fake_trim_upload_task_id)]),
+        ),
+        id=fake_finalization_task_id,
+    )
+    mock_begin_tasks_in_parallel.return_value = mock_chord_result
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": fake_trim_upload_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcoding",
+            "task_id": fake_transcode_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcribing",
+            "task_id": fake_transcribe_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "finalization",
+            "task_id": fake_finalization_task_id,
+            "status": "QUEUED",
+        },
+    ]
+    expected_status_update_query = _mock_gql_upload_task_update(
+        mentor=fake_mentor_id, question=fake_question_id, task_list=task_list
     )
     res = client.post(
         f"{request_root}/upload/answer",
@@ -243,19 +417,20 @@ def test_env_fixes_ssl_status_url(
     assert res.status_code == 200
     assert res.json == {
         "data": {
-            "id": fake_task_id,
-            "statusUrl": f"{expected_status_url_root}/upload/answer/status/fake_task_id",
+            "taskList": task_list,
+            "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_transcode_task_id,fake_transcribe_task_id,fake_trim_upload_task_id,fake_finalization_task_id]}",
         }
     }
 
 
 @pytest.mark.parametrize(
-    "task_id,state,status,info,expected_info",
+    "task_name,task_id,state,status,info,expected_info",
     [
-        ("fake-task-id-123", "PENDING", "working", None, None),
-        ("fake-task-id-234", "STARTED", "working harder", None, None),
-        ("fake-task-id-456", "SUCCESS", "done!", None, None),
+        ("trim_upload", "fake-task-id-123", "PENDING", "working", None, None),
+        ("finalization", "fake-task-id-234", "STARTED", "working harder", None, None),
+        ("transcode", "fake-task-id-456", "SUCCESS", "done!", None, None),
         (
+            "transcribe",
             "fake-task-id-678",
             "FAILURE",
             "error!",
@@ -264,14 +439,35 @@ def test_env_fixes_ssl_status_url(
         ),
     ],
 )
-@patch("mentor_upload_tasks.tasks.process_answer_video")
+@patch("mentor_upload_tasks.tasks.trim_upload_stage")
+@patch("mentor_upload_tasks.tasks.transcode_stage")
+@patch("mentor_upload_tasks.tasks.transcribe_stage")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
 def test_it_returns_status_for_a_upload_job(
-    mock_upload_task, task_id, state, status, info, expected_info, client
+    finalization_stage_task,
+    transcribe_stage_task,
+    transcode_stage_task,
+    trim_upload_stage_task,
+    task_name,
+    task_id,
+    state,
+    status,
+    info,
+    expected_info,
+    client,
 ):
     mock_task = Bunch(id=task_id, state=state, status=status, info=info)
-    mock_upload_task.AsyncResult.return_value = mock_task
-    res = client.get(f"/upload/answer/status/{task_id}")
+    trim_upload_stage_task.AsyncResult.return_value = mock_task
+    transcode_stage_task.AsyncResult.return_value = mock_task
+    transcribe_stage_task.AsyncResult.return_value = mock_task
+    finalization_stage_task.AsyncResult.return_value = mock_task
+    res = client.get(f"/upload/answer/status/{task_name}/{task_id}")
     assert res.status_code == 200
     assert res.json == {
-        "data": {"id": task_id, "state": state, "status": status, "info": expected_info}
+        "data": {
+            "id": task_id,
+            "state": state,
+            "status": status,
+            "info": expected_info,
+        }
     }

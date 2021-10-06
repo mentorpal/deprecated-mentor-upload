@@ -11,7 +11,7 @@ import pytest
     "endpoint",
     [
         ("/upload/answer"),
-        ("/upload/answer/status/xyz"),
+        ("/upload/answer/status/abc/xyz"),
     ],
 )
 def test_cors_preflight(endpoint, client):

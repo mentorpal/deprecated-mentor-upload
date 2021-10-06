@@ -39,8 +39,8 @@ class Media:
 
 @dataclass
 class TaskInfo:
-    task_id: str
-    status: str
+    flag: str
+    id: str
 
 
 @dataclass
