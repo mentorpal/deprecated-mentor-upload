@@ -13,6 +13,7 @@ from . import (
     CancelTaskRequest,
     ProcessAnswerRequest,
     ProcessTransferRequest,
+    TrimExistingUploadRequest,
     get_queue_finalization_stage,
     get_queue_transcribe_stage,
     get_queue_trim_upload_stage,
@@ -121,6 +122,11 @@ def transcribe_stage(
     dict_tuple: dict,
     req: ProcessAnswerRequest,
 ):
+    pass
+
+
+@celery.task()
+def trim_existing_upload(req: TrimExistingUploadRequest):
     pass
 
 

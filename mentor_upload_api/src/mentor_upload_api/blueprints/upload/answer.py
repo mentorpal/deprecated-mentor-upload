@@ -16,6 +16,7 @@ from celery import group, chord
 from mentor_upload_api.api import (
     UploadTaskRequest,
     upload_task_update,
+    fetch_answer_transcript_and_media,
 )
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
@@ -60,6 +61,52 @@ def begin_tasks_in_parallel(req):
         ),
     ).on_error(mentor_upload_tasks.tasks.on_chord_error.s())
     return my_chord.delay()
+
+
+@answer_blueprint.route("/trim_existing_upload/", methods=["POST"])
+@answer_blueprint.route("/trim_existing_upload", methods=["POST"])
+def trim_existing_upload():
+    body = json.loads(request.form.get("body", "{}"))
+    if not body:
+        raise Exception("missing required param body")
+    mentor = body.get("mentor")
+    question = body.get("question")
+    trim = body.get("trim")
+    transcript, answer_media = fetch_answer_transcript_and_media(mentor, question)
+    req = {
+        "mentor": mentor,
+        "question": question,
+        "trim": trim,
+        "transcript": transcript,
+        "answer_media": answer_media,
+    }
+    task = mentor_upload_tasks.tasks.trim_existing_upload.apply_async(
+        queue=mentor_upload_tasks.get_queue_trim_upload_stage(), args=[req]
+    )
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": task.id,
+            "status": "QUEUED",
+        }
+    ]
+    upload_task_update(
+        UploadTaskRequest(
+            mentor=mentor,
+            question=question,
+            task_list=task_list,
+            transcript=transcript,
+            media=answer_media,
+        )
+    )
+    return jsonify(
+        {
+            "data": {
+                "taskList": task_list,
+                "statusUrl": _to_status_url(request.url_root, [task.id]),
+            }
+        }
+    )
 
 
 @answer_blueprint.route("/", methods=["POST"])

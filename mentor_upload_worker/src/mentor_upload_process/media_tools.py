@@ -199,6 +199,17 @@ def video_trim(
     ff.run()
 
 
+def existing_video_trim(
+    input_file: str, output_file: str, start_secs: float, end_secs: float
+) -> None:
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    ff = ffmpy.FFmpeg(
+        inputs={str(input_file): None},
+        outputs={str(output_file): output_args_trim_video(start_secs, end_secs)},
+    )
+    ff.run()
+
+
 def find(
     s: str, ch: str
 ):  # gives indexes of all of the spaces so we don't split words apart
