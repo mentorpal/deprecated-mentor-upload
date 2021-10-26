@@ -8,10 +8,9 @@ import json
 from logging import exception
 
 from os import environ, path, makedirs, listdir
-from typing import List
 import uuid
 
-from flask import Blueprint, jsonify, request, send_from_directory, current_app
+from flask import Blueprint, jsonify, request, send_from_directory
 
 from celery import group, chord
 
@@ -134,33 +133,37 @@ def upload():
     )
 
 
-def find_file_name_in_files(mentor: str, question: str, files: List[str]):
+def full_video_file_name_from_directory(
+    mentor: str, question: str, file_directory: str
+):
+    files = listdir(file_directory)
     for file_name in files:
+        # video file name format: uuid1-mentorID-questionID.mp4
         file_name_split = file_name.split("-")
         file_mentor = file_name_split[-2]
         file_question = file_name_split[-1].split(".")[0]
         if file_mentor == mentor and file_question == question:
             return file_name
-    return False
+    raise Exception(
+        f"Failed to find video file for mentor: {mentor} and question: {question}"
+    )
 
 
-@answer_blueprint.route("/download/<mentor>/<question>/", methods=["GET"])
-@answer_blueprint.route("/download/<mentor>/<question>", methods=["GET"])
-def download(mentor: str, question: str):
-    # file_directory = path.join(current_app.root_path, "uploads")
-    file_directory = "/app/uploads"
-    files = listdir(file_directory)
-    file_name = find_file_name_in_files(mentor, question, files)
-    if file_name is False:
-        raise Exception(
-            f"Failed to find a file with mentor {mentor} and question {question}"
-        )
+@answer_blueprint.route("/download_video/<mentor>/<question>/", methods=["GET"])
+@answer_blueprint.route("/download_video/<mentor>/<question>", methods=["GET"])
+def download_video(mentor: str, question: str):
     try:
+        file_directory = get_upload_root()
+        file_name = full_video_file_name_from_directory(
+            mentor, question, file_directory
+        )
         return send_from_directory(file_directory, file_name, as_attachment=True)
     except Exception as x:
         import logging
 
-        logging.error(f"failed to find file {file_name} in folder {file_directory}")
+        logging.error(
+            f"failed to find video file for mentor: {mentor} and question: {question} in folder {file_directory}"
+        )
         logging.exception(x)
 
 
