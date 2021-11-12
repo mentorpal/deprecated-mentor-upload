@@ -327,10 +327,16 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
             )
             transcription_service = transcribe.init_transcription_service()
             transcribe_result = transcription_service.transcribe(
-                [transcribe.TranscribeJobRequest(sourceFile=audio_file)]
+                [
+                    transcribe.TranscribeJobRequest(
+                        sourceFile=audio_file, generateSubtitles=True
+                    )
+                ]
             )
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
+            subtitles = job_result.subtitles if job_result else []
+            #TODO: pass these subtitles to the next stages to be stored (vtt should never be generated in house on first upload)
         upload_task_status_update(
             UpdateTaskStatusRequest(
                 mentor=mentor,
