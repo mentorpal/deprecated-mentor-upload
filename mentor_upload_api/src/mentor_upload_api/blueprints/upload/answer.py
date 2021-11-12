@@ -5,7 +5,6 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
-from logging import exception
 
 from os import environ, path, makedirs, listdir
 import uuid
@@ -147,6 +146,35 @@ def full_video_file_name_from_directory(
     raise Exception(
         f"Failed to find video file for mentor: {mentor} and question: {question}"
     )
+
+
+def full_mentor_video_file_list_from_directory(mentor: str, file_directory: str):
+    files = listdir(file_directory)
+    question_files = []
+    for file_name in files:
+        # video file name format: uuid1-mentorID-questionID.mp4
+        file_name_split = file_name.split("-")
+        file_mentor = file_name_split[-2]
+        file_question = file_name_split[-1].split(".")[0]
+        if file_mentor == mentor:
+            question_files.append(file_question)
+    return question_files
+
+
+@answer_blueprint.route("/videos_on_server/<mentor>/", methods=["GET"])
+@answer_blueprint.route("/videos_on_server/<mentor>", methods=["GET"])
+def videos_on_server(mentor: str):
+    try:
+        file_directory = get_upload_root()
+        all_file_names = full_mentor_video_file_list_from_directory(
+            mentor, file_directory
+        )
+        return jsonify({"data": {"videos_on_server": all_file_names}})
+    except Exception as x:
+        import logging
+
+        logging.error(f"failed to fetch video files for mentor: {mentor}")
+        logging.exception(x)
 
 
 @answer_blueprint.route("/download_video/<mentor>/<question>/", methods=["GET"])
