@@ -28,7 +28,7 @@ RUN apt-get update && \
         libcurl4-openssl-dev \
         libssl-dev \
         mediainfo \
-    && pip install -r /tmp/requirements.txt --extra-index-url https://test.pypi.org/simple/ \
+    && pip install -r /tmp/requirements.txt \
     && pip uninstall pycurl \
     && pip install --no-index --find-links=/svc/wheels pycurl \
     && rm -rf /var/lib/apt/lists/*
