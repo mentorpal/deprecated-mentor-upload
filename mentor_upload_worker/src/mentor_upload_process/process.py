@@ -32,7 +32,6 @@ from .media_tools import (
     video_encode_for_mobile,
     video_encode_for_web,
     video_to_audio,
-    transcript_to_vtt,
 )
 from .api import (
     fetch_answer,
@@ -316,6 +315,7 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
         is_idle = is_idle_question(question)
         audio_file = video_to_audio(video_file)
         transcript = ""
+        subtitles = ""
         if not is_idle:
             upload_task_status_update(
                 UpdateTaskStatusRequest(
@@ -335,8 +335,7 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
             )
             job_result = transcribe_result.first()
             transcript = job_result.transcript if job_result else ""
-            subtitles = job_result.subtitles if job_result else []
-            #TODO: pass these subtitles to the next stages to be stored (vtt should never be generated in house on first upload)
+            subtitles = job_result.subtitles if job_result else ""
         upload_task_status_update(
             UpdateTaskStatusRequest(
                 mentor=mentor,
@@ -345,8 +344,7 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                 new_status="DONE",
             )
         )
-        # returns transcript for finalization stage to upload
-        return {"transcript": transcript}
+        return {"transcript": transcript, "subtitles": subtitles}
     except Exception as x:
         import logging
 
@@ -375,6 +373,8 @@ def extract_params_for_finalization_stage(
             params["video_web_file_path"] = dic["video_web_file_path"]
         if "transcript" in dic:
             params["transcript"] = dic["transcript"]
+        if "subtitles" in dic:
+            params["subtitles"] = dic["subtitles"]
         if "media" in dic:
             for media in dic["media"]:
                 params["media"].append(media)
@@ -439,10 +439,13 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
         media_uploads = []
         media = params["media"]
         transcript = params["transcript"] or ""
-        if params["transcript"]:
+        subtitles = params["subtitles"] or ""
+        if subtitles:
             try:
                 video_web_file, vtt_file = get_video_and_vtt_file_paths(work_dir)
-                transcript_to_vtt(video_web_file, vtt_file, transcript)
+                makedirs(path.dirname(vtt_file), exist_ok=True)
+                with open(vtt_file, "w") as f:
+                    f.write(subtitles)
                 media_uploads.append(
                     ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
                 )

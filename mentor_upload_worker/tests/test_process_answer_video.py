@@ -350,6 +350,7 @@ class _TestTranscribeStageExample:
     question: str
     timestamp: str
     transcript_fake: str
+    subtitles_fake: str
     trim: TrimRequest
     video_name: str
 
@@ -367,6 +368,7 @@ class _TestTranscribeStageExample:
                 question="q1",
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
+                subtitles_fake="Web VTT\n\n00:00-00:10\nmentor answer for question 1\n\n",
                 trim=None,
                 video_name="video1.mp4",
             )
@@ -377,6 +379,7 @@ class _TestTranscribeStageExample:
                 question="q1",
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
+                subtitles_fake="Web VTT\n\n00:00-00:10\nmentor answer for question 1\n\n",
                 trim={"start": 0.0, "end": 5.0},
                 video_name="video1.mp4",
             )
@@ -387,6 +390,7 @@ class _TestTranscribeStageExample:
                 question="q1",
                 timestamp="20120114T032134Z",
                 transcript_fake="mentor answer for question 1",
+                subtitles_fake="Web VTT\n\n00:00-00:10\nmentor answer for question 1\n\n",
                 trim={"start": 5.3, "end": 8.921},
                 video_name="video1.mp4",
             )
@@ -397,6 +401,7 @@ class _TestTranscribeStageExample:
                 question="q1_idle",
                 timestamp="20120114T032134Z",
                 transcript_fake="",
+                subtitles_fake="",
                 trim={"start": 5.3, "end": 8.921},
                 video_name="video1.mp4",
             )
@@ -444,6 +449,7 @@ def test_transcribing_stage(
                         )
                     ),
                     transcript=ex.transcript_fake,
+                    subtitles=ex.subtitles_fake,
                 )
             ]
         )
@@ -474,9 +480,7 @@ def test_transcribing_stage(
 
         assert transcribe_stage(
             [output_dict_from_trim_upload_stage], req, "fake_task_id"
-        ) == {
-            "transcript": ex.transcript_fake,
-        }
+        ) == {"transcript": ex.transcript_fake, "subtitles": ex.subtitles_fake}
 
         if not is_idle:
             _transcribe_stage_expect_transcode_calls(
@@ -500,7 +504,6 @@ class _TestFinalizationExample:
 @patch("mentor_upload_process.process._delete_video_work_dir")
 @patch("mentor_upload_process.process.get_video_and_vtt_file_paths")
 @patch("boto3.client")
-@patch("mentor_upload_process.process.transcript_to_vtt")
 @pytest.mark.parametrize(
     "ex",
     [
@@ -520,6 +523,7 @@ class _TestFinalizationExample:
                 },
                 transcribe_stage_output_dict={
                     "transcript": "fake_transcript",
+                    "subtitles": "Web VTT\n\n00:00-00:10\nFakeSubtitles\n\n",
                 },
             )
         ),
@@ -537,15 +541,12 @@ class _TestFinalizationExample:
                     "work_dir": "fake_work_dir",
                     "video_file": "fake_video_file",
                 },
-                transcribe_stage_output_dict={
-                    "transcript": "",
-                },
+                transcribe_stage_output_dict={"transcript": "", "subtitles": ""},
             )
         ),
     ],
 )
 def test_finalization_stage(
-    mock_transcript_to_vtt: Mock,
     mock_boto3_client: Mock,
     mock_get_video_and_vtt_file: Mock,
     mock_delete_work_dir: Mock,
@@ -606,6 +607,7 @@ def test_finalization_stage(
             "video_path": "video1.mp4",
             "work_dir": ex.transcode_stage_output_dict["work_dir"],
             "transcript": ex.transcribe_stage_output_dict["transcript"],
+            "subtitles": ex.transcribe_stage_output_dict["subtitles"],
             "media": expected_media,
         }
 
@@ -641,20 +643,6 @@ def test_finalization_stage(
             )
 
             mock_s3.upload_file.assert_has_calls(expected_upload_file_call)
-
-
-@dataclass
-class _TestProcessExample:
-    mentor: str
-    question: str
-    timestamp: str
-    transcript_fake: str
-    trim: TrimRequest
-    video_dims: Tuple[int, int]
-    video_name: str
-    video_duration_fake: float
-    transcode_stage_output_dict: Dict[str, str] = None
-    transcribe_stage_output_dict: Dict[str, str] = None
 
 
 @dataclass
@@ -703,7 +691,7 @@ def test_transcode_stage(
         }
         task_id = "t1"
 
-        # setup file that should have been create by init stage
+        # setup file that should have been created by init stage
         video_file = work_dir / ex.video_name
         makedirs(path.dirname(video_file), exist_ok=True)
         open(video_file, "x")
