@@ -38,7 +38,6 @@ from .media_tools import (
 from .api import (
     fetch_answer,
     fetch_question_name,
-    fetch_answer_transcript_and_media,
     update_answer,
     update_media,
     AnswerUpdateRequest,
