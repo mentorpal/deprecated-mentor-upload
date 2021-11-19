@@ -14,6 +14,7 @@ from . import (
     ProcessAnswerRequest,
     ProcessTransferRequest,
     TrimExistingUploadRequest,
+    RegenVTTRequest,
     get_queue_finalization_stage,
     get_queue_transcribe_stage,
     get_queue_trim_upload_stage,
@@ -137,6 +138,11 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest):
 
 @celery.task()
 def process_transfer_video(req: ProcessTransferRequest):
+    pass
+
+
+@celery.task()
+def regen_vtt(req: RegenVTTRequest):
     pass
 
 

@@ -26,6 +26,11 @@ class TrimExistingUploadRequest(TypedDict):
     trim: TrimRequest
 
 
+class RegenVTTRequest(TypedDict):
+    mentor: str
+    question: str
+
+
 class ProcessAnswerResponse(TypedDict):
     mentor: str
     question: str

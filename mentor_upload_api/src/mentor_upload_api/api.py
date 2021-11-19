@@ -148,6 +148,7 @@ def fetch_answer_transcript_and_media_gql(mentor: str, question: str) -> GQLQuer
     return {
         "query": """query Answer($mentor: ID!, $question: ID!) {
             answer(mentor: $mentor, question: $question){
+                hasEditedTranscript
                 transcript
                 media {
                 type
@@ -174,6 +175,11 @@ def fetch_answer_transcript_and_media(mentor: str, question: str):
         or "answer" not in tdjson["data"]
         or "media" not in tdjson["data"]["answer"]
         or "transcript" not in tdjson["data"]["answer"]
+        or "hasEditedTranscript" not in tdjson["data"]["answer"]
     ):
         raise Exception(f"query: {body} did not return proper data format")
-    return tdjson["data"]["answer"]["transcript"], tdjson["data"]["answer"]["media"]
+    return (
+        tdjson["data"]["answer"]["transcript"],
+        tdjson["data"]["answer"]["media"],
+        tdjson["data"]["answer"]["hasEditedTranscript"],
+    )

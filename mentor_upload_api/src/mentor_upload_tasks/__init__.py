@@ -55,6 +55,11 @@ class TrimExistingUploadRequest(TypedDict):
     answer_media: List[Media]
 
 
+class RegenVTTRequest(TypedDict):
+    mentor: str
+    question: str
+
+
 class ProcessTransferRequest(TypedDict):
     mentor: str
     question: str

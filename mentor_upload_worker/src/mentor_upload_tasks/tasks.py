@@ -20,6 +20,7 @@ from mentor_upload_process import (  # NOQA
     ProcessTransferRequest,
     TrimExistingUploadRequest,
     process,
+    RegenVTTRequest,
 )
 
 
@@ -168,6 +169,11 @@ def process_transfer_video(req: ProcessTransferRequest):
 def trim_existing_upload(req: TrimExistingUploadRequest):
     task_id = trim_existing_upload.request.id
     return process.trim_existing_upload(req, task_id)
+
+
+@celery.task()
+def regen_vtt(req: RegenVTTRequest):
+    return process.regen_vtt(req)
 
 
 @celery.task()

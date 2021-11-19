@@ -102,7 +102,7 @@ def answer_query_gql(mentor: str, question: str) -> GQLQueryBody:
     }
 
 
-def answer_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
+def answer_upload_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
     return {
         "query": """mutation UploadAnswer($mentorId: ID!, $questionId: ID!, $answer: UploadAnswerType!) {
             api {
@@ -151,21 +151,6 @@ def fetch_question_name_gql(question_id: str) -> GQLQueryBody:
     }
 
 
-def media_update_gql(req: MediaUpdateRequest) -> GQLQueryBody:
-    return {
-        "query": """mutation MediaUpdate($mentorId: ID!, $questionId: ID!, $media: AnswerMediaInputType!) {
-            api {
-                mediaUpdate(mentorId: $mentorId, questionId: $questionId, media: $media)
-            }
-        }""",
-        "variables": {
-            "mentorId": req.mentor,
-            "questionId": req.question,
-            "media": req.media,
-        },
-    }
-
-
 def fetch_answer(mentor: str, question: str) -> dict:
     body = answer_query_gql(mentor, question)
     res = requests.post(get_graphql_endpoint(), json=body)
@@ -177,9 +162,9 @@ def fetch_answer(mentor: str, question: str) -> dict:
     return data
 
 
-def update_answer(req: AnswerUpdateRequest) -> None:
+def upload_update_answer(req: AnswerUpdateRequest) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
-    body = answer_update_gql(req)
+    body = answer_upload_update_gql(req)
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
     res.raise_for_status()
     tdjson = res.json()
@@ -248,6 +233,7 @@ def fetch_answer_transcript_and_media_gql(mentor: str, question: str) -> GQLQuer
     return {
         "query": """query Answer($mentor: ID!, $question: ID!) {
             answer(mentor: $mentor, question: $question){
+                hasEditedTranscript
                 transcript
                 media {
                 type
@@ -274,9 +260,29 @@ def fetch_answer_transcript_and_media(mentor: str, question: str):
         or "answer" not in tdjson["data"]
         or "media" not in tdjson["data"]["answer"]
         or "transcript" not in tdjson["data"]["answer"]
+        or "hasEditedTranscript" not in tdjson["data"]["answer"]
     ):
         raise Exception(f"query: {body} did not return proper data format")
-    return tdjson["data"]["answer"]["transcript"], tdjson["data"]["answer"]["media"]
+    return (
+        tdjson["data"]["answer"]["transcript"],
+        tdjson["data"]["answer"]["media"],
+        tdjson["data"]["answer"]["hasEditedTranscript"],
+    )
+
+
+def media_update_gql(req: MediaUpdateRequest) -> GQLQueryBody:
+    return {
+        "query": """mutation MediaUpdate($mentorId: ID!, $questionId: ID!, $media: AnswerMediaInputType!) {
+            api {
+                mediaUpdate(mentorId: $mentorId, questionId: $questionId, media: $media)
+            }
+        }""",
+        "variables": {
+            "mentorId": req.mentor,
+            "questionId": req.question,
+            "media": req.media,
+        },
+    }
 
 
 def update_media(req: MediaUpdateRequest) -> None:
@@ -287,3 +293,9 @@ def update_media(req: MediaUpdateRequest) -> None:
     tdjson = res.json()
     if "errors" in tdjson:
         raise Exception(json.dumps(tdjson.get("errors")))
+
+
+def fetch_text_from_url(url: str) -> str:
+    res = requests.get(url)
+    res.raise_for_status()
+    return res.text

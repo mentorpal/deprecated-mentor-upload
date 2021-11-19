@@ -5,6 +5,7 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import os
+import re
 from typing import Optional, Tuple, Union
 import math
 
@@ -17,7 +18,7 @@ def find_duration(audio_or_video_file: str) -> float:
     for t in media_info.tracks:
         if t.track_type in ["Video", "Audio"]:
             try:
-                return float(t.duration)
+                return float(t.duration / 1000)
             except Exception:
                 pass
     return -1.0
@@ -216,16 +217,20 @@ def find(
     return [i for i, ltr in enumerate(s) if ltr == ch]
 
 
-def transcript_to_vtt(audio_or_video_file: str, vtt_file: str, transcript: str) -> str:
-    if not os.path.exists(audio_or_video_file):
+def transcript_to_vtt(
+    audio_or_video_file_or_url: str, vtt_file: str, transcript: str
+) -> str:
+    if not os.path.exists(audio_or_video_file_or_url) and not re.search(
+        "^https?", audio_or_video_file_or_url
+    ):
         raise Exception(
-            f"ERROR: Can't generate vtt, {audio_or_video_file} doesn't exist"
+            f"ERROR: Can't generate vtt, {audio_or_video_file_or_url} doesn't exist or is not a valid url"
         )
-    duration = find_duration(audio_or_video_file)
+    duration = find_duration(audio_or_video_file_or_url)
     if duration <= 0:
         import logging
 
-        logging.warning(f"video duration for {audio_or_video_file} returned 0")
+        logging.warning(f"video duration for {audio_or_video_file_or_url} returned 0")
         return ""
     piece_length = 68
     word_indexes = find(transcript, " ")
@@ -257,3 +262,65 @@ def transcript_to_vtt(audio_or_video_file: str, vtt_file: str, transcript: str) 
     with open(vtt_file, "w") as f:
         f.write(vtt_str)
     return vtt_str
+
+
+def trim_vtt_and_transcript_via_timestamps(video_file: str, vtt_str_file: str):
+    new_duration = find_duration(video_file)
+    new_duration = (
+        str(math.floor(new_duration / 60)).zfill(2)
+        + ":"
+        + ("%.3f" % (new_duration % 60)).zfill(6)
+    )
+    new_duration_min, new_duration_sec = new_duration.split(":")
+
+    new_vtt_str = ""
+    new_transcript = ""
+    vtt_file = open(vtt_str_file, "r")
+    break_with_adding_final_line = False
+    break_without_adding_final_line = False
+    add_next_line_to_transcript = False
+    for line in vtt_file.readlines():
+        if break_without_adding_final_line:
+            new_transcript = new_transcript[:-1]
+            break
+        if break_with_adding_final_line:
+            new_transcript += line.strip()
+            new_vtt_str += line
+            break
+        if add_next_line_to_transcript:
+            new_transcript += line.strip() + " "
+            add_next_line_to_transcript = False
+        if re.search("^00:", line):
+            timestamp_split = line.split(" --> ")
+            # if LHS of timestamp is > new duration, don't append anything
+            start_duration = timestamp_split[0]
+            (
+                cur_start_duration_hours,
+                cur_start_duration_minutes,
+                cur_start_duration_seconds,
+            ) = start_duration.split(":")
+            if float(cur_start_duration_minutes) > float(new_duration_min) or (
+                float(cur_start_duration_minutes) == float(new_duration_min)
+                and float(cur_start_duration_seconds > new_duration_sec)
+            ):
+                break_without_adding_final_line = True
+                continue
+            # if RHS of timestamp is > new duration, append this line and next line, and then break
+            end_duration = timestamp_split[1]
+            (
+                old_end_duration_hours,
+                old_end_duration_minutes,
+                old_end_duration_seconds,
+            ) = end_duration.split(":")
+            new_vtt_str += line
+            if float(old_end_duration_minutes) > float(new_duration_min) or (
+                float(old_end_duration_minutes) == float(new_duration_min)
+                and float(old_end_duration_seconds > new_duration_sec)
+            ):
+                break_with_adding_final_line = True
+            add_next_line_to_transcript = True
+        else:
+            new_vtt_str += line
+    vtt_file = open(vtt_str_file, "w")
+    vtt_file.write(new_vtt_str)
+    return new_vtt_str, new_transcript
