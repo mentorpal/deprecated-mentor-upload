@@ -26,22 +26,29 @@ from . import (
     ProcessAnswerRequest,
     ProcessAnswerResponse,
     ProcessTransferRequest,
+    TrimExistingUploadRequest,
+    RegenVTTRequest,
 )
 from .media_tools import (
     video_trim,
+    existing_video_trim,
     video_encode_for_mobile,
     video_encode_for_web,
     video_to_audio,
+    transcript_to_vtt,
+    trim_vtt_and_transcript_via_timestamps,
 )
 from .api import (
     fetch_answer,
     fetch_question_name,
-    update_answer,
+    upload_update_answer,
     update_media,
     AnswerUpdateRequest,
     upload_task_status_update,
     UpdateTaskStatusRequest,
     MediaUpdateRequest,
+    fetch_answer_transcript_and_media,
+    fetch_text_from_url,
 )
 
 
@@ -89,6 +96,24 @@ def _delete_video_work_dir(work_dir: str):
 
         logging.error(f"failed to delete media work dir {work_dir}")
         logging.exception(x)
+
+
+@contextmanager
+def _trimming_work_dir():
+    media_work_dir = (
+        Path(environ.get("TRANSCODE_WORK_DIR") or mkdtemp()) / _new_work_dir_name()
+    )
+    try:
+        makedirs(media_work_dir)
+        yield media_work_dir
+    finally:
+        try:
+            rmtree(str(media_work_dir))
+        except Exception as x:
+            import logging
+
+            logging.error(f"failed to delete media work dir {media_work_dir}")
+            logging.exception(x)
 
 
 def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
@@ -479,8 +504,7 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
                     import logging
 
                     logging.error(f"Failed to find file at {file}")
-
-        update_answer(
+        upload_update_answer(
             AnswerUpdateRequest(
                 mentor=mentor, question=question, transcript=transcript, media=media
             )
@@ -521,6 +545,181 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
 
             logging.error(f"failed to delete uploaded video file '{video_path_full}'")
             logging.exception(x)
+
+
+def trim_existing_upload(req: TrimExistingUploadRequest, task_id: str):
+    with _trimming_work_dir() as context:
+        try:
+            work_dir = context
+            mentor = req.get("mentor")
+            question = req.get("question")
+            trim = req.get("trim")
+            (
+                transcript,
+                answer_media,
+                has_edited_transcript,
+            ) = fetch_answer_transcript_and_media(mentor, question)
+            upload_task_status_update(
+                UpdateTaskStatusRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    new_status="IN_PROGRESS",
+                    transcript=transcript,
+                    media=answer_media,
+                )
+            )
+            web_media = next((x for x in answer_media if x["tag"] == "web"), None)
+            mobile_media = next((x for x in answer_media if x["tag"] == "mobile"), None)
+            if web_media is None or mobile_media is None:
+                raise Exception(
+                    f"failed to find video urls for mentor: {mentor} and question: {question}"
+                )
+            web_video_url = web_media["url"]
+            mobile_video_url = mobile_media["url"]
+            web_trim_file = work_dir / "web_trim.mp4"
+            mobile_trim_file = work_dir / "mobile_trim.mp4"
+            existing_video_trim(
+                web_video_url, web_trim_file, trim.get("start"), trim.get("end")
+            )
+            existing_video_trim(
+                mobile_video_url, mobile_trim_file, trim.get("start"), trim.get("end")
+            )
+            media_uploads = []
+            new_media = []
+            media_uploads.append(
+                ("video", "web", "web.mp4", "video/mp4", web_trim_file)
+            )
+            media_uploads.append(
+                ("video", "mobile", "mobile.mp4", "video/mp4", mobile_trim_file)
+            )
+
+            vtt_media = next(
+                (x for x in answer_media if x["type"] == "subtitles"), None
+            )
+            if vtt_media and not has_edited_transcript:
+                vtt_str = fetch_text_from_url(vtt_media["url"])
+                video_web_file, vtt_file = get_video_and_vtt_file_paths(work_dir)
+                makedirs(path.dirname(vtt_file), exist_ok=True)
+                with open(vtt_file, "w") as f:
+                    f.write(vtt_str)
+                new_vtt_str, new_transcript = trim_vtt_and_transcript_via_timestamps(
+                    web_trim_file, vtt_file
+                )
+                transcript = new_transcript
+                media_uploads.append(
+                    ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
+                )
+            else:
+                new_media.append(vtt_media)
+
+            if media_uploads:
+                s3 = _create_s3_client()
+                s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
+                video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
+                for media_type, tag, file_name, content_type, file in media_uploads:
+                    if path.isfile(file):
+                        item_path = f"{video_path_base}{file_name}"
+                        new_media.append(
+                            {
+                                "type": media_type,
+                                "tag": tag,
+                                "url": item_path,
+                            }
+                        )
+                        s3.upload_file(
+                            str(file),
+                            s3_bucket,
+                            item_path,
+                            ExtraArgs={"ContentType": content_type},
+                        )
+                    else:
+                        import logging
+
+                        logging.error(f"Failed to find file at {file}")
+
+            upload_update_answer(
+                AnswerUpdateRequest(
+                    mentor=mentor,
+                    question=question,
+                    transcript=transcript,
+                    media=new_media,
+                )
+            )
+            upload_task_status_update(
+                UpdateTaskStatusRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    new_status="DONE",
+                    transcript=transcript,
+                    media=new_media,
+                )
+            )
+            return {"trim_existing_upload": True}
+        except Exception as x:
+            import logging
+
+            logging.error("failed to trim video")
+            logging.exception(x)
+
+
+def regen_vtt(req: RegenVTTRequest):
+    with _trimming_work_dir() as context:
+        try:
+            work_dir = context
+            mentor = req.get("mentor")
+            question = req.get("question")
+            video_file, vtt_file = get_video_and_vtt_file_paths(work_dir)
+            (
+                transcript,
+                answer_media,
+                has_edited_transcript,
+            ) = fetch_answer_transcript_and_media(mentor, question)
+            web_media = next((x for x in answer_media if x["tag"] == "web"), None)
+            mobile_media = next((x for x in answer_media if x["tag"] == "mobile"), None)
+            if not web_media or not mobile_media:
+                raise Exception(
+                    f"failed to find answer media for mentor: {mentor} and question: {question}"
+                )
+            transcript_to_vtt(web_media["url"], vtt_file, transcript)
+            media_uploads = [("subtitles", "en", "en.vtt", "text/vtt", vtt_file)]
+            new_media = []
+            s3 = _create_s3_client()
+            s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
+            video_path_base = f"videos/{mentor}/{question}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/"
+            for media_type, tag, file_name, content_type, file in media_uploads:
+                if path.isfile(file):
+                    item_path = f"{video_path_base}{file_name}"
+                    new_media.append(
+                        {
+                            "type": media_type,
+                            "tag": tag,
+                            "url": item_path,
+                        }
+                    )
+                    s3.upload_file(
+                        str(file),
+                        s3_bucket,
+                        item_path,
+                        ExtraArgs={"ContentType": content_type},
+                    )
+                else:
+                    import logging
+
+                    logging.error(f"Failed to find file at {file}")
+            update_media(
+                MediaUpdateRequest(mentor=mentor, question=question, media=new_media[0])
+            )
+            return {"regen_vtt": True}
+        except Exception as x:
+            import logging
+
+            logging.error(
+                f"failed to regenerate vtt for mentor {mentor} and question {question}"
+            )
+            logging.exception(x)
+            return {"regen_vtt": False}
 
 
 def process_transfer_video(req: ProcessTransferRequest, task_id: str):

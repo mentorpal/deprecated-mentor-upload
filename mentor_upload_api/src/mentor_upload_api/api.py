@@ -142,3 +142,44 @@ def mentor_thumbnail_update(req: MentorThumbnailUpdateRequest) -> None:
     tdjson = res.json()
     if "errors" in tdjson:
         raise Exception(json.dumps(tdjson.get("errors")))
+
+
+def fetch_answer_transcript_and_media_gql(mentor: str, question: str) -> GQLQueryBody:
+    return {
+        "query": """query Answer($mentor: ID!, $question: ID!) {
+            answer(mentor: $mentor, question: $question){
+                hasEditedTranscript
+                transcript
+                media {
+                type
+                tag
+                url
+              }
+            }
+        }""",
+        "variables": {"mentor": mentor, "question": question},
+    }
+
+
+def fetch_answer_transcript_and_media(mentor: str, question: str):
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = fetch_answer_transcript_and_media_gql(mentor, question)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
+    if (
+        "data" not in tdjson
+        or "answer" not in tdjson["data"]
+        or "media" not in tdjson["data"]["answer"]
+        or "transcript" not in tdjson["data"]["answer"]
+        or "hasEditedTranscript" not in tdjson["data"]["answer"]
+    ):
+        raise Exception(f"query: {body} did not return proper data format")
+    return (
+        tdjson["data"]["answer"]["transcript"],
+        tdjson["data"]["answer"]["media"],
+        tdjson["data"]["answer"]["hasEditedTranscript"],
+    )

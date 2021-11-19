@@ -25,10 +25,12 @@ from mentor_upload_process import TrimRequest
 from mentor_upload_process.api import (
     upload_task_status_req_gql,
     UpdateTaskStatusRequest,
-    answer_update_gql,
+    answer_upload_update_gql,
     fetch_question_name_gql,
     get_graphql_endpoint,
     AnswerUpdateRequest,
+    media_update_gql,
+    MediaUpdateRequest,
 )
 from mentor_upload_process.media_tools import (
     output_args_video_encode_for_mobile,
@@ -92,7 +94,7 @@ def _mock_gql_answer_update(
             media.append(
                 {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"},
             )
-    gql_query = answer_update_gql(
+    gql_query = answer_upload_update_gql(
         AnswerUpdateRequest(
             mentor=mentor, question=question, transcript=transcript, media=media
         )
@@ -112,6 +114,19 @@ def _mock_gql_answer_update(
             media,
         )
     )
+
+
+def _mock_gql_media_update(mentor: str, question: str, media=None):
+    gql_query = media_update_gql(
+        MediaUpdateRequest(mentor=mentor, question=question, media=media)
+    )
+    responses.add(
+        responses.POST,
+        get_graphql_endpoint(),
+        json=gql_query,
+        status=200,
+    )
+    return gql_query
 
 
 def _transcode_expected_media(
@@ -646,6 +661,138 @@ def test_finalization_stage(
 
 
 @dataclass
+class _TestTrimExistingVideo:
+    mentor: str
+    task_id: str
+    question: str
+    timestamp: str
+    transcript: str
+    subtitles: str
+    trim: TrimRequest
+    video_name: str
+
+
+@responses.activate
+@patch("mentor_upload_process.media_tools.find_duration")
+@patch("mentor_upload_process.process.fetch_text_from_url")
+@patch("mentor_upload_process.process.fetch_answer_transcript_and_media")
+@patch("ffmpy.FFmpeg")
+@patch("boto3.client")
+@pytest.mark.parametrize(
+    "ex",
+    [
+        (
+            _TestTrimExistingVideo(
+                mentor="m1",
+                task_id="fake_task_id",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript="mentor answer for question 1 hello,world!",
+                subtitles="Web VTT\n\n00:00:00.000 --> 00:00:05.080\nmentor answer for question 1\n\n00:00:05.110 --> 00:00:10.080\nhello,world!\n\n",
+                trim={"start": 0.0, "end": 8.0},
+                video_name="video1.mp4",
+            )
+        ),
+    ],
+)
+def test_trim_existing_video(
+    mock_boto3_client: Mock,
+    mock_ffmpeg_cls: Mock,
+    mock_fetch_answer_transcript_and_media: Mock,
+    mock_fetch_text_from_url: Mock,
+    mock_find_duration: Mock,
+    monkeypatch,
+    tmpdir,
+    ex: _TestTrimExistingVideo,
+):
+    with _test_env(ex.video_name, ex.timestamp, monkeypatch, tmpdir) as work_dir:
+        mock_s3 = mock_s3_client(mock_boto3_client)
+        req = {
+            "mentor": ex.mentor,
+            "question": ex.question,
+            "trim": ex.trim,
+        }
+        base_path = f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/"
+        media = (
+            [
+                {"type": "video", "tag": "web", "url": f"{base_path}web.mp4"},
+                {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
+                {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"},
+            ],
+        )
+        mock_fetch_text_from_url.return_value = ex.subtitles
+        mock_find_duration.return_value = 4.0
+        mock_fetch_answer_transcript_and_media.return_value = (
+            ex.transcript,
+            media[0],
+            False,
+        )
+        _mock_ffmpeg(mock_ffmpeg_cls)
+
+        expected_update_answer_gql_query, expected_med = _mock_gql_answer_update(
+            req["mentor"],
+            req["question"],
+            "mentor answer for question 1",
+            ex.timestamp,
+            media=media[0],
+        )
+
+        from mentor_upload_process.process import trim_existing_upload
+
+        assert trim_existing_upload(req, ex.task_id) == {
+            "trim_existing_upload": True,
+        }
+
+        _expect_gql(
+            [
+                _mock_gql_task_status_update(
+                    req["mentor"],
+                    req["question"],
+                    task_id=ex.task_id,
+                    new_status="IN_PROGRESS",
+                    transcript=ex.transcript,
+                    media=media[0],
+                ),
+                expected_update_answer_gql_query,
+                _mock_gql_task_status_update(
+                    req["mentor"],
+                    req["question"],
+                    task_id=ex.task_id,
+                    new_status="DONE",
+                    transcript="mentor answer for question 1",
+                    media=media[0],
+                ),
+            ]
+        )
+
+        expected_trimmed_web_video_path = work_dir / "web_trim.mp4"
+        expected_trimmed_mobile_video_path = work_dir / "mobile_trim.mp4"
+        expected_vtt_path = work_dir / "subtitles.vtt"
+        expected_upload_file_calls = [
+            call(
+                expected_trimmed_web_video_path,
+                TEST_STATIC_AWS_S3_BUCKET,
+                f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/web.mp4",
+                ExtraArgs={"ContentType": "video/mp4"},
+            ),
+            call(
+                expected_trimmed_mobile_video_path,
+                TEST_STATIC_AWS_S3_BUCKET,
+                f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/mobile.mp4",
+                ExtraArgs={"ContentType": "video/mp4"},
+            ),
+            call(
+                expected_vtt_path,
+                TEST_STATIC_AWS_S3_BUCKET,
+                f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/en.vtt",
+                ExtraArgs={"ContentType": "text/vtt"},
+            ),
+        ]
+
+        mock_s3.upload_file.assert_has_calls(expected_upload_file_calls)
+
+
+@dataclass
 class _TestTranscodeStageExample:
     mentor: str
     question: str
@@ -860,3 +1007,94 @@ def test_raises_if_video_not_found_for_path():
         caught_exception = err
     assert caught_exception is not None
     assert str(caught_exception) == "video not found for path 'not_exists.mp4'"
+
+
+@dataclass
+class _TestRegenVTT:
+    mentor: str
+    task_id: str
+    question: str
+    timestamp: str
+    transcript: str
+    subtitles: str
+    trim: TrimRequest
+    video_name: str
+
+
+@responses.activate
+@patch("mentor_upload_process.media_tools.find_duration")
+@patch("mentor_upload_process.process.fetch_answer_transcript_and_media")
+@patch("ffmpy.FFmpeg")
+@patch("boto3.client")
+@pytest.mark.parametrize(
+    "ex",
+    [
+        (
+            _TestRegenVTT(
+                mentor="m1",
+                task_id="fake_task_id",
+                question="q1",
+                timestamp="20120114T032134Z",
+                transcript="mentor answer for question 1 hello,world!",
+                subtitles="Web VTT\n\n00:00-00:10\nmentor answer for question 1\n\n00:12-00:26\nhello,world!\n\n",
+                trim={"start": 0.0, "end": 8.0},
+                video_name="video1.mp4",
+            )
+        ),
+    ],
+)
+def test_regen_vtt(
+    mock_boto3_client: Mock,
+    mock_ffmpeg_cls: Mock,
+    mock_fetch_answer_transcript_and_media: Mock,
+    mock_find_duration: Mock,
+    monkeypatch,
+    tmpdir,
+    ex: _TestTrimExistingVideo,
+):
+    with _test_env(ex.video_name, ex.timestamp, monkeypatch, tmpdir) as work_dir:
+        mock_s3 = mock_s3_client(mock_boto3_client)
+        req = {
+            "mentor": ex.mentor,
+            "question": ex.question,
+        }
+        base_path = f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/"
+        media = (
+            [
+                {"type": "video", "tag": "web", "url": f"https://{base_path}web.mp4"},
+                {"type": "video", "tag": "mobile", "url": f"{base_path}mobile.mp4"},
+            ],
+        )
+        # mock_fetch_text_from_url.return_value = ex.subtitles
+        mock_find_duration.return_value = 10.0
+        mock_fetch_answer_transcript_and_media.return_value = (
+            ex.transcript,
+            media[0],
+            False,
+        )
+
+        expected_media_update_query = _mock_gql_media_update(
+            ex.mentor,
+            ex.question,
+            {"type": "subtitles", "tag": "en", "url": f"{base_path}en.vtt"},
+        )
+
+        from mentor_upload_process.process import regen_vtt
+
+        assert regen_vtt(req) == {
+            "regen_vtt": True,
+        }
+
+        _expect_gql([expected_media_update_query])
+
+        expected_vtt_path = work_dir / "subtitles.vtt"
+        expected_upload_file_calls = [
+            call(
+                expected_vtt_path,
+                TEST_STATIC_AWS_S3_BUCKET,
+                f"videos/{ex.mentor}/{ex.question}/{ex.timestamp}/en.vtt",
+                ExtraArgs={"ContentType": "text/vtt"},
+            ),
+        ]
+
+        mock_s3.upload_file.assert_has_calls(expected_upload_file_calls)
