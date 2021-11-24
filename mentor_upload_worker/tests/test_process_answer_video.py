@@ -82,7 +82,12 @@ def _test_env(
 
 
 def _mock_gql_answer_update(
-    mentor: str, question: str, transcript: str, timestamp: str, media=None
+    mentor: str,
+    question: str,
+    transcript: str,
+    timestamp: str,
+    has_edited_transcript: bool = None,
+    media=None,
 ) -> Tuple[dict, List[dict]]:
     base_path = f"videos/{mentor}/{question}/{timestamp}/"
     if media is None:
@@ -96,7 +101,11 @@ def _mock_gql_answer_update(
             )
     gql_query = answer_upload_update_gql(
         AnswerUpdateRequest(
-            mentor=mentor, question=question, transcript=transcript, media=media
+            mentor=mentor,
+            question=question,
+            transcript=transcript,
+            media=media,
+            has_edited_transcript=has_edited_transcript,
         )
     )
     responses.add(
@@ -608,6 +617,7 @@ def test_finalization_stage(
             ex.transcribe_stage_output_dict["transcript"],
             timestamp,
             media=expected_media,
+            has_edited_transcript=False,
         )
 
         from mentor_upload_process.process import finalization_stage

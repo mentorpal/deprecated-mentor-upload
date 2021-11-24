@@ -506,7 +506,11 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
                     logging.error(f"Failed to find file at {file}")
         upload_update_answer(
             AnswerUpdateRequest(
-                mentor=mentor, question=question, transcript=transcript, media=media
+                mentor=mentor,
+                question=question,
+                transcript=transcript,
+                media=media,
+                has_edited_transcript=False,
             )
         )
         upload_task_status_update(

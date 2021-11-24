@@ -34,6 +34,7 @@ class AnswerUpdateRequest:
     question: str
     transcript: str
     media: List[Media]
+    has_edited_transcript: bool = None
 
 
 @dataclass
@@ -103,17 +104,19 @@ def answer_query_gql(mentor: str, question: str) -> GQLQueryBody:
 
 
 def answer_upload_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
+    variables = {}
+    variables["mentorId"] = req.mentor
+    variables["questionId"] = req.question
+    variables["answer"] = {"transcript": req.transcript, "media": req.media}
+    if req.has_edited_transcript is not None:
+        variables["answer"]["hasEditedTranscript"] = req.has_edited_transcript
     return {
         "query": """mutation UploadAnswer($mentorId: ID!, $questionId: ID!, $answer: UploadAnswerType!) {
             api {
                 uploadAnswer(mentorId: $mentorId, questionId: $questionId, answer: $answer)
             }
         }""",
-        "variables": {
-            "mentorId": req.mentor,
-            "questionId": req.question,
-            "answer": {"transcript": req.transcript, "media": req.media},
-        },
+        "variables": variables,
     }
 
 
