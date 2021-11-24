@@ -664,6 +664,17 @@ def trim_existing_upload(req: TrimExistingUploadRequest, task_id: str):
         except Exception as x:
             import logging
 
+            upload_task_status_update(
+                UpdateTaskStatusRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    new_status="FAILED",
+                    transcript=transcript,
+                    media=answer_media,
+                )
+            )
+
             logging.error("failed to trim video")
             logging.exception(x)
 
