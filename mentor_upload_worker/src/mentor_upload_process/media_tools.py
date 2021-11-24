@@ -4,9 +4,10 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
+from dataclasses import dataclass
 import os
 import re
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 import math
 
 import ffmpy
@@ -264,63 +265,73 @@ def transcript_to_vtt(
     return vtt_str
 
 
-def trim_vtt_and_transcript_via_timestamps(video_file: str, vtt_str_file: str):
-    new_duration = find_duration(video_file)
-    new_duration = (
-        str(math.floor(new_duration / 60)).zfill(2)
-        + ":"
-        + ("%.3f" % (new_duration % 60)).zfill(6)
-    )
-    new_duration_min, new_duration_sec = new_duration.split(":")
+@dataclass
+class TimestampSegment:
+    secs_start: float
+    secs_end: float
+    transcript_segment: str
 
-    new_vtt_str = ""
-    new_transcript = ""
+
+def vtt_str_file_to_objects(vtt_str_file) -> List[TimestampSegment]:
+    timestamp_segs = []
     vtt_file = open(vtt_str_file, "r")
-    break_with_adding_final_line = False
-    break_without_adding_final_line = False
-    add_next_line_to_transcript = False
-    for line in vtt_file.readlines():
-        if break_without_adding_final_line:
-            new_transcript = new_transcript[:-1]
-            break
-        if break_with_adding_final_line:
-            new_transcript += line.strip()
-            new_vtt_str += line
-            break
-        if add_next_line_to_transcript:
-            new_transcript += line.strip() + " "
-            add_next_line_to_transcript = False
+    line = vtt_file.readline()
+    while line:
         if re.search("^00:", line):
             timestamp_split = line.split(" --> ")
-            # if LHS of timestamp is > new duration, don't append anything
             start_duration = timestamp_split[0]
             (
-                cur_start_duration_hours,
-                cur_start_duration_minutes,
-                cur_start_duration_seconds,
+                start_hours,
+                start_minutes,
+                start_seconds,
             ) = start_duration.split(":")
-            if float(cur_start_duration_minutes) > float(new_duration_min) or (
-                float(cur_start_duration_minutes) == float(new_duration_min)
-                and float(cur_start_duration_seconds > new_duration_sec)
-            ):
-                break_without_adding_final_line = True
-                continue
-            # if RHS of timestamp is > new duration, append this line and next line, and then break
             end_duration = timestamp_split[1]
             (
-                old_end_duration_hours,
-                old_end_duration_minutes,
-                old_end_duration_seconds,
+                end_hours,
+                end_minutes,
+                end_seconds,
             ) = end_duration.split(":")
-            new_vtt_str += line
-            if float(old_end_duration_minutes) > float(new_duration_min) or (
-                float(old_end_duration_minutes) == float(new_duration_min)
-                and float(old_end_duration_seconds > new_duration_sec)
-            ):
-                break_with_adding_final_line = True
-            add_next_line_to_transcript = True
-        else:
-            new_vtt_str += line
+            timestamp_segs.append(
+                TimestampSegment(
+                    float(start_minutes) * 60 + float(start_seconds),
+                    float(end_minutes) * 60 + float(end_seconds),
+                    vtt_file.readline().strip(),
+                )
+            )
+        line = vtt_file.readline()
+    vtt_file.close()
+    return timestamp_segs
+
+
+def trim_vtt_and_transcript_via_timestamps(
+    vtt_str_file: str, trim_start_secs: float, trim_end_secs: float
+):
+    timestamp_segs = vtt_str_file_to_objects(vtt_str_file)
+    # Removes timestamp segments that come after the new end of the video
+    # In the future, should also accomodate for the user trimming the start of the video
+    for timestamp_seg in timestamp_segs[:]:
+        if timestamp_seg.secs_start >= trim_end_secs:
+            timestamp_segs.remove(timestamp_seg)
+
+    new_vtt_str = "WEBVTT FILE:\n\n"
+    new_transcript = ""
+    for timestamp_seg in timestamp_segs:
+        output_start = (
+            str(math.floor(timestamp_seg.secs_start / 60)).zfill(2)
+            + ":"
+            + ("%.3f" % (timestamp_seg.secs_start % 60)).zfill(6)
+        )
+        output_end = (
+            str(math.floor(timestamp_seg.secs_end / 60)).zfill(2)
+            + ":"
+            + ("%.3f" % (timestamp_seg.secs_end % 60)).zfill(6)
+        )
+        new_vtt_str += f"00:{output_start} --> 00:{output_end}\n"
+        new_vtt_str += f"{timestamp_seg.transcript_segment}\n\n"
+        new_transcript += f"{timestamp_seg.transcript_segment} "
+    new_transcript = new_transcript[:-1]
+
     vtt_file = open(vtt_str_file, "w")
     vtt_file.write(new_vtt_str)
+    vtt_file.close()
     return new_vtt_str, new_transcript

@@ -604,7 +604,7 @@ def trim_existing_upload(req: TrimExistingUploadRequest, task_id: str):
                 with open(vtt_file, "w") as f:
                     f.write(vtt_str)
                 new_vtt_str, new_transcript = trim_vtt_and_transcript_via_timestamps(
-                    web_trim_file, vtt_file
+                    vtt_file, trim.get("start"), trim.get("end")
                 )
                 transcript = new_transcript
                 media_uploads.append(

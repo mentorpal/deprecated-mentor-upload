@@ -689,7 +689,7 @@ class _TestTrimExistingVideo:
                 timestamp="20120114T032134Z",
                 transcript="mentor answer for question 1 hello,world!",
                 subtitles="Web VTT\n\n00:00:00.000 --> 00:00:05.080\nmentor answer for question 1\n\n00:00:05.110 --> 00:00:10.080\nhello,world!\n\n",
-                trim={"start": 0.0, "end": 8.0},
+                trim={"start": 0.0, "end": 5.0},
                 video_name="video1.mp4",
             )
         ),
