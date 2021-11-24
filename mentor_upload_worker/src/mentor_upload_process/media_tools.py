@@ -329,7 +329,7 @@ def trim_vtt_and_transcript_via_timestamps(
         new_vtt_str += f"00:{output_start} --> 00:{output_end}\n"
         new_vtt_str += f"{timestamp_seg.transcript_segment}\n\n"
         new_transcript += f"{timestamp_seg.transcript_segment} "
-    new_transcript = new_transcript[:-1]
+    new_transcript = new_transcript.strip()
 
     vtt_file = open(vtt_str_file, "w")
     vtt_file.write(new_vtt_str)
