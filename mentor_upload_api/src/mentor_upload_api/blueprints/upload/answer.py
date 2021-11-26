@@ -5,9 +5,10 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
+import shutil
 from logging import exception
 
-from os import environ, path, makedirs, listdir
+from os import environ, path, makedirs, listdir, remove
 import uuid
 
 from flask import Blueprint, jsonify, request, send_from_directory
@@ -131,6 +132,58 @@ def upload():
             }
         }
     )
+
+def list_files_from_directory(file_directory: str):
+    files = listdir(file_directory)
+    return files
+
+@answer_blueprint.route("/mounted_files/", methods=["GET"])
+@answer_blueprint.route("/mounted_files", methods=["GET"])
+def mounted_files():
+    try:
+        file_directory = get_upload_root()
+        files = list_files_from_directory(file_directory)
+        total, used, free = shutil.disk_usage(file_directory)
+        return {
+            "data":{
+                "mounted_files": files,
+                "total_storage":total,
+                "used_storage":used,
+                "free_storage":free,
+            }
+        }
+    except Exception as x:
+        import logging
+
+        logging.error(
+            f"failed to fetch files from upload directory"
+        )
+        logging.exception(x)
+
+
+@answer_blueprint.route("/remove_uploads_file/<file_name>/", methods=["GET"])
+@answer_blueprint.route("/remove_uploads_file/<file_name>", methods=["GET"])
+def remove_file_from_uploads_folder(file_name: str):
+    try:
+        file_path = path.join(get_upload_root(), file_name)
+        remove(file_path)
+        return {
+            "data":{
+                "file_removed": True
+            }
+        }
+    except Exception as x:
+        import logging
+
+        logging.error(
+            f"failed to remove file {file_name} from uploads directory"
+        )
+        logging.exception(x)
+        return {
+            "data":{
+                "file_removed": False
+            }
+        }
 
 
 def full_video_file_name_from_directory(
