@@ -6,7 +6,6 @@
 #
 import json
 import shutil
-from logging import exception
 
 from os import environ, path, makedirs, listdir, remove
 import uuid
@@ -145,35 +144,66 @@ def mounted_files():
     try:
         file_directory = get_upload_root()
         files = list_files_from_directory(file_directory)
-        total, used, free = shutil.disk_usage(file_directory)
         return {
             "data": {
-                "mounted_files": files,
-                "total_storage": total,
-                "used_storage": used,
-                "free_storage": free,
+                "mountedFiles": files,
             }
         }
     except Exception as x:
         import logging
 
-        logging.error(f"failed to fetch files from upload directory")
+        logging.error("failed to fetch files from upload directory")
         logging.exception(x)
 
 
-@answer_blueprint.route("/remove_uploads_file/<file_name>/", methods=["GET"])
-@answer_blueprint.route("/remove_uploads_file/<file_name>", methods=["GET"])
-def remove_file_from_uploads_folder(file_name: str):
+@answer_blueprint.route("/storage_info/", methods=["GET"])
+@answer_blueprint.route("/storage_info", methods=["GET"])
+def storage_info():
+    try:
+        file_directory = get_upload_root()
+        total, used, free = shutil.disk_usage(file_directory)
+        return {
+            "data": {
+                "totalStorage": total,
+                "usedStorage": used,
+                "freeStorage": free,
+            }
+        }
+    except Exception as x:
+        import logging
+
+        logging.error("failed to fetch server storage info")
+        logging.exception(x)
+
+
+@answer_blueprint.route("/remove_mounted_file/<file_name>/", methods=["POST"])
+@answer_blueprint.route("/remove_mounted_file/<file_name>", methods=["POST"])
+def remove_mounted_file(file_name: str):
     try:
         file_path = path.join(get_upload_root(), file_name)
         remove(file_path)
-        return {"data": {"file_removed": True}}
+        return {"data": {"fileRemoved": True}}
     except Exception as x:
         import logging
 
         logging.error(f"failed to remove file {file_name} from uploads directory")
         logging.exception(x)
-        return {"data": {"file_removed": False}}
+        return {"data": {"fileRemoved": False}}
+
+
+@answer_blueprint.route("/download_mounted_file/<file_name>/", methods=["GET"])
+@answer_blueprint.route("/download_mounted_file/<file_name>", methods=["GET"])
+def download_mounted_file(file_name: str):
+    try:
+        file_directory = get_upload_root()
+        return send_from_directory(file_directory, file_name, as_attachment=True)
+    except Exception as x:
+        import logging
+
+        logging.error(
+            f"failed to find video file {file_name} in folder {file_directory}"
+        )
+        logging.exception(x)
 
 
 def full_video_file_name_from_directory(
@@ -206,21 +236,6 @@ def download_video(mentor: str, question: str):
 
         logging.error(
             f"failed to find video file for mentor: {mentor} and question: {question} in folder {file_directory}"
-        )
-        logging.exception(x)
-
-
-@answer_blueprint.route("/download_uploads_file/<file_name>/", methods=["GET"])
-@answer_blueprint.route("/download_uploads_file/<file_name>", methods=["GET"])
-def download_uploads_file(file_name: str):
-    try:
-        file_directory = get_upload_root()
-        return send_from_directory(file_directory, file_name, as_attachment=True)
-    except Exception as x:
-        import logging
-
-        logging.error(
-            f"failed to find video file {file_name} in folder {file_directory}"
         )
         logging.exception(x)
 
