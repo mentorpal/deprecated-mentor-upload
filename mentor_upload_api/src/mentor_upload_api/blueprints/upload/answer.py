@@ -7,7 +7,7 @@
 import json
 import shutil
 
-from os import environ, path, makedirs, listdir, remove
+from os import environ, path, makedirs, listdir, remove, scandir
 import uuid
 
 from flask import Blueprint, jsonify, request, send_from_directory
@@ -134,7 +134,9 @@ def upload():
 
 
 def list_files_from_directory(file_directory: str):
-    files = listdir(file_directory)
+    files = []
+    for entry in scandir(file_directory):
+        files.append({"fileName": entry.name, "size": entry.stat().st_size})
     return files
 
 
