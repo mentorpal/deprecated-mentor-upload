@@ -8,6 +8,8 @@ import json
 import shutil
 
 from os import environ, path, makedirs, listdir, remove, scandir
+from datetime import datetime
+from dateutil import tz
 import uuid
 
 from flask import Blueprint, jsonify, request, send_from_directory
@@ -135,8 +137,18 @@ def upload():
 
 def list_files_from_directory(file_directory: str):
     files = []
+    cali_tz = tz.gettz("America/Los_Angeles")
     for entry in scandir(file_directory):
-        files.append({"fileName": entry.name, "size": entry.stat().st_size})
+        files.append(
+            {
+                "fileName": entry.name,
+                "size": entry.stat().st_size,
+                "uploadDate": datetime.fromtimestamp(
+                    entry.stat().st_ctime, tz=cali_tz
+                ).strftime("%m/%d/%Y %I:%M:%S %p")
+                + " (PST)",
+            }
+        )
     return files
 
 
