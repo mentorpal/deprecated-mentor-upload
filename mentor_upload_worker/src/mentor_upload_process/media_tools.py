@@ -4,8 +4,10 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
+from dataclasses import dataclass
 import os
-from typing import Optional, Tuple, Union
+import re
+from typing import List, Optional, Tuple, Union
 import math
 
 import ffmpy
@@ -17,7 +19,7 @@ def find_duration(audio_or_video_file: str) -> float:
     for t in media_info.tracks:
         if t.track_type in ["Video", "Audio"]:
             try:
-                return float(t.duration)
+                return float(t.duration / 1000)
             except Exception:
                 pass
     return -1.0
@@ -199,22 +201,37 @@ def video_trim(
     ff.run()
 
 
+def existing_video_trim(
+    input_file: str, output_file: str, start_secs: float, end_secs: float
+) -> None:
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    ff = ffmpy.FFmpeg(
+        inputs={str(input_file): None},
+        outputs={str(output_file): output_args_trim_video(start_secs, end_secs)},
+    )
+    ff.run()
+
+
 def find(
     s: str, ch: str
 ):  # gives indexes of all of the spaces so we don't split words apart
     return [i for i, ltr in enumerate(s) if ltr == ch]
 
 
-def transcript_to_vtt(audio_or_video_file: str, vtt_file: str, transcript: str) -> str:
-    if not os.path.exists(audio_or_video_file):
+def transcript_to_vtt(
+    audio_or_video_file_or_url: str, vtt_file: str, transcript: str
+) -> str:
+    if not os.path.exists(audio_or_video_file_or_url) and not re.search(
+        "^https?", audio_or_video_file_or_url
+    ):
         raise Exception(
-            f"ERROR: Can't generate vtt, {audio_or_video_file} doesn't exist"
+            f"ERROR: Can't generate vtt, {audio_or_video_file_or_url} doesn't exist or is not a valid url"
         )
-    duration = find_duration(audio_or_video_file)
+    duration = find_duration(audio_or_video_file_or_url)
     if duration <= 0:
         import logging
 
-        logging.warning(f"video duration for {audio_or_video_file} returned 0")
+        logging.warning(f"video duration for {audio_or_video_file_or_url} returned 0")
         return ""
     piece_length = 68
     word_indexes = find(transcript, " ")
@@ -246,3 +263,75 @@ def transcript_to_vtt(audio_or_video_file: str, vtt_file: str, transcript: str) 
     with open(vtt_file, "w") as f:
         f.write(vtt_str)
     return vtt_str
+
+
+@dataclass
+class TimestampSegment:
+    secs_start: float
+    secs_end: float
+    transcript_segment: str
+
+
+def vtt_str_file_to_objects(vtt_str_file) -> List[TimestampSegment]:
+    timestamp_segs = []
+    vtt_file = open(vtt_str_file, "r")
+    line = vtt_file.readline()
+    while line:
+        if re.search("^00:", line):
+            timestamp_split = line.split(" --> ")
+            start_duration = timestamp_split[0]
+            (
+                start_hours,
+                start_minutes,
+                start_seconds,
+            ) = start_duration.split(":")
+            end_duration = timestamp_split[1]
+            (
+                end_hours,
+                end_minutes,
+                end_seconds,
+            ) = end_duration.split(":")
+            timestamp_segs.append(
+                TimestampSegment(
+                    float(start_minutes) * 60 + float(start_seconds),
+                    float(end_minutes) * 60 + float(end_seconds),
+                    vtt_file.readline().strip(),
+                )
+            )
+        line = vtt_file.readline()
+    vtt_file.close()
+    return timestamp_segs
+
+
+def trim_vtt_and_transcript_via_timestamps(
+    vtt_str_file: str, trim_start_secs: float, trim_end_secs: float
+):
+    timestamp_segs = vtt_str_file_to_objects(vtt_str_file)
+    # Removes timestamp segments that come after the new end of the video
+    # In the future, should also accomodate for the user trimming the start of the video
+    for timestamp_seg in timestamp_segs[:]:
+        if timestamp_seg.secs_start >= trim_end_secs:
+            timestamp_segs.remove(timestamp_seg)
+
+    new_vtt_str = "WEBVTT FILE:\n\n"
+    new_transcript = ""
+    for timestamp_seg in timestamp_segs:
+        output_start = (
+            str(math.floor(timestamp_seg.secs_start / 60)).zfill(2)
+            + ":"
+            + ("%.3f" % (timestamp_seg.secs_start % 60)).zfill(6)
+        )
+        output_end = (
+            str(math.floor(timestamp_seg.secs_end / 60)).zfill(2)
+            + ":"
+            + ("%.3f" % (timestamp_seg.secs_end % 60)).zfill(6)
+        )
+        new_vtt_str += f"00:{output_start} --> 00:{output_end}\n"
+        new_vtt_str += f"{timestamp_seg.transcript_segment}\n\n"
+        new_transcript += f"{timestamp_seg.transcript_segment} "
+    new_transcript = new_transcript.strip()
+
+    vtt_file = open(vtt_str_file, "w")
+    vtt_file.write(new_vtt_str)
+    vtt_file.close()
+    return new_vtt_str, new_transcript
