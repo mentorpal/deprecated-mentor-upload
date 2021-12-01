@@ -5,7 +5,7 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from os import environ
-from typing import TypedDict
+from typing import List, TypedDict
 
 
 def get_queue_trim_upload_stage() -> str:
@@ -38,6 +38,26 @@ class ProcessAnswerRequest(TypedDict):
     question: str
     video_path: str
     trim: TrimRequest
+
+
+class Media:
+    type: str
+    tag: str
+    url: str
+    needsTransfer: bool  # noqa: N815
+
+
+class TrimExistingUploadRequest(TypedDict):
+    mentor: str
+    question: str
+    trim: TrimRequest
+    transcript: str
+    answer_media: List[Media]
+
+
+class RegenVTTRequest(TypedDict):
+    mentor: str
+    question: str
 
 
 class ProcessTransferRequest(TypedDict):

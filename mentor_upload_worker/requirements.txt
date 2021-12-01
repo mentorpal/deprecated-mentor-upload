@@ -5,6 +5,6 @@ ffmpy==0.3.0
 pymediainfo==5.1.0
 pymongo[srv]==3.12.0
 python-dotenv==0.19.0
-py_transcribe_aws==1.4.2
+py_transcribe_aws>=1.0.0
 redis==3.5.3
 requests==2.26.0

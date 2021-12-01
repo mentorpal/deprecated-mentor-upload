@@ -153,7 +153,6 @@ def test_upload(
     expected_status_update_query = _mock_gql_upload_task_update(
         mentor=input_mentor, question=input_question, task_list=task_list
     )
-    # sends the request to trigger upload()
     res = client.post(
         f"{upload_domain}/upload/answer",
         data={
