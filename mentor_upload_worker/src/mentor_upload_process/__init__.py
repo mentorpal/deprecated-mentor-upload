@@ -19,6 +19,18 @@ class ProcessAnswerRequest(TypedDict):
     trim: TrimRequest
 
 
+class TrimExistingUploadRequest(TypedDict):
+    mentor: str
+    question: str
+    video_url: str
+    trim: TrimRequest
+
+
+class RegenVTTRequest(TypedDict):
+    mentor: str
+    question: str
+
+
 class ProcessAnswerResponse(TypedDict):
     mentor: str
     question: str

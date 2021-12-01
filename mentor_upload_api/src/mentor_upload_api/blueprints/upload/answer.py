@@ -63,6 +63,47 @@ def begin_tasks_in_parallel(req):
     return my_chord.delay()
 
 
+@answer_blueprint.route("/trim_existing_upload/", methods=["POST"])
+@answer_blueprint.route("/trim_existing_upload", methods=["POST"])
+def trim_existing_upload():
+    body = json.loads(request.form.get("body", "{}"))
+    if not body:
+        raise Exception("missing required param body")
+    mentor = body.get("mentor")
+    question = body.get("question")
+    trim = body.get("trim")
+    req = {
+        "mentor": mentor,
+        "question": question,
+        "trim": trim,
+    }
+    task = mentor_upload_tasks.tasks.trim_existing_upload.apply_async(
+        queue=mentor_upload_tasks.get_queue_trim_upload_stage(), args=[req]
+    )
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": task.id,
+            "status": "QUEUED",
+        }
+    ]
+    upload_task_update(
+        UploadTaskRequest(
+            mentor=mentor,
+            question=question,
+            task_list=task_list,
+        )
+    )
+    return jsonify(
+        {
+            "data": {
+                "taskList": task_list,
+                "statusUrl": _to_status_url(request.url_root, [task.id]),
+            }
+        }
+    )
+
+
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
 def upload():
@@ -221,3 +262,23 @@ def task_status(task_name: str, task_id: str):
             }
         }
     )
+
+
+@answer_blueprint.route("/regen_vtt/", methods=["POST"])
+@answer_blueprint.route("/regen_vtt", methods=["POST"])
+def regen_vtt():
+    body = json.loads(request.form.get("body", "{}"))
+    if not body:
+        raise Exception("missing required param body")
+    mentor = body.get("mentor")
+    question = body.get("question")
+    req = {
+        "mentor": mentor,
+        "question": question,
+    }
+    task = mentor_upload_tasks.tasks.regen_vtt.apply_async(
+        queue=mentor_upload_tasks.get_queue_trim_upload_stage(), args=[req]
+    )
+    result = task.wait(timeout=None, interval=0.5)
+
+    return jsonify({"data": result})
