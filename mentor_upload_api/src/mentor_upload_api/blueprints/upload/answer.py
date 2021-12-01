@@ -5,7 +5,6 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
-import shutil
 
 from os import environ, path, makedirs, listdir, remove, scandir
 from datetime import datetime
@@ -208,26 +207,6 @@ def mounted_files():
         import logging
 
         logging.error("failed to fetch files from upload directory")
-        logging.exception(x)
-
-
-@answer_blueprint.route("/storage_info/", methods=["GET"])
-@answer_blueprint.route("/storage_info", methods=["GET"])
-def storage_info():
-    try:
-        file_directory = get_upload_root()
-        total, used, free = shutil.disk_usage(file_directory)
-        return {
-            "data": {
-                "totalStorage": total,
-                "usedStorage": used,
-                "freeStorage": free,
-            }
-        }
-    except Exception as x:
-        import logging
-
-        logging.error("failed to fetch server storage info")
         logging.exception(x)
 
 
