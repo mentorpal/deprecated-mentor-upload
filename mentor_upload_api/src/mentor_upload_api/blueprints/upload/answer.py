@@ -6,7 +6,9 @@
 #
 import json
 
-from os import environ, path, makedirs, listdir
+from os import environ, path, makedirs, listdir, remove, scandir
+from datetime import datetime
+from dateutil import tz
 import uuid
 
 from flask import Blueprint, jsonify, request, send_from_directory
@@ -171,6 +173,71 @@ def upload():
             }
         }
     )
+
+
+def list_files_from_directory(file_directory: str):
+    files = []
+    cali_tz = tz.gettz("America/Los_Angeles")
+    for entry in scandir(file_directory):
+        files.append(
+            {
+                "fileName": entry.name,
+                "size": entry.stat().st_size,
+                "uploadDate": datetime.fromtimestamp(
+                    entry.stat().st_ctime, tz=cali_tz
+                ).strftime("%m/%d/%Y %I:%M:%S %p")
+                + " (PST)",
+            }
+        )
+    return files
+
+
+@answer_blueprint.route("/mounted_files/", methods=["GET"])
+@answer_blueprint.route("/mounted_files", methods=["GET"])
+def mounted_files():
+    try:
+        file_directory = get_upload_root()
+        files = list_files_from_directory(file_directory)
+        return {
+            "data": {
+                "mountedFiles": files,
+            }
+        }
+    except Exception as x:
+        import logging
+
+        logging.error("failed to fetch files from upload directory")
+        logging.exception(x)
+
+
+@answer_blueprint.route("/remove_mounted_file/<file_name>/", methods=["POST"])
+@answer_blueprint.route("/remove_mounted_file/<file_name>", methods=["POST"])
+def remove_mounted_file(file_name: str):
+    try:
+        file_path = path.join(get_upload_root(), file_name)
+        remove(file_path)
+        return {"data": {"fileRemoved": True}}
+    except Exception as x:
+        import logging
+
+        logging.error(f"failed to remove file {file_name} from uploads directory")
+        logging.exception(x)
+        return {"data": {"fileRemoved": False}}
+
+
+@answer_blueprint.route("/download_mounted_file/<file_name>/", methods=["GET"])
+@answer_blueprint.route("/download_mounted_file/<file_name>", methods=["GET"])
+def download_mounted_file(file_name: str):
+    try:
+        file_directory = get_upload_root()
+        return send_from_directory(file_directory, file_name, as_attachment=True)
+    except Exception as x:
+        import logging
+
+        logging.error(
+            f"failed to find video file {file_name} in folder {file_directory}"
+        )
+        logging.exception(x)
 
 
 def full_video_file_name_from_directory(
