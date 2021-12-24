@@ -17,9 +17,8 @@ from flask_cors import CORS  # NOQA E402
 
 class JSONFormatter(logging.Formatter):
     RECORD_ATTRS = [
-        'request_id', 'name', 'levelname', 'filename', 'module',
-        'lineno', 'funcName', 'thread', 'threadName', 'process', 
-        'endpoint', 'method', 'url', 'remote_addr', 'headers'
+        'name', 'levelname', 'filename', 'module', 'path',
+        'lineno', 'funcName', 'endpoint', 'method', 'url', 'headers'
     ]
     def to_payload(self, record):
         payload = {
@@ -46,13 +45,16 @@ class JSONFormatter(logging.Formatter):
 class RequestJSONFormatter(JSONFormatter):
     def format(self, record):
         if has_request_context():
-            record.request_id = g.request_id if hasattr(g, 'request_id') else '-'
+            # todo for distributed tracing:
+            # record.request_id = g.request_id if hasattr(g, 'request_id') else '-'
+            if hasattr(g, 'response_time'):
+                setattr(record,'response-time', g.response_time)
+            record.path = request.full_path
             record.endpoint = request.endpoint
             record.method = request.method
             record.url = request.url
             # make sure to redact sensitive info: cookies, auth...
             record.headers = {k: v for k, v in request.headers.items() if 'auth' not in k.lower()}
-            record.remote_addr = request.remote_addr
         
         return super().format(record)
 
@@ -70,7 +72,6 @@ class RequestFilter(logging.Filter):
         #         return True
         # else:
         #     return True
-
 
 def create_app():
     log_level = os.environ.get('LOG_LEVEL_UPLOAD_API', 'INFO')
@@ -127,6 +128,7 @@ def create_app():
     )
     app = Flask(__name__)
     CORS(app)
+
     from mentor_upload_api.blueprints.ping import ping_blueprint
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
@@ -139,4 +141,9 @@ def create_app():
     from mentor_upload_api.blueprints.upload.thumbnail import thumbnail_blueprint
 
     app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")
+    
+    @app.route("/error")
+    def error_handler_test():
+        raise Exception('Safe to ignore, route for intentional error')
+        
     return app
