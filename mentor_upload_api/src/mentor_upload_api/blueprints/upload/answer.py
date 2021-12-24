@@ -109,11 +109,10 @@ def trim_existing_upload():
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
 def upload():
-    req_log.info('files: [%s], body: [%s]', request.files, request.form.get("body"))
+    log.info('%s', {"files": request.files, "body": request.form.get("body")})
     # request.form contains the entire video encoded, dont want all that in the logs:
     # req_log.info(request.form(as_text=True)[:300])
     body = json.loads(request.form.get("body", "{}"))
-    log.info('body %s', body)
     if not body:
         raise Exception("missing required param body")
     mentor = body.get("mentor")
