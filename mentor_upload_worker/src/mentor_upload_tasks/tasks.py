@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env.
 
-import os
-import logging
+import os  # NOQA
+import logging  # NOQA
 from celery import Celery  # NOQA
 from kombu import Exchange, Queue  # NOQA
 
@@ -24,7 +24,8 @@ from mentor_upload_process import (  # NOQA
     RegenVTTRequest,
 )
 
-log = logging.getLogger('upload-worker-tasks')
+log = logging.getLogger("upload-worker-tasks")
+
 
 def get_queue_trim_upload_stage() -> str:
     return os.environ.get("TRIM_UPLOAD_QUEUE_NAME") or "trim_upload"
@@ -51,7 +52,7 @@ broker_url = (
     or os.environ.get("CELERY_BROKER_URL")
     or "redis://redis:6379/0"
 )
-log.info('%s', { "broker_url": broker_url })
+log.info("%s", {"broker_url": broker_url})
 celery = Celery("mentor_upload_tasks", broker=broker_url)
 
 celery_config = {
@@ -99,9 +100,7 @@ celery_config = {
         ),
         Queue(
             get_queue_finalization_stage(),
-            exchange=Exchange(
-                get_queue_finalization_stage(), "direct", durable=True
-            ),
+            exchange=Exchange(get_queue_finalization_stage(), "direct", durable=True),
             routing_key=get_queue_finalization_stage(),
         ),
         Queue(
@@ -128,10 +127,9 @@ celery_config = {
     "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
 }
 
-log.info('%s', {"celery_config": celery_config})
-celery.conf.update(
-    celery_config
-)
+log.info("%s", {"celery_config": celery_config})
+celery.conf.update(celery_config)
+
 
 @celery.task()
 def trim_upload_stage(
@@ -148,7 +146,7 @@ def transcode_stage(
     dict_tuple: dict,
     req: ProcessAnswerRequest,
 ) -> ProcessAnswerResponse:
-    log.info('transcode stage: %s, %s', dict_tuple, req)
+    log.info("transcode stage: %s, %s", dict_tuple, req)
     task_id = transcode_stage.request.id
     log.debug(transcode_stage.request)
     return process.transcode_stage(dict_tuple, req, task_id)
@@ -159,7 +157,7 @@ def transcribe_stage(
     dict_tuple: dict,
     req: ProcessAnswerRequest,
 ) -> ProcessAnswerResponse:
-    log.info('transcribe stage: %s, %s', dict_tuple, req)
+    log.info("transcribe stage: %s, %s", dict_tuple, req)
     task_id = transcribe_stage.request.id
     log.debug(transcribe_stage.request)
     return process.transcribe_stage(dict_tuple, req, task_id)
@@ -169,7 +167,7 @@ def transcribe_stage(
 def finalization_stage(
     dict_tuple: dict, req: ProcessAnswerRequest
 ) -> ProcessAnswerResponse:
-    log.info('finalization stage: %s, %s', dict_tuple, req)
+    log.info("finalization stage: %s, %s", dict_tuple, req)
     task_id = finalization_stage.request.id
     log.debug(finalization_stage.request)
     return process.finalization_stage(dict_tuple, req=req, task_id=task_id)
@@ -177,7 +175,7 @@ def finalization_stage(
 
 @celery.task()
 def process_transfer_video(req: ProcessTransferRequest):
-    log.info('process_transfer_video: %s', req)
+    log.info("process_transfer_video: %s", req)
     task_id = process_transfer_video.request.id
     log.debug(process_transfer_video.request)
     return process.process_transfer_video(req, task_id)
@@ -185,7 +183,7 @@ def process_transfer_video(req: ProcessTransferRequest):
 
 @celery.task()
 def trim_existing_upload(req: TrimExistingUploadRequest):
-    log.info('trim_existing_upload stage: %s', req)
+    log.info("trim_existing_upload stage: %s", req)
     task_id = trim_existing_upload.request.id
     log.debug(trim_existing_upload.request)
     return process.trim_existing_upload(req, task_id)
@@ -199,7 +197,7 @@ def regen_vtt(req: RegenVTTRequest):
 
 @celery.task()
 def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
-    log.info('cancel_task: %s', req)
+    log.info("cancel_task: %s", req)
     t = process.cancel_task(req)
     celery.control.revoke(req.get("task_id"), terminate=True)
     return t

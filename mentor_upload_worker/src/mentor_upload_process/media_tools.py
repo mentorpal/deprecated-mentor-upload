@@ -13,7 +13,8 @@ import math
 import ffmpy
 from pymediainfo import MediaInfo
 
-log = logging.getLogger('media-tools')
+log = logging.getLogger("media-tools")
+
 
 def find_duration(audio_or_video_file: str) -> float:
     log.info(audio_or_video_file)
@@ -140,7 +141,7 @@ def output_args_video_to_audio() -> Tuple[str, ...]:
 
 
 def video_encode_for_mobile(src_file: str, tgt_file: str, target_height=480) -> None:
-    log.info('%s, %s, %s', src_file, tgt_file, target_height)
+    log.info("%s, %s, %s", src_file, tgt_file, target_height)
     os.makedirs(os.path.dirname(tgt_file), exist_ok=True)
     ff = ffmpy.FFmpeg(
         inputs={str(src_file): None},
@@ -157,7 +158,7 @@ def video_encode_for_mobile(src_file: str, tgt_file: str, target_height=480) -> 
 def video_encode_for_web(
     src_file: str, tgt_file: str, max_height=720, target_aspect=1.77777777778
 ) -> None:
-    log.info('%s, %s, %s, %s', src_file, tgt_file, max_height, target_aspect)
+    log.info("%s, %s, %s, %s", src_file, tgt_file, max_height, target_aspect)
     os.makedirs(os.path.dirname(tgt_file), exist_ok=True)
     ff = ffmpy.FFmpeg(
         inputs={str(src_file): None},
@@ -184,7 +185,7 @@ def video_to_audio(
 
     Returns: path to the new audio file
     """
-    log.info('%s, %s, %s', input_file, output_file, output_audio_encoding)
+    log.info("%s, %s, %s", input_file, output_file, output_audio_encoding)
 
     if not os.path.exists(input_file):
         raise Exception(f"ERROR: Can't covert audio, {input_file} doesn't exist")
@@ -203,7 +204,7 @@ def video_to_audio(
 def video_trim(
     input_file: str, output_file: str, start_secs: float, end_secs: float
 ) -> None:
-    log.info('%s, %s, %s-%s', input_file, output_file, start_secs, end_secs)
+    log.info("%s, %s, %s-%s", input_file, output_file, start_secs, end_secs)
     if not os.path.exists(input_file):
         raise Exception(f"ERROR: Can't trim, {input_file} doesn't exist")
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -214,10 +215,11 @@ def video_trim(
     ff.run()
     log.debug(ff)
 
+
 def existing_video_trim(
     input_file: str, output_file: str, start_secs: float, end_secs: float
 ) -> None:
-    log.info('%s, %s, %s-%s', input_file, output_file, start_secs, end_secs)
+    log.info("%s, %s, %s-%s", input_file, output_file, start_secs, end_secs)
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ff = ffmpy.FFmpeg(
         inputs={str(input_file): None},
@@ -225,6 +227,7 @@ def existing_video_trim(
     )
     ff.run()
     log.debug(ff)
+
 
 def find(
     s: str, ch: str
@@ -235,7 +238,7 @@ def find(
 def transcript_to_vtt(
     audio_or_video_file_or_url: str, vtt_file: str, transcript: str
 ) -> str:
-    log.info('%s, %s, %s', audio_or_video_file_or_url, vtt_file, transcript)
+    log.info("%s, %s, %s", audio_or_video_file_or_url, vtt_file, transcript)
 
     if not os.path.exists(audio_or_video_file_or_url) and not re.search(
         "^https?", audio_or_video_file_or_url

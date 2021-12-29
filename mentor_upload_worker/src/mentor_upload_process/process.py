@@ -51,7 +51,8 @@ from .api import (
     fetch_text_from_url,
 )
 
-log = logging.getLogger('upload-worker-process')
+log = logging.getLogger("upload-worker-process")
+
 
 def upload_path(p: str) -> str:
     return path.join(environ.get("UPLOADS") or "./uploads", p)
@@ -65,7 +66,7 @@ def _require_env(n: str) -> str:
 
 
 def _create_s3_client() -> S3Client:
-    log.info('creating new S3 client')
+    log.info("creating new S3 client")
     return boto3.client(
         "s3",
         region_name=_require_env("STATIC_AWS_REGION"),
@@ -86,7 +87,7 @@ def _video_work_dir(source_path: str):
     makedirs(media_work_dir)
     video_file = media_work_dir / path.basename(source_path)
     copyfile(source_path, video_file)
-    log.debug('working video: %s', video_file)
+    log.debug("working video: %s", video_file)
     yield (video_file, media_work_dir)
 
 
@@ -107,15 +108,16 @@ def _trimming_work_dir():
     )
     try:
         makedirs(media_work_dir)
-        log.debug('%s created', media_work_dir)
+        log.debug("%s created", media_work_dir)
         yield media_work_dir
     finally:
         try:
-            log.debug('removing %s', media_work_dir)
+            log.debug("removing %s", media_work_dir)
             rmtree(str(media_work_dir))
         except Exception as x:
             log.error(f"failed to delete media work dir {media_work_dir}")
             log.exception(x)
+
 
 def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
     upload_task_status_update(
@@ -293,7 +295,7 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                         "url": item_path,
                     }
                 )
-                log.debug('uploading %s to %s', item_path, s3_bucket)
+                log.debug("uploading %s to %s", item_path, s3_bucket)
                 s3.upload_file(
                     str(file),
                     s3_bucket,
@@ -350,7 +352,7 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                     new_status="IN_PROGRESS",
                 )
             )
-            log.info('transcribing %s', audio_file)
+            log.info("transcribing %s", audio_file)
             transcription_service = transcribe.init_transcription_service()
             transcribe_result = transcription_service.transcribe(
                 [
@@ -360,8 +362,8 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                 ]
             )
             job_result = transcribe_result.first()
-            log.info('%s transcribed', audio_file)
-            log.debug('%s', job_result)
+            log.info("%s transcribed", audio_file)
+            log.debug("%s", job_result)
             transcript = job_result.transcript if job_result else ""
             subtitles = job_result.subtitles if job_result else ""
         upload_task_status_update(
