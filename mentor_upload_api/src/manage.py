@@ -12,13 +12,14 @@ from flask import g, request
 try:
     logging.info('creating app')
     app = create_app()
+    # logger configured in create_app()
+    req_log = logging.getLogger('request')
+    log = logging.getLogger()
+    log.info('app created')
 except Exception as x:
     logging.exception(x)
     raise x
 
-# logger configured in create_app()
-req_log = logging.getLogger('request')
-log = logging.getLogger()
 
 @app.before_request
 def before_request():

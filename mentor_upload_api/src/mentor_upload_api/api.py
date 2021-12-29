@@ -4,13 +4,14 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-from dataclasses import dataclass
 import json
+import logging
+import requests
+from dataclasses import dataclass
 from os import environ
 from typing import TypedDict, List
 
-import requests
-
+log = logging.getLogger('api')
 
 def get_graphql_endpoint() -> str:
     return environ.get("GRAPHQL_ENDPOINT") or "http://graphql:3001/graphql"
@@ -117,6 +118,7 @@ def upload_task_status_req_gql(req: UpdateTaskStatusRequest) -> GQLQueryBody:
 def upload_task_status_update(req: UpdateTaskStatusRequest) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = upload_task_status_req_gql(req)
+    log.debug(body)
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
     res.raise_for_status()
     tdjson = res.json()
@@ -127,6 +129,7 @@ def upload_task_status_update(req: UpdateTaskStatusRequest) -> None:
 def upload_task_update(req: UploadTaskRequest) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = upload_task_req_gql(req)
+    log.debug(body)
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
     res.raise_for_status()
     tdjson = res.json()
@@ -137,6 +140,7 @@ def upload_task_update(req: UploadTaskRequest) -> None:
 def mentor_thumbnail_update(req: MentorThumbnailUpdateRequest) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = thumbnail_update_gql(req)
+    log.debug(body)
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
     res.raise_for_status()
     tdjson = res.json()
@@ -164,6 +168,7 @@ def fetch_answer_transcript_and_media_gql(mentor: str, question: str) -> GQLQuer
 def fetch_answer_transcript_and_media(mentor: str, question: str):
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = fetch_answer_transcript_and_media_gql(mentor, question)
+    log.info(body)
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
 
     res.raise_for_status()
