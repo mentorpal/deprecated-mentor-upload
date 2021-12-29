@@ -20,8 +20,8 @@ from mentor_upload_api.api import (
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
-log = logging.getLogger('answer')
-req_log = logging.getLogger('request')
+log = logging.getLogger("answer")
+req_log = logging.getLogger("request")
 answer_blueprint = Blueprint("answer", __name__)
 
 
@@ -67,7 +67,7 @@ def begin_tasks_in_parallel(req):
 @answer_blueprint.route("/trim_existing_upload/", methods=["POST"])
 @answer_blueprint.route("/trim_existing_upload", methods=["POST"])
 def trim_existing_upload():
-    req_log.info('trim existing, body: [%s]', request.form.get("body"))
+    req_log.info("trim existing, body: [%s]", request.form.get("body"))
     body = json.loads(request.form.get("body", "{}"))
     if not body:
         raise Exception("missing required param body")
@@ -109,7 +109,7 @@ def trim_existing_upload():
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
 def upload():
-    log.info('%s', {"files": request.files, "body": request.form.get("body")})
+    log.info("%s", {"files": request.files, "body": request.form.get("body")})
     # request.form contains the entire video encoded, dont want all that in the logs:
     # req_log.info(request.form(as_text=True)[:300])
     body = json.loads(request.form.get("body", "{}"))
@@ -124,7 +124,16 @@ def upload():
     root_ext = path.splitext(upload_file.filename)
     file_name = f"{uuid.uuid4()}-{mentor}-{question}{root_ext[1]}"
     file_path = path.join(get_upload_root(), file_name)
-    log.info('%s',{"trim": trim, "file": upload_file, "ext": root_ext, "file_name": file_name, "path": file_path})
+    log.info(
+        "%s",
+        {
+            "trim": trim,
+            "file": upload_file,
+            "ext": root_ext,
+            "file_name": file_name,
+            "path": file_path,
+        },
+    )
     makedirs(get_upload_root(), exist_ok=True)
     upload_file.save(file_path)
     req = {
@@ -310,8 +319,8 @@ def task_status(task_name: str, task_id: str):
     elif task_name == "finalization":
         t = mentor_upload_tasks.tasks.finalization_stage.AsyncResult(task_id)
     else:
-        logging.error(f'unrecognized task_name: {task_name}, id: {task_id}')
-        raise Exception(f'unrecognized task_name: {task_name}')
+        logging.error(f"unrecognized task_name: {task_name}, id: {task_id}")
+        raise Exception(f"unrecognized task_name: {task_name}")
 
     return jsonify(
         {

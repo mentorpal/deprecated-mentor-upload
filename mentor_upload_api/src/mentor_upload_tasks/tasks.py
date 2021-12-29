@@ -23,14 +23,14 @@ from . import (
     get_queue_cancel_task,
 )
 
-log = logging.getLogger('api-tasks')
+log = logging.getLogger("api-tasks")
 
 broker_url = (
     os.environ.get("UPLOAD_CELERY_BROKER_URL")
     or os.environ.get("CELERY_BROKER_URL")
     or "redis://redis:6379/0"
 )
-log.info('%s', { "broker_url": broker_url })
+log.info("%s", {"broker_url": broker_url})
 
 celery = Celery("mentor_upload_tasks", broker=broker_url)
 celery_config = {
@@ -76,9 +76,7 @@ celery_config = {
         ),
         Queue(
             get_queue_finalization_stage(),
-            exchange=Exchange(
-                get_queue_finalization_stage(), "direct", durable=True
-            ),
+            exchange=Exchange(get_queue_finalization_stage(), "direct", durable=True),
             routing_key=get_queue_finalization_stage(),
         ),
         Queue(
@@ -104,9 +102,10 @@ celery_config = {
     },
     "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
 }
-log.info('%s', {"celery_config": celery_config})
+log.info("%s", {"celery_config": celery_config})
 
 celery.conf.update(celery_config)
+
 
 @celery.task()
 def trim_upload_stage(
