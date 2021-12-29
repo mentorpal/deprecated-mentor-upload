@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env.
 
-import os
-import logging
-import json
+import os  # NOQA E402
+import logging  # NOQA E402
+import json  # NOQA E402
 from logging.config import dictConfig  # NOQA E402
 from flask import Flask, request, g, has_request_context  # NOQA E402
 from flask_cors import CORS  # NOQA E402
