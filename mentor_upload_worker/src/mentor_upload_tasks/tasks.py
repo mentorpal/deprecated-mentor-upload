@@ -26,6 +26,23 @@ from mentor_upload_process import (  # NOQA
 
 log = logging.getLogger("upload-worker-tasks")
 
+if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
+    log.info("SENTRY enabled, calling init")
+    import sentry_sdk  # NOQA E402
+    from sentry_sdk.integrations.celery import CeleryIntegration  # NOQA E402
+
+    sentry_sdk.init(
+        dsn=os.environ.get("SENTRY_DSN_MENTOR_UPLOAD"),
+        # include project so issues can be filtered in sentry:
+        environment=os.environ.get("PYTHON_ENV", "careerfair-qa"),
+        integrations=[CeleryIntegration()],
+        # Set traces_sample_rate to 1.0 to capture 100%
+        # of transactions for performance monitoring.
+        # We recommend adjusting this value in production.
+        traces_sample_rate=0.20,
+        debug=os.environ.get("SENTRY_DEBUG_UPLOADER", "") == "true",
+    )
+
 
 def get_queue_trim_upload_stage() -> str:
     return os.environ.get("TRIM_UPLOAD_QUEUE_NAME") or "trim_upload"
@@ -68,7 +85,7 @@ celery_config = {
     "task_default_queue": get_queue_finalization_stage(),
     "task_default_exchange": get_queue_finalization_stage(),
     # for debugging:
-    # "worker_concurrency":1,  "worker_prefetch_multiplier": 1,
+    "worker_concurrency":1,  "worker_prefetch_multiplier": 1,
     "task_default_routing_key": get_queue_finalization_stage(),
     "task_queues": [
         Queue(

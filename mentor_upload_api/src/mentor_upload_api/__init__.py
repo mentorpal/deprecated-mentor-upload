@@ -157,6 +157,7 @@ def create_app():
             # of transactions for performance monitoring.
             # We recommend adjusting this value in production.
             traces_sample_rate=0.20,
+            debug=os.environ.get("SENTRY_DEBUG_UPLOADER", "") == "true",
         )
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
