@@ -85,7 +85,7 @@ celery_config = {
     "task_default_queue": get_queue_finalization_stage(),
     "task_default_exchange": get_queue_finalization_stage(),
     # for debugging:
-    "worker_concurrency":1,  "worker_prefetch_multiplier": 1,
+    # "worker_concurrency": 1,    "worker_prefetch_multiplier": 1,
     "task_default_routing_key": get_queue_finalization_stage(),
     "task_queues": [
         Queue(
