@@ -40,8 +40,8 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(payload)
 
 
-log_level = os.environ.get("LOG_LEVEL_UPLOAD_API", "INFO")
-log_format = os.environ.get("LOG_FORMAT_UPLOAD_API", "json")
+log_level = os.environ.get("LOG_LEVEL_UPLOAD_WORKER", "INFO")
+log_format = os.environ.get("LOG_FORMAT_UPLOAD_WORKER", "json")
 
 dictConfig(
     {

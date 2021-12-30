@@ -17,9 +17,13 @@ from flask_cors import CORS  # NOQA E402
 from mentor_upload_api.blueprints.ping import ping_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.answer import answer_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.transfer import transfer_blueprint  # NOQA E402
-from mentor_upload_api.blueprints.upload.thumbnail import (
+from mentor_upload_api.blueprints.upload.thumbnail import (  # NOQA E402
     thumbnail_blueprint,
-)  # NOQA E402
+)
+
+if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
+    import sentry_sdk  # NOQA E402
+    from sentry_sdk.integrations.flask import FlaskIntegration  # NOQA E402
 
 
 class JSONFormatter(logging.Formatter):
@@ -142,12 +146,25 @@ def create_app():
     app = Flask(__name__)
     CORS(app)
 
+    if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
+        logging.info("SENTRY enabled, calling init")
+        sentry_sdk.init(
+            dsn=os.environ.get("SENTRY_DSN_MENTOR_UPLOAD"),
+            # include project so issues can be filtered in sentry:
+            environment=os.environ.get("PYTHON_ENV", "careerfair-qa"),
+            integrations=[FlaskIntegration()],
+            # Set traces_sample_rate to 1.0 to capture 100%
+            # of transactions for performance monitoring.
+            # We recommend adjusting this value in production.
+            traces_sample_rate=0.20,
+        )
+
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
     app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
     app.register_blueprint(transfer_blueprint, url_prefix="/upload/transfer")
     app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")
 
-    @app.route("/error")
+    @app.route("/upload/error")
     def error_handler_test():
         raise Exception("Safe to ignore, route for intentional error")
 
