@@ -6,13 +6,8 @@ import math
 import ffmpy
 from pymediainfo import MediaInfo
 import os
-import sys
 
 log = logging.getLogger("trim")
-
-# # add ffmpeg binary to the path:
-# here = os.path.dirname(os.path.realpath(__file__))
-# sys.path.append(os.path.join(here, 'binaries/ffmpeg'))
 
 def format_secs(secs: Union[float, int, str]) -> str:
     return f"{float(str(secs)):.3f}"
@@ -31,7 +26,7 @@ def output_args_trim_video(start_secs: float, end_secs: float) -> Tuple[str, ...
 
 def find_duration(audio_or_video_file: str) -> float:
     log.info(audio_or_video_file)
-    media_info = MediaInfo.parse(audio_or_video_file, library_file='./binaries/MediaInfo_DLL_21.09_Lambda/lib/libmediainfo.so')
+    media_info = MediaInfo.parse(audio_or_video_file, library_file='/opt/MediaInfo_DLL_21.09_Lambda/lib/libmediainfo.so')
     for t in media_info.tracks:
         if t.track_type in ["Video", "Audio"]:
             try:
@@ -42,11 +37,10 @@ def find_duration(audio_or_video_file: str) -> float:
     return -1.0
 
 def handler(event, context):
-    # print('full duration', find_duration('./celery-short.mp4'))
+    print('full duration', find_duration('./celery-short.mp4'))
     ff = ffmpy.FFmpeg(
-        # executable="./binaries/ffmpeg/ffmpeg",
-        # inputs={str('./celery-short.mp4'): None},
-        inputs={str('https://static-mentorpal-v2-mentorpal-origin.s3.amazonaws.com/videos/60ba6dbc733e6a54b9b9af3a/6098b41257ab183da46cf777/20210605T013318Z/web.mp4'): None},
+        executable="/opt/ffmpeg/ffmpeg",
+        inputs={str('./celery-short.mp4'): None},
         outputs={str("/tmp/trim.mp4"): output_args_trim_video(4, 8)},
     )
     ff.run()

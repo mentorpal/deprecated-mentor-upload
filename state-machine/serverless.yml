@@ -5,27 +5,24 @@
 #    docs.serverless.com
 #
 
-service: mentorpal-upload-state-machine
+service: mentorpal-upload-sm
 
 # pin to only deploy with a specific Serverless version
 frameworkVersion: '2'
 
+variablesResolutionMode: 20210326
+
 # todo install drugin build:
 # sls plugin install -n serverless-python-requirements
 # sls plugin install -n serverless-offline
-
-# TODO layers, https://www.serverless.com/framework/docs/providers/aws/guide/layers or `serverless-layers` plugin
+# sls plugin install -n serverless-layers
 
 plugins:
   - serverless-python-requirements
   - serverless-offline
-  
+  # - serverless-layers
+
 custom:
-  # https://github.com/serverless/serverless-python-requirements
-  pythonRequirements:
-    dockerizePip: non-linux # instructs the python requirments plugin to use a docker container to package requirements
-  # serverless-offline:
-  #   useDocker: true
   stages:
     offline:
       LOG_LEVEL: 'trace'
@@ -35,11 +32,30 @@ custom:
       # v2 is hardcoded, we could use fallback stages instead
       S3_STATIC: ${ssm:/mentorpal/v2/s3_static_arn}
     qa:
-      S3_STATIC: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
+      # TODO
+      # S3_STATIC: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
       LOG_LEVEL: 'debug'
     prod:
       LOG_LEVEL: 'info'
-      S3_STATIC: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
+      # TODO
+      # S3_STATIC: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
+  # https://github.com/serverless/serverless-python-requirements
+  pythonRequirements:
+    dockerizePip: non-linux # instructs the python requirments plugin to use a docker container to package requirements
+
+  # todo, replace pythonRequirements with serverless-layers
+  # serverless-layers requires a deployment bucket to be created before deploying this stack (in terraform)
+  # serverless-layers:
+  #   - dependencies:
+  #       layersDeploymentBucket: '${self:service}-dependencies-${self:provider.stage}'
+  #       dependenciesPath: ./requirements.txt
+  #       compatibleRuntimes:
+  #         - python3.7
+  #         - python3.8
+  #       # applies to all lambdas
+
+  # serverless-offline:
+  #   useDocker: true
 
 provider:
   name: aws
@@ -78,16 +94,38 @@ package:
      - '!./**'
     # and then add back in only the files we need:
      - trim.py
-     - ./binaries/ffmpeg/ffmpeg
-     - './binaries/MediaInfo_DLL_21.09_Lambda/lib/**'
+    #  - ./binaries/ffmpeg/ffmpeg
+    #  - './binaries/MediaInfo_DLL_21.09_Lambda/lib/**'
      - requirements.txt
      - celery-short.mp4
 
+layers:
+  # binaries are shared and this will make lambdas size smaller
+  binaries:
+    path: ./binaries
+    package:
+      patterns:
+        - '!./**'
+        # relative to layer path:
+        # when attached, these are available under /opt
+        - ./ffmpeg/ffmpeg
+        - './MediaInfo_DLL_21.09_Lambda/lib/**'    
+    name: binaries-layer-${self:provider.stage}
+    description: Bundles ffmpeg and mediainfo binaries/libs
+    compatibleArchitectures: # optional, a list of architectures this layer is compatible with
+      - x86_64
+    licenseInfo: GPLv3 # optional, a string specifying license information
+    retain: false # If true, layer versions are not deleted as new ones are created
+
 functions:
-  step_mentor-upload-fn-trim-lambda:
+  step-trim:
     handler: trim.handler
     memorySize: 2048 # todo benchmark to find the optimal size
     timeout: 300
+    layers:
+      # binaries gets named "Binaries"+"LambdaLayer":
+      # see https://www.serverless.com/framework/docs/providers/aws/guide/layers#using-your-layers
+      - { Ref: BinariesLambdaLayer }
 
 #    The following are a few example events you can configure
 #    NOTE: Please make sure to change your handler code to work with those events
@@ -125,18 +163,3 @@ functions:
 #            host: example.com
 #            path: /hello
 
-#    Define function environment variables here
-#    environment:
-#      variable2: value2
-
-# you can add CloudFormation resource templates here
-#resources:
-#  Resources:
-#    NewResource:
-#      Type: AWS::S3::Bucket
-#      Properties:
-#        BucketName: my-new-bucket
-#  Outputs:
-#     NewOutput:
-#       Description: "Description for the output"
-#       Value: "Some output value"
