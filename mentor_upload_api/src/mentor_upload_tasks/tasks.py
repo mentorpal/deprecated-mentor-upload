@@ -8,6 +8,7 @@ import os
 
 from celery import Celery
 from kombu import Exchange, Queue
+import logging
 
 from . import (
     CancelTaskRequest,
@@ -22,85 +23,88 @@ from . import (
     get_queue_cancel_task,
 )
 
+log = logging.getLogger("api-tasks")
+
 broker_url = (
     os.environ.get("UPLOAD_CELERY_BROKER_URL")
     or os.environ.get("CELERY_BROKER_URL")
     or "redis://redis:6379/0"
 )
+log.info("%s", {"broker_url": broker_url})
+
 celery = Celery("mentor_upload_tasks", broker=broker_url)
-celery.conf.update(
-    {
-        "accept_content": ["json"],
-        "broker_url": broker_url,
-        "event_serializer": os.environ.get("CELERY_EVENT_SERIALIZER", "json"),
-        "result_backend": (
-            os.environ.get("UPLOAD_CELERY_RESULT_BACKEND")
-            or os.environ.get("CELERY_RESULT_BACKEND")
-            or "redis://redis:6379/0"
-        ),
-        "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
-        "task_default_queue": get_queue_finalization_stage(),
-        "task_default_exchange": get_queue_finalization_stage(),
-        "task_default_routing_key": get_queue_finalization_stage(),
-        "task_queues": [
-            Queue(
+celery_config = {
+    "accept_content": ["json"],
+    "broker_url": broker_url,
+    "event_serializer": os.environ.get("CELERY_EVENT_SERIALIZER", "json"),
+    "result_backend": (
+        os.environ.get("UPLOAD_CELERY_RESULT_BACKEND")
+        or os.environ.get("CELERY_RESULT_BACKEND")
+        or "redis://redis:6379/0"
+    ),
+    "result_serializer": os.environ.get("CELERY_RESULT_SERIALIZER", "json"),
+    "task_default_queue": get_queue_finalization_stage(),
+    "task_default_exchange": get_queue_finalization_stage(),
+    "task_default_routing_key": get_queue_finalization_stage(),
+    "task_queues": [
+        Queue(
+            get_queue_trim_upload_stage(),
+            exchange=Exchange(
                 get_queue_trim_upload_stage(),
-                exchange=Exchange(
-                    get_queue_trim_upload_stage(),
-                    "direct",
-                    durable=True,
-                ),
-                routing_key=get_queue_trim_upload_stage(),
+                "direct",
+                durable=True,
             ),
-            Queue(
+            routing_key=get_queue_trim_upload_stage(),
+        ),
+        Queue(
+            get_queue_transcode_stage(),
+            exchange=Exchange(
                 get_queue_transcode_stage(),
-                exchange=Exchange(
-                    get_queue_transcode_stage(),
-                    "direct",
-                    durable=True,
-                ),
-                routing_key=get_queue_transcode_stage(),
+                "direct",
+                durable=True,
             ),
-            Queue(
+            routing_key=get_queue_transcode_stage(),
+        ),
+        Queue(
+            get_queue_transcribe_stage(),
+            exchange=Exchange(
                 get_queue_transcribe_stage(),
-                exchange=Exchange(
-                    get_queue_transcribe_stage(),
-                    "direct",
-                    durable=True,
-                ),
-                routing_key=get_queue_transcribe_stage(),
+                "direct",
+                durable=True,
             ),
-            Queue(
-                get_queue_finalization_stage(),
-                exchange=Exchange(
-                    get_queue_finalization_stage(), "direct", durable=True
-                ),
-                routing_key=get_queue_finalization_stage(),
-            ),
-            Queue(
-                get_queue_cancel_task(),
-                exchange=Exchange(get_queue_cancel_task(), "direct", durable=True),
-                routing_key=get_queue_cancel_task(),
-            ),
-        ],
-        "task_routes": {
-            "mentor_upload_tasks.tasks.trim_upload_stage": {
-                "queue": get_queue_trim_upload_stage()
-            },
-            "mentor_upload_tasks.tasks.transcribe_stage": {
-                "queue": get_queue_transcribe_stage()
-            },
-            "mentor_upload_tasks.tasks.transcode_stage": {
-                "queue": get_queue_transcode_stage()
-            },
-            "mentor_upload_tasks.tasks.finalization_stage": {
-                "queue": get_queue_finalization_stage()
-            },
-            "mentor_upload_tasks.tasks.cancel_task": {"queue": get_queue_cancel_task()},
+            routing_key=get_queue_transcribe_stage(),
+        ),
+        Queue(
+            get_queue_finalization_stage(),
+            exchange=Exchange(get_queue_finalization_stage(), "direct", durable=True),
+            routing_key=get_queue_finalization_stage(),
+        ),
+        Queue(
+            get_queue_cancel_task(),
+            exchange=Exchange(get_queue_cancel_task(), "direct", durable=True),
+            routing_key=get_queue_cancel_task(),
+        ),
+    ],
+    "task_routes": {
+        "mentor_upload_tasks.tasks.trim_upload_stage": {
+            "queue": get_queue_trim_upload_stage()
         },
-        "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
-    }
-)
+        "mentor_upload_tasks.tasks.transcribe_stage": {
+            "queue": get_queue_transcribe_stage()
+        },
+        "mentor_upload_tasks.tasks.transcode_stage": {
+            "queue": get_queue_transcode_stage()
+        },
+        "mentor_upload_tasks.tasks.finalization_stage": {
+            "queue": get_queue_finalization_stage()
+        },
+        "mentor_upload_tasks.tasks.cancel_task": {"queue": get_queue_cancel_task()},
+    },
+    "task_serializer": os.environ.get("CELERY_TASK_SERIALIZER", "json"),
+}
+log.info("%s", {"celery_config": celery_config})
+
+celery.conf.update(celery_config)
 
 
 @celery.task()
@@ -153,4 +157,6 @@ def cancel_task(req: CancelTaskRequest):
 
 @celery.task()
 def on_chord_error(request, exc, traceback):
-    print("Task {0!r} raised error: {1!r}".format(request.id, exc))
+    log.error("Task {0!r} raised error: {1!r}".format(request.id, exc))
+    log.error(exc)
+    # TODO report to sentry

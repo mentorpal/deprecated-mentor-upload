@@ -7,6 +7,8 @@ This repo contains two subprojects:
 - mentor-upload-api: api for starting and tracking upload job
 - mentor-upload-worker: back end services handle processing
 
+Celery is used for task management, and redis as a broker.
+
 ## Requirements
 
 - [recommended] [penv](https://github.com/pyenv/pyenv-installer) to simplify python version management. 
