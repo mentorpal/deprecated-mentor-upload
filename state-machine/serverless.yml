@@ -1,0 +1,142 @@
+# To access resources defined in Terraform, we use SSM
+# https://www.serverless.com/blog/definitive-guide-terraform-serverless/
+#
+# For full config options, check the docs:
+#    docs.serverless.com
+#
+
+service: mentorpal-upload-state-machine
+
+# pin to only deploy with a specific Serverless version
+frameworkVersion: '2'
+
+# todo install drugin build:
+# sls plugin install -n serverless-python-requirements
+# sls plugin install -n serverless-offline
+
+# TODO layers, https://www.serverless.com/framework/docs/providers/aws/guide/layers or `serverless-layers` plugin
+
+plugins:
+  - serverless-python-requirements
+  - serverless-offline
+  
+custom:
+  # https://github.com/serverless/serverless-python-requirements
+  pythonRequirements:
+    dockerizePip: non-linux # instructs the python requirments plugin to use a docker container to package requirements
+  # serverless-offline:
+  #   useDocker: true
+  stages:
+    offline:
+      LOG_LEVEL: 'trace'
+      S3_STATIC: ${ssm:/mentorpal/v2/s3_static_arn}
+    dev:
+      LOG_LEVEL: 'trace'
+      # v2 is hardcoded, we could use fallback stages instead
+      S3_STATIC: ${ssm:/mentorpal/v2/s3_static_arn}
+    qa:
+      S3_STATIC: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
+      LOG_LEVEL: 'debug'
+    prod:
+      LOG_LEVEL: 'info'
+      S3_STATIC: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
+
+provider:
+  name: aws
+  stage: ${opt:stage, 'dev'} # stage is dev unless otherwise specified with --stage flag
+  stackTags:
+    ENVIRONMENT: ${self:provider.stage}
+    PROJECT: ${self:service}-${self:provider.stage}
+    REPOSITORY: mentor-upload
+  runtime: python3.8
+  lambdaHashingVersion: 20201221
+  tracing:
+    lambda: true
+  logRetentionInDays: 30      
+  region: us-east-1
+  environment:
+    # IS_OFFLINE: ${env:IS_OFFLINE}
+    STAGE: ${self:provider.stage}
+    PYTHON_ENV: ${self:provider.stage}
+  # iam permissions for all lambda functions
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - "s3:PutObject"
+            - "s3:GetObject"
+          Resource:
+            Fn::Join:
+              - "/"
+              - - ${self:custom.stages.${self:provider.stage}.S3_STATIC}
+                - "*"
+package:
+#  individually: false
+ patterns:
+    # exclude everything:
+     - '!./**'
+    # and then add back in only the files we need:
+     - trim.py
+     - ./binaries/ffmpeg/ffmpeg
+     - './binaries/MediaInfo_DLL_21.09_Lambda/lib/**'
+     - requirements.txt
+     - celery-short.mp4
+
+functions:
+  step_mentor-upload-fn-trim-lambda:
+    handler: trim.handler
+    memorySize: 2048 # todo benchmark to find the optimal size
+    timeout: 300
+
+#    The following are a few example events you can configure
+#    NOTE: Please make sure to change your handler code to work with those events
+#    Check the event documentation for details
+#    events:
+#      - httpApi:
+#          path: /users/create
+#          method: get
+#      - websocket: $connect
+#      - s3: ${env:BUCKET}
+#      - schedule: rate(10 minutes)
+#      - sns: greeter-topic
+#      - stream: arn:aws:dynamodb:region:XXXXXX:table/foo/stream/1970-01-01T00:00:00.000
+#      - alexaSkill: amzn1.ask.skill.xx-xx-xx-xx
+#      - alexaSmartHome: amzn1.ask.skill.xx-xx-xx-xx
+#      - iot:
+#          sql: "SELECT * FROM 'some_topic'"
+#      - cloudwatchEvent:
+#          event:
+#            source:
+#              - "aws.ec2"
+#            detail-type:
+#              - "EC2 Instance State-change Notification"
+#            detail:
+#              state:
+#                - pending
+#      - cloudwatchLog: '/aws/lambda/hello'
+#      - cognitoUserPool:
+#          pool: MyUserPool
+#          trigger: PreSignUp
+#      - alb:
+#          listenerArn: arn:aws:elasticloadbalancing:us-east-1:XXXXXX:listener/app/my-load-balancer/50dc6c495c0c9188/
+#          priority: 1
+#          conditions:
+#            host: example.com
+#            path: /hello
+
+#    Define function environment variables here
+#    environment:
+#      variable2: value2
+
+# you can add CloudFormation resource templates here
+#resources:
+#  Resources:
+#    NewResource:
+#      Type: AWS::S3::Bucket
+#      Properties:
+#        BucketName: my-new-bucket
+#  Outputs:
+#     NewOutput:
+#       Description: "Description for the output"
+#       Value: "Some output value"

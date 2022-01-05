@@ -23,3 +23,6 @@ docker-test-train-out
 htmlcov
 htmlcov
 models
+.env
+node_modules
+.serverless
