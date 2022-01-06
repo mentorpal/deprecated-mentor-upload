@@ -192,8 +192,6 @@ def video_to_audio(
     """
     log.info("%s, %s, %s", input_file, output_file, output_audio_encoding)
 
-    if not os.path.exists(input_file):
-        raise Exception(f"ERROR: Can't covert audio, {input_file} doesn't exist")
     output_file = (
         output_file or f"{os.path.splitext(input_file)[0]}.{output_audio_encoding}"
     )

@@ -3,14 +3,16 @@ import boto3
 import tempfile
 import os
 import logger
+import transcribe
 
 from media_tools import (
     video_trim,
     video_encode_for_mobile,
     video_encode_for_web,
     video_to_audio,
-    transcript_to_vtt,
-    trim_vtt_and_transcript_via_timestamps,
+)
+from api import (
+    fetch_question_name,
 )
 
 log = logger.getLogger("answer-handler")
@@ -35,7 +37,7 @@ def transcode_stage(video_file, s3_path):
     s3.upload_file(
         mobile_mp4,
         s3_bucket,
-        os.path.join(f"{s3_path}/mobile.mp4"),
+        f"{s3_path}/mobile.mp4",
         ExtraArgs={"ContentType": "video/mp4"},
     )
 
@@ -46,10 +48,56 @@ def transcode_stage(video_file, s3_path):
     s3.upload_file(
         web_mp4,
         s3_bucket,
-        os.path.join(f"{s3_path}/web.mp4"),
+        f"{s3_path}/web.mp4",
         ExtraArgs={"ContentType": "video/mp4"},
     )
-        
+
+def is_idle_question(question_id: str) -> bool:
+    name = fetch_question_name(question_id)
+    return name == "_IDLE_"
+
+def transcribe_stage(question, video_file, s3_path):
+    is_idle = is_idle_question(question)
+    audio_file = video_to_audio(video_file)
+    transcript = ""
+    subtitles = ""
+    if not is_idle:
+        log.info("transcribing %s", audio_file)
+        transcription_service = transcribe.init_transcription_service()
+        transcribe_result = transcription_service.transcribe(
+            [
+                transcribe.TranscribeJobRequest(
+                    sourceFile=audio_file, generateSubtitles=True
+                )
+            ]
+        )
+        job_result = transcribe_result.first()
+        log.info("%s transcribed", audio_file)
+        log.debug("%s", job_result)
+        transcript = job_result.transcript if job_result else ""
+        subtitles = job_result.subtitles if job_result else ""
+
+        if subtitles:
+            vtt_file = os.path.join(os.path.dirname(video_file), 'en.vtt')
+            with open(vtt_file, "w") as f:
+                f.write(subtitles)
+                # ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
+                s3.upload_file(
+                    vtt_file,
+                    s3_bucket,
+                    f"{s3_path}/en.vtt",
+                    ExtraArgs={"ContentType": "text/vtt"},
+                )
+       # TODO
+        # upload_update_answer(
+        #     AnswerUpdateRequest(
+        #         mentor=mentor,
+        #         question=question,
+        #         transcript=transcript,
+        #         media=media,
+        #         has_edited_transcript=False,
+        #     )
+        # )
 
 def handler(event, context):
     log.info(json.dumps(event))
@@ -68,6 +116,7 @@ def handler(event, context):
                 video_trim(work_file, trim_file, request['trim']['start'], request['trim']['end'])
                 work_file = trim_file # from now on work with the trimmed file
             
+            transcribe_stage(request['video'], work_file, s3_path)
             transcode_stage(work_file, s3_path)
             
             # TODO notify graphql

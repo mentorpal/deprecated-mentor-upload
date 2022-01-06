@@ -78,7 +78,12 @@ provider:
     PYTHON_ENV: ${self:provider.stage}
     S3_STATIC_ARN: ${self:custom.stages.${self:provider.stage}.S3_STATIC_ARN}
     FFMPEG_EXECUTABLE: /opt/ffmpeg/ffmpeg
-    
+    TRANSCRIBE_MODULE_PATH: transcribe_aws
+    TRANSCRIBE_AWS_REGION: ${self:provider.region}
+    TRANSCRIBE_AWS_S3_BUCKET_SOURCE: mentorpal-v2-mentorpal-transcribe-uploads
+    TRANSCRIBE_AWS_SECRET_ACCESS_KEY: 'TODO SSM'
+    TRANSCRIBE_AWS_ACCESS_KEY_ID: 'TODO SSM'
+
   # iam permissions for all lambda functions
   iam:
     role:
