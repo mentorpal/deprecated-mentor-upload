@@ -2,7 +2,8 @@
 # https://www.serverless.com/blog/definitive-guide-terraform-serverless/
 #
 # For full config options, check the docs:
-#    docs.serverless.com
+#  - docs.serverless.com
+#  - https://github.com/serverless/serverless/blob/master/docs/providers/aws/guide/serverless.yml.md
 #
 
 service: mentorpal-upload-sm
@@ -25,19 +26,19 @@ custom:
   stages:
     offline:
       LOG_LEVEL: 'trace'
-      S3_STATIC: ${ssm:/mentorpal/v2/s3_static_arn}
+      S3_STATIC_ARN: arn:aws:s3:::static-mentorpal-offline-origin
     dev:
       LOG_LEVEL: 'trace'
       # v2 is hardcoded, we could use fallback stages instead
-      S3_STATIC: ${ssm:/mentorpal/v2/s3_static_arn}
+      S3_STATIC_ARN: ${ssm:/mentorpal/v2/s3_static_arn}
     qa:
       # TODO
-      # S3_STATIC: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
+      # S3_STATIC_ARN: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
       LOG_LEVEL: 'debug'
     prod:
       LOG_LEVEL: 'info'
       # TODO
-      # S3_STATIC: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
+      # S3_STATIC_ARN: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
 
   # serverless-layers requires a deployment bucket to be created before deploying this stack
   serverless-layers:
@@ -75,6 +76,8 @@ provider:
     # IS_OFFLINE: ${env:IS_OFFLINE}
     STAGE: ${self:provider.stage}
     PYTHON_ENV: ${self:provider.stage}
+    S3_STATIC_ARN: ${self:custom.stages.${self:provider.stage}.S3_STATIC_ARN}
+    
   # iam permissions for all lambda functions
   iam:
     role:
@@ -86,7 +89,7 @@ provider:
           Resource:
             Fn::Join:
               - "/"
-              - - ${self:custom.stages.${self:provider.stage}.S3_STATIC}
+              - - ${self:custom.stages.${self:provider.stage}.S3_STATIC_ARN}
                 - "*"
 package:
 #  individually: false
@@ -95,10 +98,6 @@ package:
      - '!./**'
     # and then add back in only the files we need:
      - trim.py
-    #  - ./binaries/ffmpeg/ffmpeg
-    #  - './binaries/MediaInfo_DLL_21.09_Lambda/lib/**'
-    #  - requirements.txt
-     - celery-short.mp4
 
 layers:
   # binaries are shared and this will make lambdas size smaller

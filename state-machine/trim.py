@@ -2,12 +2,23 @@ import json
 from dataclasses import dataclass
 import logging
 from typing import List, Optional, Tuple, Union
-import math
+import boto3
 import ffmpy
 from pymediainfo import MediaInfo
 import os
 
 log = logging.getLogger("trim")
+
+
+def _require_env(n: str) -> str:
+    env_val = os.environ.get(n, "")
+    if not env_val:
+        raise EnvironmentError(f"missing required env var {n}")
+    return env_val
+
+s3_bucket = _require_env("S3_STATIC_ARN").split(':')[-1]
+log.info('using s3 bucket %s', s3_bucket)
+s3 = boto3.client("s3")
 
 def format_secs(secs: Union[float, int, str]) -> str:
     return f"{float(str(secs)):.3f}"
@@ -37,20 +48,22 @@ def find_duration(audio_or_video_file: str) -> float:
     return -1.0
 
 def handler(event, context):
-    print('full duration', find_duration('./celery-short.mp4'))
+    s3.download_file(s3_bucket, 'videos/6196af5e068d43dc686194f8/6149a443a8bc832ca8c16f41/original.mp4', '/tmp/original.mp4')
     ff = ffmpy.FFmpeg(
         executable="/opt/ffmpeg/ffmpeg",
-        inputs={str('./celery-short.mp4'): None},
-        outputs={str("/tmp/trim.mp4"): output_args_trim_video(4, 8)},
+        inputs={str('/tmp/original.mp4'): None},
+        outputs={str("/tmp/trim.mp4"): output_args_trim_video(2, 5)},
     )
     ff.run()
     log.debug(ff)
+
     body = {
-        "message": "test trim executed successfully!",
+        "message": "test trim executed successfully, duration: " + str(find_duration('/tmp/trim.mp4')),
         "input": event,
         "env": os.environ.get("PYTHON_ENV", "")
     }
     os.remove("/tmp/trim.mp4")
+    os.remove("/tmp/original.mp4")
     response = {
         "statusCode": 200,
         "body": json.dumps(body)
