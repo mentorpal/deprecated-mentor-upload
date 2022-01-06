@@ -13,15 +13,14 @@ frameworkVersion: '2'
 variablesResolutionMode: 20210326
 
 # todo install drugin build:
-# sls plugin install -n serverless-python-requirements
+# sls plugin install -n serverless-deployment-bucket
 # sls plugin install -n serverless-offline
 # sls plugin install -n serverless-layers
 
 plugins:
-  - serverless-python-requirements
+  - serverless-deployment-bucket
   - serverless-offline
-  # - serverless-layers
-
+  - serverless-layers
 custom:
   stages:
     offline:
@@ -39,20 +38,16 @@ custom:
       LOG_LEVEL: 'info'
       # TODO
       # S3_STATIC: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
-  # https://github.com/serverless/serverless-python-requirements
-  pythonRequirements:
-    dockerizePip: non-linux # instructs the python requirments plugin to use a docker container to package requirements
 
-  # todo, replace pythonRequirements with serverless-layers
-  # serverless-layers requires a deployment bucket to be created before deploying this stack (in terraform)
-  # serverless-layers:
-  #   - dependencies:
-  #       layersDeploymentBucket: '${self:service}-dependencies-${self:provider.stage}'
-  #       dependenciesPath: ./requirements.txt
-  #       compatibleRuntimes:
-  #         - python3.7
-  #         - python3.8
-  #       # applies to all lambdas
+  # serverless-layers requires a deployment bucket to be created before deploying this stack
+  serverless-layers:
+    - dependencies:
+        layersDeploymentBucket: ${self:provider.deploymentBucket.name}
+        dependenciesPath: ./requirements.txt
+        compatibleRuntimes:
+          - python3.7
+          - python3.8
+        # applies to all lambdas
 
   # serverless-offline:
   #   useDocker: true
@@ -60,6 +55,11 @@ custom:
 provider:
   name: aws
   stage: ${opt:stage, 'dev'} # stage is dev unless otherwise specified with --stage flag
+  deploymentBucket:
+    name: '${self:service}-sls-deploy-${self:provider.stage}'
+    blockPublicAccess: true
+    serverSideEncryption: AES256
+    versioning: false
   stackTags:
     ENVIRONMENT: ${self:provider.stage}
     PROJECT: ${self:service}-${self:provider.stage}
@@ -70,6 +70,7 @@ provider:
     lambda: true
   logRetentionInDays: 30      
   region: us-east-1
+  architecture: x86_64 # because of the static ffmpeg binaries and python dependencies
   environment:
     # IS_OFFLINE: ${env:IS_OFFLINE}
     STAGE: ${self:provider.stage}
@@ -96,7 +97,7 @@ package:
      - trim.py
     #  - ./binaries/ffmpeg/ffmpeg
     #  - './binaries/MediaInfo_DLL_21.09_Lambda/lib/**'
-     - requirements.txt
+    #  - requirements.txt
      - celery-short.mp4
 
 layers:
