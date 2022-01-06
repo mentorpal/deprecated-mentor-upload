@@ -77,6 +77,7 @@ provider:
     STAGE: ${self:provider.stage}
     PYTHON_ENV: ${self:provider.stage}
     S3_STATIC_ARN: ${self:custom.stages.${self:provider.stage}.S3_STATIC_ARN}
+    FFMPEG_EXECUTABLE: /opt/ffmpeg/ffmpeg
     
   # iam permissions for all lambda functions
   iam:
@@ -97,7 +98,7 @@ package:
     # exclude everything:
      - '!./**'
     # and then add back in only the files we need:
-     - trim.py
+     - '*.py'
 
 layers:
   # binaries are shared and this will make lambdas size smaller
@@ -109,7 +110,7 @@ layers:
         # relative to layer path:
         # when attached, these are available under /opt
         - ./ffmpeg/ffmpeg
-        - './MediaInfo_DLL_21.09_Lambda/lib/**'    
+        - './MediaInfo_DLL_21.09_Lambda/lib/**'
     name: binaries-layer-${self:provider.stage}
     description: Bundles ffmpeg and mediainfo binaries/libs
     compatibleArchitectures: # optional, a list of architectures this layer is compatible with
@@ -119,47 +120,10 @@ layers:
 
 functions:
   step-trim:
-    handler: trim.handler
+    handler: answer.handler
     memorySize: 2048 # todo benchmark to find the optimal size
     timeout: 300
     layers:
       # binaries gets named "Binaries"+"LambdaLayer":
       # see https://www.serverless.com/framework/docs/providers/aws/guide/layers#using-your-layers
       - { Ref: BinariesLambdaLayer }
-
-#    The following are a few example events you can configure
-#    NOTE: Please make sure to change your handler code to work with those events
-#    Check the event documentation for details
-#    events:
-#      - httpApi:
-#          path: /users/create
-#          method: get
-#      - websocket: $connect
-#      - s3: ${env:BUCKET}
-#      - schedule: rate(10 minutes)
-#      - sns: greeter-topic
-#      - stream: arn:aws:dynamodb:region:XXXXXX:table/foo/stream/1970-01-01T00:00:00.000
-#      - alexaSkill: amzn1.ask.skill.xx-xx-xx-xx
-#      - alexaSmartHome: amzn1.ask.skill.xx-xx-xx-xx
-#      - iot:
-#          sql: "SELECT * FROM 'some_topic'"
-#      - cloudwatchEvent:
-#          event:
-#            source:
-#              - "aws.ec2"
-#            detail-type:
-#              - "EC2 Instance State-change Notification"
-#            detail:
-#              state:
-#                - pending
-#      - cloudwatchLog: '/aws/lambda/hello'
-#      - cognitoUserPool:
-#          pool: MyUserPool
-#          trigger: PreSignUp
-#      - alb:
-#          listenerArn: arn:aws:elasticloadbalancing:us-east-1:XXXXXX:listener/app/my-load-balancer/50dc6c495c0c9188/
-#          priority: 1
-#          conditions:
-#            host: example.com
-#            path: /hello
-
