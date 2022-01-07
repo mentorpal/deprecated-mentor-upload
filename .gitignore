@@ -26,3 +26,5 @@ models
 .env
 node_modules
 .serverless
+scripts
+
