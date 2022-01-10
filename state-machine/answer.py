@@ -129,7 +129,7 @@ def handler(event, context):
                 work_file = trim_file  # from now on work with the trimmed file
 
             transcode_stage(work_file, s3_path)
-            transcribe_stage(request["video"], work_file, s3_path)
+            transcribe_stage(request["question"], work_file, s3_path)
 
             # TODO notify graphql
 
