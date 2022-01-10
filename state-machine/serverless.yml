@@ -101,6 +101,7 @@ provider:
               - "/"
               - - ${self:custom.stages.${self:provider.stage}.S3_STATIC_ARN}
                 - "*"
+
 package:
 #  individually: false
  patterns:
@@ -128,15 +129,81 @@ layers:
     retain: false # If true, layer versions are not deleted as new ones are created
 
 functions:
-  step-trim:
-    handler: answer.handler
+  answer-transcode-web:
+    handler: answer-transcode-web.handler
     memorySize: 8192 # 5min video takes 100sec with 2GB, 50sec with 4GB, 30sec with 8GB
     timeout: 300
     environment:
       # sensitive data, better to just add it to lambdas that really need it:
       TRANSCRIBE_AWS_SECRET_ACCESS_KEY: ${self:custom.stages.${self:provider.stage}.TRANSCRIBE_AWS_SECRET_ACCESS_KEY}
       TRANSCRIBE_AWS_ACCESS_KEY_ID: ${self:custom.stages.${self:provider.stage}.TRANSCRIBE_AWS_ACCESS_KEY_ID}
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt: [TranscodeWebQueue, Arn]
     layers:
       # binaries gets named "Binaries"+"LambdaLayer":
       # see https://www.serverless.com/framework/docs/providers/aws/guide/layers#using-your-layers
       - { Ref: BinariesLambdaLayer }
+
+
+resources:
+  Resources:
+    TranscodeWebDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        DelaySeconds: 30
+        QueueName: upload-transcode-web-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600 # max 14 days, default is 4 days
+    
+    TranscodeWebQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-sqs-queues.html
+        QueueName: upload-trancode-web-queue-${self:provider.stage}
+        VisibilityTimeout: 600 # default too low, we need to give lambdas time to finish processing
+        RedrivePolicy:
+          deadLetterTargetArn:
+            Fn::GetAtt: [TranscodeWebDLQ, Arn]
+          maxReceiveCount: 3 # try 3 times and them move to DLQ
+
+    ProcessUploadSnsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: 'mentor-upload-process-topic-${self:provider.stage}'
+        Subscription:
+          - Protocol: sqs
+            Endpoint: 
+              Fn::GetAtt: [TranscodeWebQueue, Arn]
+
+    SnsToSqsPolicy:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Sid: "Allow SNS publish to SQS"
+              Effect: Allow
+              Principal: 
+                Service: "sns.amazonaws.com"
+              Resource: 
+                Fn::GetAtt: [TranscodeWebQueue, Arn]
+              Action: SQS:SendMessage
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: 
+                    # Fn::GetAtt: [ProcessUploadSnsTopic, Arn]
+                    Ref: ProcessUploadSnsTopic
+        Queues:
+          - Ref: TranscodeWebQueue
+
+  Outputs:
+    ProcessUploadSnsTopicName:
+      Description: SNS topic name
+      Value: 
+        Fn::GetAtt: [ProcessUploadSnsTopic, TopicName]
+    ProcessUploadSnsTopicArn:
+      Description: SNS topic ARN
+      Value: 
+      # return value is ARN, so no need for Fn::GetAtt
+        Ref: ProcessUploadSnsTopic
