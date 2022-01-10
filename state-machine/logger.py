@@ -9,6 +9,7 @@ from logging.config import dictConfig
 import os
 import json
 
+
 class JSONFormatter(logging.Formatter):
     RECORD_ATTRS = [
         "name",
@@ -64,5 +65,6 @@ dictConfig(
     }
 )
 
-def getLogger(name):
+
+def get_logger(name):
     return logging.getLogger(name)

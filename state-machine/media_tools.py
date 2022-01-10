@@ -13,8 +13,11 @@ import math
 import ffmpy
 from pymediainfo import MediaInfo
 
-LIB_FILE=os.environ.get('MEDIAINFO_LIB', '/opt/MediaInfo_DLL_21.09_Lambda/lib/libmediainfo.so')
-FFMPEG_EXECUTABLE=os.environ.get('FFMPEG_EXECUTABLE', "/opt/ffmpeg/ffmpeg")
+
+LIB_FILE = os.environ.get(
+    "MEDIAINFO_LIB", "/opt/MediaInfo_DLL_21.09_Lambda/lib/libmediainfo.so"
+)
+FFMPEG_EXECUTABLE = os.environ.get("FFMPEG_EXECUTABLE", "/opt/ffmpeg/ffmpeg")
 
 log = logging.getLogger("media-tools")
 
@@ -145,7 +148,7 @@ def output_args_video_to_audio() -> Tuple[str, ...]:
 
 def video_encode_for_mobile(src_file: str, tgt_file: str, target_height=480) -> None:
     log.info("%s, %s, %s", src_file, tgt_file, target_height)
-    
+
     ff = ffmpy.FFmpeg(
         inputs={str(src_file): None},
         outputs={
@@ -209,7 +212,7 @@ def video_trim(
     input_file: str, output_file: str, start_secs: float, end_secs: float
 ) -> None:
     log.info("%s, %s, %s-%s", input_file, output_file, start_secs, end_secs)
-    # couldnt get to output to stdout like here 
+    # couldnt get to output to stdout like here
     # https://aws.amazon.com/blogs/media/processing-user-generated-content-using-aws-lambda-and-ffmpeg/
     ff = ffmpy.FFmpeg(
         inputs={str(input_file): None},
