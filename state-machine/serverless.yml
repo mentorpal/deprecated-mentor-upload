@@ -31,10 +31,16 @@ custom:
       LOG_LEVEL: 'trace'
       # v2 is hardcoded, we could use fallback stages instead
       S3_STATIC_ARN: ${ssm:/mentorpal/v2/s3_static_arn}
+      TRANSCRIBE_AWS_S3_BUCKET_SOURCE: mentorpal-v2-mentorpal-transcribe-uploads
+      TRANSCRIBE_AWS_SECRET_ACCESS_KEY: ${ssm:/mentorpal/v2/transcribe/access_key}
+      TRANSCRIBE_AWS_ACCESS_KEY_ID: ${ssm:/mentorpal/v2/transcribe/secret_key}
     qa:
       # TODO
       # S3_STATIC_ARN: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
       LOG_LEVEL: 'debug'
+      TRANSCRIBE_AWS_S3_BUCKET_SOURCE: mentorpal-v2-mentorpal-transcribe-uploads
+      TRANSCRIBE_AWS_SECRET_ACCESS_KEY: ${ssm:/mentorpal/v2/transcribe/access_key}
+      TRANSCRIBE_AWS_ACCESS_KEY_ID: ${ssm:/mentorpal/v2/transcribe/secret_key}
     prod:
       LOG_LEVEL: 'info'
       # TODO
@@ -81,8 +87,6 @@ provider:
     TRANSCRIBE_MODULE_PATH: transcribe_aws
     TRANSCRIBE_AWS_REGION: ${self:provider.region}
     TRANSCRIBE_AWS_S3_BUCKET_SOURCE: mentorpal-v2-mentorpal-transcribe-uploads
-    TRANSCRIBE_AWS_SECRET_ACCESS_KEY: 'TODO SSM'
-    TRANSCRIBE_AWS_ACCESS_KEY_ID: 'TODO SSM'
 
   # iam permissions for all lambda functions
   iam:
@@ -126,8 +130,12 @@ layers:
 functions:
   step-trim:
     handler: answer.handler
-    memorySize: 2048 # todo benchmark to find the optimal size
+    memorySize: 8192 # 5min video takes 100sec with 2GB, 50sec with 4GB, 30sec with 8GB
     timeout: 300
+    environment:
+      # sensitive data, better to just add it to lambdas that really need it:
+      TRANSCRIBE_AWS_SECRET_ACCESS_KEY: ${self:custom.stages.${self:provider.stage}.TRANSCRIBE_AWS_SECRET_ACCESS_KEY}
+      TRANSCRIBE_AWS_ACCESS_KEY_ID: ${self:custom.stages.${self:provider.stage}.TRANSCRIBE_AWS_ACCESS_KEY_ID}
     layers:
       # binaries gets named "Binaries"+"LambdaLayer":
       # see https://www.serverless.com/framework/docs/providers/aws/guide/layers#using-your-layers
