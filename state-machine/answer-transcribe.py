@@ -33,15 +33,7 @@ def transcribe_video(video_file, s3_path):
     subtitles = ""
     audio_file = video_to_audio(video_file)
     log.info("transcribing %s", audio_file)
-    transcription_service = transcribe.init_transcription_service(
-        os.environ["TRANSCRIBE_MODULE_PATH"],
-        {
-            # must provide these explicitly because lambdas have AWS_ACCESS_KEY_ID from their own account
-            "AWS_REGION": os.environ["TRANSCRIBE_AWS_REGION"],
-            "AWS_ACCESS_KEY_ID": os.environ["TRANSCRIBE_AWS_ACCESS_KEY_ID"],
-            "AWS_SECRET_ACCESS_KEY": os.environ["TRANSCRIBE_AWS_SECRET_ACCESS_KEY"],
-        },
-    )
+    transcription_service = transcribe.init_transcription_service()
     transcribe_result = transcription_service.transcribe(
         [transcribe.TranscribeJobRequest(sourceFile=audio_file, generateSubtitles=True)]
     )
