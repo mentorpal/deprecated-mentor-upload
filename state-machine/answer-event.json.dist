@@ -1,0 +1,18 @@
+{
+  "Records": [
+    {
+      "messageId": "42ff3334-1f76-42fb-aa11-212e0064b0dd",
+      "body": "{\n  \"Type\" : \"Notification\",\n  \"MessageId\" : \"b867708c-63d7-5729-8fbb-2ada02f6e74d\",\n  \"TopicArn\" : \"arn:aws:sns:us-east-1:111122223333:mentor-upload-process-topic-dev\",\n  \"Message\" : \"{\\\"request\\\":   \\n  {\\\"question\\\":6149a443a8bc832ca8c16f41\\\"\\\",\\\"video\\\":\\\"videos/6196af5e068d43dc686194f8/6149a443a8bc832ca8c16f41/original.mp4\\\"}\\n}\",\n  \"Timestamp\" : \"2022-01-10T16:29:21.320Z\" \n}",
+      "attributes": {
+        "ApproximateReceiveCount": "1",
+        "SentTimestamp": "1641832161368",
+        "ApproximateFirstReceiveTimestamp": "1641832161382"
+      },
+      "messageAttributes": {},
+      "md5OfBody": "f1a0c1e398a808fdfd08aed537418005",
+      "eventSource": "aws:sqs",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:111122223333:upload-trancode-web-queue-dev",
+      "awsRegion": "us-east-1"
+    }
+  ]
+}
