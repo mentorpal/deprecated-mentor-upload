@@ -143,6 +143,7 @@ functions:
       - sqs:
           arn:
             Fn::GetAtt: [TranscodeWebQueue, Arn]
+          batchSize: 1
     layers:
       # binaries gets named "Binaries"+"LambdaLayer":
       # see https://www.serverless.com/framework/docs/providers/aws/guide/layers#using-your-layers
@@ -156,6 +157,7 @@ functions:
       - sqs:
           arn:
             Fn::GetAtt: [TranscodeMobileQueue, Arn]
+          batchSize: 1            
     layers:
       # binaries gets named "Binaries"+"LambdaLayer":
       # see https://www.serverless.com/framework/docs/providers/aws/guide/layers#using-your-layers
@@ -168,7 +170,7 @@ functions:
     environment:
       TRANSCRIBE_MODULE_PATH: transcribe_aws
       TRANSCRIBE_AWS_REGION: ${self:provider.region}
-      TRANSCRIBE_AWS_S3_BUCKET_SOURCE: mentorpal-v2-mentorpal-transcribe-uploads
+      TRANSCRIBE_AWS_S3_BUCKET_SOURCE: ${self:custom.stages.${self:provider.stage}.TRANSCRIBE_AWS_S3_BUCKET_SOURCE}
       # sensitive data, better to just add it to lambdas that really need it:
       TRANSCRIBE_AWS_SECRET_ACCESS_KEY: ${self:custom.stages.${self:provider.stage}.TRANSCRIBE_AWS_SECRET_ACCESS_KEY}
       TRANSCRIBE_AWS_ACCESS_KEY_ID: ${self:custom.stages.${self:provider.stage}.TRANSCRIBE_AWS_ACCESS_KEY_ID}
@@ -176,6 +178,7 @@ functions:
       - sqs:
           arn:
             Fn::GetAtt: [TranscribeQueue, Arn]
+          batchSize: 1
     layers:
       # binaries gets named "Binaries"+"LambdaLayer":
       # see https://www.serverless.com/framework/docs/providers/aws/guide/layers#using-your-layers
