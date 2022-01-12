@@ -280,6 +280,14 @@ resources:
           - Ref: TranscodeMobileQueue
           - Ref: TranscribeQueue
 
+    ProcessUploadSnsTopicArn:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Name: /mentorpal/${self:provider.stage}/shared/upload_sns_arn
+        Type: String
+        Value: 
+          Ref: ProcessUploadSnsTopic
+
   Outputs:
     ProcessUploadSnsTopicName:
       Description: SNS topic name
