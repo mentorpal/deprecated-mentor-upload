@@ -4,6 +4,10 @@ import tempfile
 import os
 import logger
 from media_tools import video_encode_for_mobile
+from api import (
+    upload_task_status_update,
+    UpdateTaskStatusRequest,
+)
 
 
 log = logger.get_logger("answer-transcode-mobile-handler")
@@ -41,6 +45,11 @@ def handler(event, context):
     for record in event["Records"]:
         body = json.loads(str(record["body"]))
         request = json.loads(str(body["Message"]))["request"]
+        task_list = request["task_list"]
+        task = next(filter(lambda t: t["task_name"] == "transcoding-mobile", task_list))
+        if not task:
+            log.warning("no transcoding-mobile task requested")
+            return
         log.info("video to process %s", request["video"])
         with tempfile.TemporaryDirectory() as work_dir:
             work_file = os.path.join(work_dir, "original.mp4")
@@ -50,12 +59,29 @@ def handler(event, context):
             )  # same 'folder' as original file
             log.info("%s downloaded to %s", request["video"], work_dir)
 
+            upload_task_status_update(
+                UpdateTaskStatusRequest(
+                    mentor=request["mentor"],
+                    question=request["question"],
+                    task_id=task["task_id"],
+                    new_status="IN_PROGRESS",
+                )
+            )
+
             transcode_mobile(work_file, s3_path)
 
-            # TODO notify graphql
-
-
-# if __name__ == "__main__":
-#     with open('./answer.event.json.dist','r') as f:
-#         e = json.loads(f.read())
-#         handler(e,{})
+            upload_task_status_update(
+                UpdateTaskStatusRequest(
+                    mentor=request["mentor"],
+                    question=request["question"],
+                    task_id=task["task_id"],
+                    new_status="DONE",
+                    media=[
+                        {
+                            "type": "video",
+                            "tag": "mobile",
+                            "url": f"{s3_path}/mobile.mp4",
+                        }
+                    ],
+                )
+            )

@@ -5,7 +5,13 @@ import os
 import logger
 import transcribe
 from media_tools import video_to_audio
-from api import fetch_question_name
+from api import (
+    fetch_question_name,
+    upload_task_status_update,
+    upload_update_answer,
+    AnswerUpdateRequest,
+    UpdateTaskStatusRequest,
+)
 
 
 log = logger.get_logger("answer-transcribe-handler")
@@ -28,7 +34,7 @@ def is_idle_question(question_id: str) -> bool:
     return name == "_IDLE_"
 
 
-def transcribe_video(video_file, s3_path):
+def transcribe_video(mentor, question, video_file, s3_path):
     transcript = ""
     subtitles = ""
     audio_file = video_to_audio(video_file)
@@ -47,23 +53,21 @@ def transcribe_video(video_file, s3_path):
         vtt_file = os.path.join(os.path.dirname(video_file), "en.vtt")
         with open(vtt_file, "w") as f:
             f.write(subtitles)
-            # ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
             s3.upload_file(
                 vtt_file,
                 s3_bucket,
                 f"{s3_path}/en.vtt",
                 ExtraArgs={"ContentType": "text/vtt"},
             )
-    # TODO
-    # upload_update_answer(
-    #     AnswerUpdateRequest(
-    #         mentor=mentor,
-    #         question=question,
-    #         transcript=transcript,
-    #         media=media,
-    #         has_edited_transcript=False,
-    #     )
-    # )
+    upload_update_answer(
+        AnswerUpdateRequest(
+            mentor=mentor,
+            question=question,
+            transcript=transcript,
+            # media=media, we dont have all the media here
+            has_edited_transcript=False,
+        )
+    )
 
 
 def handler(event, context):
@@ -71,11 +75,32 @@ def handler(event, context):
     for record in event["Records"]:
         body = json.loads(str(record["body"]))
         request = json.loads(str(body["Message"]))["request"]
-        is_idle = is_idle_question(request["question"])
+        task_list = request["task_list"]
+        task = next(filter(lambda t: t["task_name"] == "transcoding-web", task_list))
+        if not task:
+            log.warning("transcribe task not requested")
+            return
 
+        is_idle = is_idle_question(request["question"])
         if is_idle:
             log.info("question is idle, nothing to transcribe")
+            upload_task_status_update(
+                UpdateTaskStatusRequest(
+                    mentor=request["mentor"],
+                    question=request["question"],
+                    task_id=task["task_id"],
+                    new_status="DONE",
+                )
+            )
             return
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=request["mentor"],
+                question=request["question"],
+                task_id=task["task_id"],
+                new_status="IN_PROGRESS",
+            )
+        )
 
         log.info("video to process %s", request["video"])
         with tempfile.TemporaryDirectory() as work_dir:
@@ -86,6 +111,20 @@ def handler(event, context):
             )  # same 'folder' as original file
             log.info("%s downloaded to %s", request["video"], work_dir)
 
-            transcribe_video(work_file, s3_path)
+            transcribe_video(request["mentor"], request["question"], work_file, s3_path)
 
-            # TODO notify graphql
+            upload_task_status_update(
+                UpdateTaskStatusRequest(
+                    mentor=request["mentor"],
+                    question=request["question"],
+                    task_id=task["task_id"],
+                    new_status="DONE",
+                    media=[
+                        {
+                            "type": "subtitles",
+                            "tag": "en",
+                            "url": f"{s3_path}/en.vtt",
+                        }
+                    ],
+                )
+            )
