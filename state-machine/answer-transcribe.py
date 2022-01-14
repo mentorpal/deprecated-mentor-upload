@@ -34,7 +34,7 @@ def is_idle_question(question_id: str) -> bool:
     return name == "_IDLE_"
 
 
-def transcribe_video(mentor, question, video_file, s3_path):
+def transcribe_video(mentor, question, task_id, video_file, s3_path):
     transcript = ""
     subtitles = ""
     audio_file = video_to_audio(video_file)
@@ -59,12 +59,27 @@ def transcribe_video(mentor, question, video_file, s3_path):
                 f"{s3_path}/en.vtt",
                 ExtraArgs={"ContentType": "text/vtt"},
             )
+    upload_task_status_update(
+        UpdateTaskStatusRequest(
+            mentor=mentor,
+            question=question,
+            task_id=task_id,
+            new_status="DONE",
+            media=[
+                {
+                    "type": "subtitles",
+                    "tag": "en",
+                    "url": f"{s3_path}/en.vtt",
+                }
+            ],
+        )
+    )
     upload_update_answer(
         AnswerUpdateRequest(
             mentor=mentor,
             question=question,
             transcript=transcript,
-            # media=media, we dont have all the media here
+            media=[], # this is used only if transfer is required
             has_edited_transcript=False,
         )
     )
@@ -76,7 +91,7 @@ def handler(event, context):
         body = json.loads(str(record["body"]))
         request = json.loads(str(body["Message"]))["request"]
         task_list = request["task_list"]
-        task = next(filter(lambda t: t["task_name"] == "transcoding-web", task_list))
+        task = next(filter(lambda t: t["task_name"] == "transcribing", task_list))
         if not task:
             log.warning("transcribe task not requested")
             return
@@ -111,20 +126,4 @@ def handler(event, context):
             )  # same 'folder' as original file
             log.info("%s downloaded to %s", request["video"], work_dir)
 
-            transcribe_video(request["mentor"], request["question"], work_file, s3_path)
-
-            upload_task_status_update(
-                UpdateTaskStatusRequest(
-                    mentor=request["mentor"],
-                    question=request["question"],
-                    task_id=task["task_id"],
-                    new_status="DONE",
-                    media=[
-                        {
-                            "type": "subtitles",
-                            "tag": "en",
-                            "url": f"{s3_path}/en.vtt",
-                        }
-                    ],
-                )
-            )
+            transcribe_video(request["mentor"], request["question"], task["task_id"], work_file, s3_path)

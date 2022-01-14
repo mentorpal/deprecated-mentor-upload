@@ -206,7 +206,6 @@ def upload_task_status_req_gql(req: UpdateTaskStatusRequest) -> GQLQueryBody:
 
 
 def upload_task_status_update(req: UpdateTaskStatusRequest) -> None:
-    # return None
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = upload_task_status_req_gql(req)
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
