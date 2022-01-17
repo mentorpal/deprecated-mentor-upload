@@ -79,7 +79,7 @@ def transcribe_video(mentor, question, task_id, video_file, s3_path):
             mentor=mentor,
             question=question,
             transcript=transcript,
-            media=[], # this is used only if transfer is required
+            media=[],  # this is used only if transfer is required
             has_edited_transcript=False,
         )
     )
@@ -126,4 +126,10 @@ def handler(event, context):
             )  # same 'folder' as original file
             log.info("%s downloaded to %s", request["video"], work_dir)
 
-            transcribe_video(request["mentor"], request["question"], task["task_id"], work_file, s3_path)
+            transcribe_video(
+                request["mentor"],
+                request["question"],
+                task["task_id"],
+                work_file,
+                s3_path,
+            )
