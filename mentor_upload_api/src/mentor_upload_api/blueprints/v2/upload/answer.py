@@ -32,7 +32,7 @@ def _require_env(n: str) -> str:
 
 static_s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
 log.info("using s3 bucket %s", static_s3_bucket)
-s3 = boto3.client("s3")
+s3_client = boto3.client("s3")
 sns = boto3.client('sns', region_name=os.environ.get('STATIC_AWS_REGION'))
 ssm = boto3.client('ssm',  region_name=os.environ.get('STATIC_AWS_REGION'))
 
@@ -79,6 +79,8 @@ def video_trim(
 @answer_blueprint.route("", methods=["POST"])
 def upload():
     log.info("%s", {"files": request.files, "body": request.form.get("body")})
+    # TODO reject request if there's already a job in progress
+
     # request.form contains the entire video encoded, dont want all that in the logs:
     # req_log.info(request.form(as_text=True)[:300])
     body = json.loads(request.form.get("body", "{}"))
@@ -119,35 +121,43 @@ def upload():
 
     s3_path = f'videos/{mentor}/{question}'
     log.info("uploading %s to %s", file_path, s3_path)
+    # to prevent data inconsistency by partial failures (new web.mp3 - old transcript...)
+    all_artifacts = ['original.mp4','web.mp4','mobile.mp4','en.vtt']
+    s3_client.delete_objects(Bucket=static_s3_bucket,
+        Delete={'Objects': [{'Key': f'{s3_path}/{name}'} for name in all_artifacts]}
+    )
     
-    s3.upload_file(
+    s3_client.upload_file(
         file_path,
         static_s3_bucket,
         f"{s3_path}/original.mp4",
         ExtraArgs={"ContentType": "video/mp4"},
     )
-    task_list = [
-        {
+
+    task_list = []
+    if trim:
+        task_list.append({
             "task_name": "trim_upload",
             "task_id": str(uuid.uuid4()),
             "status": "DONE",
-        },
-        {
+        })
+
+    task_list.append({
             "task_name": "transcoding-web",
             "task_id": str(uuid.uuid4()),
             "status": "QUEUED",
-        },
-        {
+    })
+    task_list.append({
             "task_name": "transcoding-mobile",
             "task_id": str(uuid.uuid4()),
             "status": "QUEUED",
-        },
-        {
+    })
+    task_list.append({
             "task_name": "transcribing",
             "task_id": str(uuid.uuid4()),
             "status": "QUEUED",
-        },
-    ]
+    })
+
     req = {
         "request": {
             "mentor": mentor,
