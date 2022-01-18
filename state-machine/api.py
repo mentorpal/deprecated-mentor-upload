@@ -121,7 +121,14 @@ def upload_answer_and_task_status_req_gql(
     variables = {}
     variables["mentorId"] = answer_req.mentor
     variables["questionId"] = answer_req.question
-    variables["answer"] = answer_req.new_status
+
+    variables["answer"] = {
+        "transcript": answer_req.transcript,
+        "media": answer_req.media,
+    }
+    if answer_req.has_edited_transcript is not None:
+        variables["answer"]["hasEditedTranscript"] = answer_req.has_edited_transcript
+
     variables["taskId"] = status_req.task_id
     variables["newStatus"] = status_req.new_status
     if status_req.transcript:
@@ -129,7 +136,7 @@ def upload_answer_and_task_status_req_gql(
     if status_req.media:
         variables["media"] = status_req.media
     return {
-        "query": """mutation UpdateUploadAnswerAndTaskStatus($mentorId: ID!, $questionId: ID!, $taskId: String!, $newStatus: String!, $transcript: String, $media: [AnswerMediaInputType]) {
+        "query": """mutation UpdateUploadAnswerAndTaskStatus($mentorId: ID!, $questionId: ID!, $answer: UploadAnswerType!, $taskId: String!, $newStatus: String!, $transcript: String, $media: [AnswerMediaInputType]) {
             api {
                 uploadAnswer(mentorId: $mentorId, questionId: $questionId, answer: $answer)
                 uploadTaskStatusUpdate(mentorId: $mentorId, questionId: $questionId, taskId: $taskId, newStatus: $newStatus, transcript: $transcript, media: $media)
