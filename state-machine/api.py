@@ -110,10 +110,10 @@ def upload_answer_and_task_status_req_gql(
 
 
 def upload_answer_and_task_status_update(
-    answerReq: AnswerUpdateRequest, statusReq: UpdateTaskStatusRequest
+    answer_req: AnswerUpdateRequest, status_req: UpdateTaskStatusRequest
 ) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
-    body = upload_answer_and_task_status_req_gql(answerReq, statusReq)
+    body = upload_answer_and_task_status_req_gql(answer_req, status_req)
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
     res.raise_for_status()
     tdjson = res.json()
