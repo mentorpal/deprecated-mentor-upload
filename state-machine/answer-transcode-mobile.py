@@ -99,6 +99,7 @@ def handler(event, context):
                 AnswerUpdateRequest(
                     mentor=request["mentor"],
                     question=request["question"],
+                    transcript="",
                     media=media,
                 ),
                 UpdateTaskStatusRequest(
