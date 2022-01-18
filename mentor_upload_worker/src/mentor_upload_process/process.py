@@ -6,6 +6,7 @@
 #
 from contextlib import contextmanager
 from datetime import datetime
+import logging
 
 from os import environ, path, makedirs, remove
 from pathlib import Path
@@ -13,7 +14,6 @@ from tempfile import mkdtemp
 from shutil import copyfile, rmtree
 from typing import List, Tuple
 import urllib.request
-
 
 import boto3
 from boto3_type_annotations.s3 import Client as S3Client
@@ -51,6 +51,8 @@ from .api import (
     fetch_text_from_url,
 )
 
+log = logging.getLogger("upload-worker-process")
+
 
 def upload_path(p: str) -> str:
     return path.join(environ.get("UPLOADS") or "./uploads", p)
@@ -64,6 +66,7 @@ def _require_env(n: str) -> str:
 
 
 def _create_s3_client() -> S3Client:
+    log.info("creating new S3 client")
     return boto3.client(
         "s3",
         region_name=_require_env("STATIC_AWS_REGION"),
@@ -84,18 +87,18 @@ def _video_work_dir(source_path: str):
     makedirs(media_work_dir)
     video_file = media_work_dir / path.basename(source_path)
     copyfile(source_path, video_file)
+    log.debug("working video: %s", video_file)
     yield (video_file, media_work_dir)
 
 
 @contextmanager
 def _delete_video_work_dir(work_dir: str):
     try:
+        log.debug(work_dir)
         rmtree(str(work_dir))
     except Exception as x:
-        import logging
-
-        logging.error(f"failed to delete media work dir {work_dir}")
-        logging.exception(x)
+        log.error(f"failed to delete media work dir {work_dir}")
+        log.exception(x)
 
 
 @contextmanager
@@ -105,15 +108,15 @@ def _trimming_work_dir():
     )
     try:
         makedirs(media_work_dir)
+        log.debug("%s created", media_work_dir)
         yield media_work_dir
     finally:
         try:
+            log.debug("removing %s", media_work_dir)
             rmtree(str(media_work_dir))
         except Exception as x:
-            import logging
-
-            logging.error(f"failed to delete media work dir {media_work_dir}")
-            logging.exception(x)
+            log.error(f"failed to delete media work dir {media_work_dir}")
+            log.exception(x)
 
 
 def cancel_task(req: CancelTaskRequest) -> CancelTaskResponse:
@@ -251,6 +254,7 @@ def extract_params_for_transcode_transcribe_stages(
 
 def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
     params = extract_params_for_transcode_transcribe_stages(dict_tuple, req, task_id)
+    log.info(params)
     try:
         mentor = params.get("mentor")
         question = params.get("question")
@@ -291,6 +295,7 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                         "url": item_path,
                     }
                 )
+                log.debug("uploading %s to %s", item_path, s3_bucket)
                 s3.upload_file(
                     str(file),
                     s3_bucket,
@@ -298,9 +303,7 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                     ExtraArgs={"ContentType": content_type},
                 )
             else:
-                import logging
-
-                logging.error(f"Failed to find file at {file}")
+                log.error(f"Failed to find file at {file}")
 
         upload_task_status_update(
             UpdateTaskStatusRequest(
@@ -316,9 +319,7 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
             "work_dir": str(work_dir),
         }
     except Exception as x:
-        import logging
-
-        logging.exception(x)
+        log.exception(x)
         _delete_video_work_dir(work_dir)
         upload_task_status_update(
             UpdateTaskStatusRequest(
@@ -332,6 +333,7 @@ def transcode_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
 
 def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
     params = extract_params_for_transcode_transcribe_stages(dict_tuple, req, task_id)
+    log.info(params)
     try:
         mentor = params.get("mentor")
         question = params.get("question")
@@ -350,6 +352,7 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                     new_status="IN_PROGRESS",
                 )
             )
+            log.info("transcribing %s", audio_file)
             transcription_service = transcribe.init_transcription_service()
             transcribe_result = transcription_service.transcribe(
                 [
@@ -359,6 +362,8 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
                 ]
             )
             job_result = transcribe_result.first()
+            log.info("%s transcribed", audio_file)
+            log.debug("%s", job_result)
             transcript = job_result.transcript if job_result else ""
             subtitles = job_result.subtitles if job_result else ""
         upload_task_status_update(
@@ -371,18 +376,18 @@ def transcribe_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
         )
         return {"transcript": transcript, "subtitles": subtitles}
     except Exception as x:
-        import logging
-
-        logging.exception(x)
-        _delete_video_work_dir(work_dir)
-        upload_task_status_update(
-            UpdateTaskStatusRequest(
-                mentor=mentor,
-                question=question,
-                task_id=task_id,
-                new_status="FAILED",
+        log.exception(x)
+        try:
+            upload_task_status_update(
+                UpdateTaskStatusRequest(
+                    mentor=mentor,
+                    question=question,
+                    task_id=task_id,
+                    new_status="FAILED",
+                )
             )
-        )
+        finally:
+            _delete_video_work_dir(work_dir)
 
 
 def extract_params_for_finalization_stage(
@@ -448,6 +453,7 @@ def get_video_and_vtt_file_paths(work_dir: str):
 
 def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str):
     params = extract_params_for_finalization_stage(dict_tuple, req, task_id)
+    log.info(params)
     mentor = params.get("mentor")
     question = params.get("question")
     work_dir = Path(params.get("work_dir"))
@@ -475,10 +481,8 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
                     ("subtitles", "en", "en.vtt", "text/vtt", vtt_file)
                 )
             except Exception as vtt_err:
-                import logging
-
-                logging.error(f"Failed to create vtt file at {vtt_file}")
-                logging.exception(vtt_err)
+                log.error(f"Failed to create vtt file at {vtt_file}")
+                log.exception(vtt_err)
 
         if media_uploads:
             s3 = _create_s3_client()
@@ -501,9 +505,8 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
                         ExtraArgs={"ContentType": content_type},
                     )
                 else:
-                    import logging
+                    log.error(f"Failed to find file at {file}")
 
-                    logging.error(f"Failed to find file at {file}")
         upload_update_answer(
             AnswerUpdateRequest(
                 mentor=mentor,
@@ -525,9 +528,7 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
         )
         return ProcessAnswerResponse(**params)
     except Exception as x:
-        import logging
-
-        logging.exception(x)
+        log.exception(x)
         _delete_video_work_dir(work_dir)
         upload_task_status_update(
             UpdateTaskStatusRequest(
@@ -545,10 +546,8 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest, task_id: str
             _delete_video_work_dir(work_dir)
             remove(video_path_full)
         except Exception as x:
-            import logging
-
-            logging.error(f"failed to delete uploaded video file '{video_path_full}'")
-            logging.exception(x)
+            log.error(f"failed to delete uploaded video file '{video_path_full}'")
+            log.exception(x)
 
 
 def trim_existing_upload(req: TrimExistingUploadRequest, task_id: str):
@@ -638,9 +637,7 @@ def trim_existing_upload(req: TrimExistingUploadRequest, task_id: str):
                             ExtraArgs={"ContentType": content_type},
                         )
                     else:
-                        import logging
-
-                        logging.error(f"Failed to find file at {file}")
+                        log.error(f"Failed to find file at {file}")
 
             upload_update_answer(
                 AnswerUpdateRequest(
@@ -662,8 +659,8 @@ def trim_existing_upload(req: TrimExistingUploadRequest, task_id: str):
             )
             return {"trim_existing_upload": True}
         except Exception as x:
-            import logging
-
+            log.error("failed to trim video")
+            log.exception(x)
             upload_task_status_update(
                 UpdateTaskStatusRequest(
                     mentor=mentor,
@@ -674,9 +671,6 @@ def trim_existing_upload(req: TrimExistingUploadRequest, task_id: str):
                     media=answer_media,
                 )
             )
-
-            logging.error("failed to trim video")
-            logging.exception(x)
 
 
 def regen_vtt(req: RegenVTTRequest):
@@ -720,20 +714,17 @@ def regen_vtt(req: RegenVTTRequest):
                         ExtraArgs={"ContentType": content_type},
                     )
                 else:
-                    import logging
+                    log.error(f"Failed to find file at {file}")
 
-                    logging.error(f"Failed to find file at {file}")
             update_media(
                 MediaUpdateRequest(mentor=mentor, question=question, media=new_media[0])
             )
             return {"regen_vtt": True}
         except Exception as x:
-            import logging
-
-            logging.error(
+            log.error(
                 f"failed to regenerate vtt for mentor {mentor} and question {question}"
             )
-            logging.exception(x)
+            log.exception(x)
             return {"regen_vtt": False}
 
 
@@ -788,9 +779,7 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                     MediaUpdateRequest(mentor=mentor, question=question, media=m)
                 )
             except Exception as x:
-                import logging
-
-                logging.exception(x)
+                log.exception(x)
                 upload_task_status_update(
                     UpdateTaskStatusRequest(
                         mentor=mentor,
@@ -805,10 +794,8 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                 try:
                     remove(file_path)
                 except Exception as x:
-                    import logging
-
-                    logging.error(f"failed to delete file '{file_path}'")
-                    logging.exception(x)
+                    log.error(f"failed to delete file '{file_path}'")
+                    log.exception(x)
     upload_task_status_update(
         UpdateTaskStatusRequest(
             mentor=mentor,

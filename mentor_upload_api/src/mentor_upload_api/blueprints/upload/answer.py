@@ -5,15 +5,12 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
-from logging import exception
-
+import logging
+import uuid
 from os import environ, path, makedirs, listdir, remove, scandir
 from datetime import datetime
 from dateutil import tz
-import uuid
-
 from flask import Blueprint, jsonify, request, send_from_directory
-
 from celery import group, chord
 
 from mentor_upload_api.api import (
@@ -23,6 +20,8 @@ from mentor_upload_api.api import (
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
+log = logging.getLogger("answer")
+req_log = logging.getLogger("request")
 answer_blueprint = Blueprint("answer", __name__)
 
 
@@ -68,6 +67,7 @@ def begin_tasks_in_parallel(req):
 @answer_blueprint.route("/trim_existing_upload/", methods=["POST"])
 @answer_blueprint.route("/trim_existing_upload", methods=["POST"])
 def trim_existing_upload():
+    req_log.info("trim existing, body: [%s]", request.form.get("body"))
     body = json.loads(request.form.get("body", "{}"))
     if not body:
         raise Exception("missing required param body")
@@ -109,16 +109,31 @@ def trim_existing_upload():
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
 def upload():
+    log.info("%s", {"files": request.files, "body": request.form.get("body")})
+    # request.form contains the entire video encoded, dont want all that in the logs:
+    # req_log.info(request.form(as_text=True)[:300])
     body = json.loads(request.form.get("body", "{}"))
     if not body:
         raise Exception("missing required param body")
     mentor = body.get("mentor")
     question = body.get("question")
+    if not mentor or not question:
+        raise Exception("missing required param - mentor/question")
     trim = body.get("trim")
     upload_file = request.files["video"]
     root_ext = path.splitext(upload_file.filename)
     file_name = f"{uuid.uuid4()}-{mentor}-{question}{root_ext[1]}"
     file_path = path.join(get_upload_root(), file_name)
+    log.info(
+        "%s",
+        {
+            "trim": trim,
+            "file": upload_file,
+            "ext": root_ext,
+            "file_name": file_name,
+            "path": file_path,
+        },
+    )
     makedirs(get_upload_root(), exist_ok=True)
     upload_file.save(file_path)
     req = {
@@ -205,8 +220,6 @@ def mounted_files():
             }
         }
     except Exception as x:
-        import logging
-
         logging.error("failed to fetch files from upload directory")
         logging.exception(x)
 
@@ -219,8 +232,6 @@ def remove_mounted_file(file_name: str):
         remove(file_path)
         return {"data": {"fileRemoved": True}}
     except Exception as x:
-        import logging
-
         logging.error(f"failed to remove file {file_name} from uploads directory")
         logging.exception(x)
         return {"data": {"fileRemoved": False}}
@@ -233,14 +244,13 @@ def download_mounted_file(file_name: str):
         file_directory = get_upload_root()
         return send_from_directory(file_directory, file_name, as_attachment=True)
     except Exception as x:
-        import logging
-
         logging.error(
             f"failed to find video file {file_name} in folder {file_directory}"
         )
         logging.exception(x)
 
 
+# why not glob *-{mentor}-{question}.mp4
 def full_video_file_name_from_directory(
     mentor: str, question: str, file_directory: str
 ):
@@ -267,8 +277,6 @@ def download_video(mentor: str, question: str):
         )
         return send_from_directory(file_directory, file_name, as_attachment=True)
     except Exception as x:
-        import logging
-
         logging.error(
             f"failed to find video file for mentor: {mentor} and question: {question} in folder {file_directory}"
         )
@@ -311,9 +319,8 @@ def task_status(task_name: str, task_id: str):
     elif task_name == "finalization":
         t = mentor_upload_tasks.tasks.finalization_stage.AsyncResult(task_id)
     else:
-        import logging
-
-        logging.exception("unrecognized task_name")
+        logging.error(f"unrecognized task_name: {task_name}, id: {task_id}")
+        raise Exception(f"unrecognized task_name: {task_name}")
 
     return jsonify(
         {

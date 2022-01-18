@@ -5,20 +5,24 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from dataclasses import dataclass
+import logging
 import os
 import re
 from typing import List, Optional, Tuple, Union
 import math
-
 import ffmpy
 from pymediainfo import MediaInfo
 
+log = logging.getLogger("media-tools")
+
 
 def find_duration(audio_or_video_file: str) -> float:
+    log.info(audio_or_video_file)
     media_info = MediaInfo.parse(audio_or_video_file)
     for t in media_info.tracks:
         if t.track_type in ["Video", "Audio"]:
             try:
+                log.debug(t)
                 return float(t.duration / 1000)
             except Exception:
                 pass
@@ -26,8 +30,10 @@ def find_duration(audio_or_video_file: str) -> float:
 
 
 def find_video_dims(video_file: str) -> Tuple[int, int]:
+    log.info(video_file)
     media_info = MediaInfo.parse(video_file)
     video_tracks = [t for t in media_info.tracks if t.track_type == "Video"]
+    log.debug(video_tracks)
     return (
         (video_tracks[0].width, video_tracks[0].height)
         if len(video_tracks) >= 1
@@ -135,6 +141,7 @@ def output_args_video_to_audio() -> Tuple[str, ...]:
 
 
 def video_encode_for_mobile(src_file: str, tgt_file: str, target_height=480) -> None:
+    log.info("%s, %s, %s", src_file, tgt_file, target_height)
     os.makedirs(os.path.dirname(tgt_file), exist_ok=True)
     ff = ffmpy.FFmpeg(
         inputs={str(src_file): None},
@@ -145,11 +152,13 @@ def video_encode_for_mobile(src_file: str, tgt_file: str, target_height=480) -> 
         },
     )
     ff.run()
+    log.debug(ff)
 
 
 def video_encode_for_web(
     src_file: str, tgt_file: str, max_height=720, target_aspect=1.77777777778
 ) -> None:
+    log.info("%s, %s, %s, %s", src_file, tgt_file, max_height, target_aspect)
     os.makedirs(os.path.dirname(tgt_file), exist_ok=True)
     ff = ffmpy.FFmpeg(
         inputs={str(src_file): None},
@@ -160,6 +169,7 @@ def video_encode_for_web(
         },
     )
     ff.run()
+    log.debug(ff)
 
 
 def video_to_audio(
@@ -175,6 +185,8 @@ def video_to_audio(
 
     Returns: path to the new audio file
     """
+    log.info("%s, %s, %s", input_file, output_file, output_audio_encoding)
+
     if not os.path.exists(input_file):
         raise Exception(f"ERROR: Can't covert audio, {input_file} doesn't exist")
     output_file = (
@@ -185,12 +197,14 @@ def video_to_audio(
         outputs={str(output_file): output_args_video_to_audio()},
     )
     ff.run()
+    log.debug(ff)
     return output_file
 
 
 def video_trim(
     input_file: str, output_file: str, start_secs: float, end_secs: float
 ) -> None:
+    log.info("%s, %s, %s-%s", input_file, output_file, start_secs, end_secs)
     if not os.path.exists(input_file):
         raise Exception(f"ERROR: Can't trim, {input_file} doesn't exist")
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -199,17 +213,20 @@ def video_trim(
         outputs={str(output_file): output_args_trim_video(start_secs, end_secs)},
     )
     ff.run()
+    log.debug(ff)
 
 
 def existing_video_trim(
     input_file: str, output_file: str, start_secs: float, end_secs: float
 ) -> None:
+    log.info("%s, %s, %s-%s", input_file, output_file, start_secs, end_secs)
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     ff = ffmpy.FFmpeg(
         inputs={str(input_file): None},
         outputs={str(output_file): output_args_trim_video(start_secs, end_secs)},
     )
     ff.run()
+    log.debug(ff)
 
 
 def find(
@@ -221,6 +238,8 @@ def find(
 def transcript_to_vtt(
     audio_or_video_file_or_url: str, vtt_file: str, transcript: str
 ) -> str:
+    log.info("%s, %s, %s", audio_or_video_file_or_url, vtt_file, transcript)
+
     if not os.path.exists(audio_or_video_file_or_url) and not re.search(
         "^https?", audio_or_video_file_or_url
     ):
@@ -228,10 +247,9 @@ def transcript_to_vtt(
             f"ERROR: Can't generate vtt, {audio_or_video_file_or_url} doesn't exist or is not a valid url"
         )
     duration = find_duration(audio_or_video_file_or_url)
+    log.debug(duration)
     if duration <= 0:
-        import logging
-
-        logging.warning(f"video duration for {audio_or_video_file_or_url} returned 0")
+        log.warning(f"video duration for {audio_or_video_file_or_url} returned 0")
         return ""
     piece_length = 68
     word_indexes = find(transcript, " ")
@@ -242,7 +260,9 @@ def transcript_to_vtt(
                 split_index.append(word_indexes[el])
                 break
     split_index.append(len(transcript))
+    log.debug(split_index)
     amount_of_chunks = math.ceil(len(transcript) / piece_length)
+    log.debug(amount_of_chunks)
     vtt_str = "WEBVTT FILE:\n\n"
     for j in range(len(split_index) - 1):  # this uses a constant piece length
         seconds_start = round((duration / amount_of_chunks) * j, 2) + 0.85
@@ -262,6 +282,7 @@ def transcript_to_vtt(
     os.makedirs(os.path.dirname(vtt_file), exist_ok=True)
     with open(vtt_file, "w") as f:
         f.write(vtt_str)
+    log.debug(vtt_str)
     return vtt_str
 
 
