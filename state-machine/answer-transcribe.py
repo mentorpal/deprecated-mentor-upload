@@ -48,7 +48,7 @@ def transcribe_video(mentor, question, task_id, video_file, s3_path):
     log.debug("%s", job_result)
     transcript = job_result.transcript if job_result else ""
     subtitles = job_result.subtitles if job_result else ""
-
+    media = []
     if subtitles:
         vtt_file = os.path.join(os.path.dirname(video_file), "en.vtt")
         with open(vtt_file, "w") as f:
@@ -59,28 +59,24 @@ def transcribe_video(mentor, question, task_id, video_file, s3_path):
                 f"{s3_path}/en.vtt",
                 ExtraArgs={"ContentType": "text/vtt"},
             )
+        media = []
+
+    upload_update_answer(
+        AnswerUpdateRequest(
+            mentor=mentor,
+            question=question,
+            transcript=transcript,
+            media=media,
+            has_edited_transcript=False,
+        )
+    )
     upload_task_status_update(
         UpdateTaskStatusRequest(
             mentor=mentor,
             question=question,
             task_id=task_id,
             new_status="DONE",
-            media=[
-                {
-                    "type": "subtitles",
-                    "tag": "en",
-                    "url": f"{s3_path}/en.vtt",
-                }
-            ],
-        )
-    )
-    upload_update_answer(
-        AnswerUpdateRequest(
-            mentor=mentor,
-            question=question,
-            transcript=transcript,
-            media=[],  # this is used only if transfer is required
-            has_edited_transcript=False,
+            media=media,
         )
     )
 

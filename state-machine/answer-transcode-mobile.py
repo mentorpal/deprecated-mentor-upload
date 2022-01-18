@@ -7,6 +7,8 @@ from media_tools import video_encode_for_mobile
 from api import (
     upload_task_status_update,
     UpdateTaskStatusRequest,
+    upload_update_answer,
+    AnswerUpdateRequest,
 )
 
 
@@ -70,18 +72,26 @@ def handler(event, context):
 
             transcode_mobile(work_file, s3_path)
 
+            media = [
+                {
+                    "type": "video",
+                    "tag": "mobile",
+                    "url": f"{s3_path}/mobile.mp4",
+                }
+            ]
+            upload_update_answer(
+                AnswerUpdateRequest(
+                    mentor=request["mentor"],
+                    question=request["question"],
+                    media=media,
+                )
+            )
             upload_task_status_update(
                 UpdateTaskStatusRequest(
                     mentor=request["mentor"],
                     question=request["question"],
                     task_id=task["task_id"],
                     new_status="DONE",
-                    media=[
-                        {
-                            "type": "video",
-                            "tag": "mobile",
-                            "url": f"{s3_path}/mobile.mp4",
-                        }
-                    ],
+                    media=media,
                 )
             )
