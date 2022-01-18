@@ -12,5 +12,6 @@ exclude =
     .tox,
     .venv,
     .vscode,
+    node_modules/,
     build,
 
