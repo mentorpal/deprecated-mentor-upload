@@ -5,10 +5,10 @@ import os
 import logger
 from media_tools import video_encode_for_web
 from api import (
-    upload_task_status_update,
     UpdateTaskStatusRequest,
-    upload_update_answer,
     AnswerUpdateRequest,
+    upload_task_status_update,
+    upload_answer_and_task_status_update,
 )
 
 
@@ -70,25 +70,23 @@ def handler(event, context):
             )
             transcode_web(work_file, s3_path)
             media = [
-                        {
-                            "type": "video",
-                            "tag": "web",
-                            "url": f"{s3_path}/web.mp4",
-                        }
-                    ]
-            upload_update_answer(
+                {
+                    "type": "video",
+                    "tag": "web",
+                    "url": f"{s3_path}/web.mp4",
+                }
+            ]
+            upload_answer_and_task_status_update(
                 AnswerUpdateRequest(
                     mentor=request["mentor"],
                     question=request["question"],
                     media=media,
-                )
-            )
-            upload_task_status_update(
+                ),
                 UpdateTaskStatusRequest(
                     mentor=request["mentor"],
                     question=request["question"],
                     task_id=task["task_id"],
                     new_status="DONE",
                     media=media,
-                )
+                ),
             )

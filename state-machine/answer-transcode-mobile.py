@@ -5,10 +5,10 @@ import os
 import logger
 from media_tools import video_encode_for_mobile
 from api import (
-    upload_task_status_update,
     UpdateTaskStatusRequest,
-    upload_update_answer,
     AnswerUpdateRequest,
+    upload_task_status_update,
+    upload_answer_and_task_status_update,
 )
 
 
@@ -79,19 +79,17 @@ def handler(event, context):
                     "url": f"{s3_path}/mobile.mp4",
                 }
             ]
-            upload_update_answer(
+            upload_answer_and_task_status_update(
                 AnswerUpdateRequest(
                     mentor=request["mentor"],
                     question=request["question"],
                     media=media,
-                )
-            )
-            upload_task_status_update(
+                ),
                 UpdateTaskStatusRequest(
                     mentor=request["mentor"],
                     question=request["question"],
                     task_id=task["task_id"],
                     new_status="DONE",
                     media=media,
-                )
+                ),
             )

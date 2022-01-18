@@ -6,11 +6,11 @@ import logger
 import transcribe
 from media_tools import video_to_audio
 from api import (
-    fetch_question_name,
-    upload_task_status_update,
-    upload_update_answer,
     AnswerUpdateRequest,
     UpdateTaskStatusRequest,
+    fetch_question_name,
+    upload_task_status_update,
+    upload_answer_and_task_status_update,
 )
 
 
@@ -61,23 +61,21 @@ def transcribe_video(mentor, question, task_id, video_file, s3_path):
             )
         media = []
 
-    upload_update_answer(
+    upload_answer_and_task_status_update(
         AnswerUpdateRequest(
             mentor=mentor,
             question=question,
             transcript=transcript,
             media=media,
             has_edited_transcript=False,
-        )
-    )
-    upload_task_status_update(
+        ),
         UpdateTaskStatusRequest(
             mentor=mentor,
             question=question,
             task_id=task_id,
             new_status="DONE",
             media=media,
-        )
+        ),
     )
 
 

@@ -205,6 +205,42 @@ def upload_task_status_req_gql(req: UpdateTaskStatusRequest) -> GQLQueryBody:
     }
 
 
+def upload_answer_and_task_status_update(
+    answerReq: AnswerUpdateRequest, statusReq: UpdateTaskStatusRequest
+) -> None:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = upload_answer_and_task_status_req_gql(answerReq, statusReq)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
+
+
+def upload_answer_and_task_status_req_gql(
+    answerReq: AnswerUpdateRequest, statusReq: UpdateTaskStatusRequest
+) -> GQLQueryBody:
+    variables = {}
+    variables["mentorId"] = answerReq.mentor
+    variables["questionId"] = answerReq.question
+    variables["answer"] = answerReq.new_status
+    variables["taskId"] = statusReq.task_id
+    variables["newStatus"] = statusReq.new_status
+    if statusReq.transcript:
+        variables["transcript"] = statusReq.transcript
+    if statusReq.media:
+        variables["media"] = statusReq.media
+    return {
+        "query": """mutation UpdateUploadAnswerAndTaskStatus($mentorId: ID!, $questionId: ID!, $taskId: String!, $newStatus: String!, $transcript: String, $media: [AnswerMediaInputType]) {
+            api {
+                uploadAnswer(mentorId: $mentorId, questionId: $questionId, answer: $answer)
+                uploadTaskStatusUpdate(mentorId: $mentorId, questionId: $questionId, taskId: $taskId, newStatus: $newStatus, transcript: $transcript, media: $media)
+            }
+        }""",
+        "variables": variables,
+    }
+
+
 def upload_task_status_update(req: UpdateTaskStatusRequest) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = upload_task_status_req_gql(req)
