@@ -75,7 +75,13 @@ def transcribe_video(mentor, question, task_id, video_file, s3_path):
                 f"{s3_path}/en.vtt",
                 ExtraArgs={"ContentType": "text/vtt"},
             )
-        media = []
+        media = [
+            {
+                "type": "subtitles",
+                "tag": "en",
+                "url": f"{s3_path}/en.vtt",
+            }
+        ]
 
     upload_answer_and_task_status_update(
         AnswerUpdateRequest(
