@@ -14,6 +14,22 @@ from api import (
 
 log = logger.get_logger("answer-transcode-mobile-handler")
 
+if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
+    log.info("SENTRY enabled, calling init")
+    import sentry_sdk  # NOQA E402
+    from sentry_sdk.integrations.aws_lambda import AwsLambdaIntegration  # NOQA E402
+
+    sentry_sdk.init(
+        dsn=os.environ.get("SENTRY_DSN_MENTOR_UPLOAD"),
+        # include project so issues can be filtered in sentry:
+        environment=os.environ.get("PYTHON_ENV", "careerfair-qa"),
+        integrations=[AwsLambdaIntegration(timeout_warning=True)],
+        # Set traces_sample_rate to 1.0 to capture 100%
+        # of transactions for performance monitoring.
+        traces_sample_rate=0.20,
+        debug=os.environ.get("SENTRY_DEBUG_UPLOADER", "") == "true",
+    )
+
 
 def _require_env(n: str) -> str:
     env_val = os.environ.get(n, "")

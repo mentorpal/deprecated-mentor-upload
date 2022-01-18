@@ -28,8 +28,10 @@ custom:
       LOG_LEVEL: 'trace'
       S3_STATIC_ARN: arn:aws:s3:::static-mentorpal-offline-origin
       GRAPHQL_ENDPOINT: 'http://127.0.0.1:3001/graphql'
+      IS_SENTRY_ENABLED: false
     dev:
       LOG_LEVEL: 'trace'
+      IS_SENTRY_ENABLED: false
       # v2 is hardcoded, we could use fallback stages instead
       S3_STATIC_ARN: ${ssm:/mentorpal/v2/s3_static_arn}
       GRAPHQL_ENDPOINT: 'https://v2.mentorpal.org/graphql'
@@ -41,6 +43,7 @@ custom:
       # TODO
       # S3_STATIC_ARN: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
       LOG_LEVEL: 'debug'
+      IS_SENTRY_ENABLED: true
       GRAPHQL_ENDPOINT: 'https://v2.mentorpal.org/graphql'
       API_SECRET: '${ssm:/mentorpal/v2/shared/api_secret}'
       TRANSCRIBE_AWS_S3_BUCKET_SOURCE: mentorpal-v2-mentorpal-transcribe-uploads
@@ -48,6 +51,7 @@ custom:
       TRANSCRIBE_AWS_ACCESS_KEY_ID: ${ssm:/mentorpal/v2/transcribe/secret_key}
     prod:
       LOG_LEVEL: 'info'
+      IS_SENTRY_ENABLED: true
       GRAPHQL_ENDPOINT: 'https://careerfair.mentorpal.org/graphql'
       # API_SECRET: '${ssm:/mentorpal/careerfair/shared/api_secret}'
       # TODO
@@ -88,11 +92,13 @@ provider:
   environment:
     # IS_OFFLINE: ${env:IS_OFFLINE}
     STAGE: ${self:provider.stage}
-    PYTHON_ENV: ${self:provider.stage}
+    PYTHON_ENV: careerfair-${self:provider.stage}
     S3_STATIC_ARN: ${self:custom.stages.${self:provider.stage}.S3_STATIC_ARN}
     FFMPEG_EXECUTABLE: /opt/ffmpeg/ffmpeg
     GRAPHQL_ENDPOINT: ${self:custom.stages.${self:provider.stage}.GRAPHQL_ENDPOINT}
     API_SECRET: ${self:custom.stages.${self:provider.stage}.API_SECRET}
+    IS_SENTRY_ENABLED: ${self:custom.stages.${self:provider.stage}.IS_SENTRY_ENABLED}
+    SENTRY_DSN_MENTOR_UPLOAD: '${ssm:/mentorpal/upload/sentry_dsn}'
 
   # iam permissions for all lambda functions
   iam:
