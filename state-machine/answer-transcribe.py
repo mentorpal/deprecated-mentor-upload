@@ -102,6 +102,66 @@ def transcribe_video(mentor, question, task_id, video_file, s3_path):
     )
 
 
+def fetch_from_graphql(request, task):
+    upload_task = fetch_task(request["mentor"], request["question"])
+    stored_task = next(
+        (x for x in upload_task["taskList"] if x["task_id"] == task["task_id"]),
+        None,
+    )
+    if stored_task is None:
+        log.error("task it doesnt match %s %s", task, upload_task["taskList"])
+        raise Exception(
+            "task it doesnt match %s %s",
+            task["task_id"],
+            [t["task_id"] for t in upload_task["taskList"]],
+        )
+    return stored_task
+
+
+def process_task(request, task):
+    stored_task = fetch_from_graphql(request, task)
+    if stored_task["status"].startswith("CANCEL"):
+        log.info("task cancelled, skipping transcription")
+        return
+
+    is_idle = is_idle_question(request["question"])
+    if is_idle:
+        log.info("question is idle, nothing to transcribe")
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=request["mentor"],
+                question=request["question"],
+                task_id=task["task_id"],
+                new_status="DONE",
+            )
+        )
+        return
+
+    upload_task_status_update(
+        UpdateTaskStatusRequest(
+            mentor=request["mentor"],
+            question=request["question"],
+            task_id=task["task_id"],
+            new_status="IN_PROGRESS",
+        )
+    )
+
+    log.info("video to process %s", request["video"])
+    with tempfile.TemporaryDirectory() as work_dir:
+        work_file = os.path.join(work_dir, "original.mp4")
+        s3.download_file(s3_bucket, request["video"], work_file)
+        s3_path = os.path.dirname(request["video"])  # same 'folder' as original file
+        log.info("%s downloaded to %s", request["video"], work_dir)
+
+        transcribe_video(
+            request["mentor"],
+            request["question"],
+            task["task_id"],
+            work_file,
+            s3_path,
+        )
+
+
 def handler(event, context):
     log.info(json.dumps(event))
     for record in event["Records"]:
@@ -112,56 +172,16 @@ def handler(event, context):
         if not task:
             log.warning("transcribe task not requested")
             return
-        upload_task = fetch_task(request["mentor"], request["question"])
-        stored_task = next(
-            (x for x in upload_task["taskList"] if x["task_id"] == task["task_id"]),
-            None,
-        )
-        if stored_task is None:
-            log.error("task it doesnt match %s %s", task, upload_task["taskList"])
-            raise Exception(
-                "task it doesnt match %s %s",
-                task["task_id"],
-                [t["task_id"] for t in upload_task["taskList"]],
-            )
-        if stored_task["status"].startswith("CANCEL"):
-            log.info("task cancelled, skipping transcription")
-            return
 
-        is_idle = is_idle_question(request["question"])
-        if is_idle:
-            log.info("question is idle, nothing to transcribe")
+        try:
+            process_task(request, task)
+        except Exception as x:
             upload_task_status_update(
                 UpdateTaskStatusRequest(
                     mentor=request["mentor"],
                     question=request["question"],
                     task_id=task["task_id"],
-                    new_status="DONE",
+                    new_status="FAILED",
                 )
             )
-            return
-        upload_task_status_update(
-            UpdateTaskStatusRequest(
-                mentor=request["mentor"],
-                question=request["question"],
-                task_id=task["task_id"],
-                new_status="IN_PROGRESS",
-            )
-        )
-
-        log.info("video to process %s", request["video"])
-        with tempfile.TemporaryDirectory() as work_dir:
-            work_file = os.path.join(work_dir, "original.mp4")
-            s3.download_file(s3_bucket, request["video"], work_file)
-            s3_path = os.path.dirname(
-                request["video"]
-            )  # same 'folder' as original file
-            log.info("%s downloaded to %s", request["video"], work_dir)
-
-            transcribe_video(
-                request["mentor"],
-                request["question"],
-                task["task_id"],
-                work_file,
-                s3_path,
-            )
+            raise x

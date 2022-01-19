@@ -59,6 +59,67 @@ def transcode_web(video_file, s3_path):
     )
 
 
+def fetch_from_graphql(request, task):
+    upload_task = fetch_task(request["mentor"], request["question"])
+    stored_task = next(
+        (x for x in upload_task["taskList"] if x["task_id"] == task["task_id"]),
+        None,
+    )
+    if stored_task is None:
+        log.error("task it doesnt match %s %s", task, upload_task["taskList"])
+        raise Exception(
+            "task it doesnt match %s %s",
+            task["task_id"],
+            [t["task_id"] for t in upload_task["taskList"]],
+        )
+    return stored_task
+
+
+def process_task(request, task):
+    log.info("video to process %s", request["video"])
+    stored_task = fetch_from_graphql(request, task)
+    if stored_task["status"].startswith("CANCEL"):
+        log.info("task cancelled, skipping transcription")
+        return
+
+    with tempfile.TemporaryDirectory() as work_dir:
+        work_file = os.path.join(work_dir, "original.mp4")
+        s3.download_file(s3_bucket, request["video"], work_file)
+        s3_path = os.path.dirname(request["video"])
+        log.info("%s downloaded to %s", request["video"], work_dir)
+        upload_task_status_update(
+            UpdateTaskStatusRequest(
+                mentor=request["mentor"],
+                question=request["question"],
+                task_id=task["task_id"],
+                new_status="IN_PROGRESS",
+            )
+        )
+        transcode_web(work_file, s3_path)
+        media = [
+            {
+                "type": "video",
+                "tag": "web",
+                "url": f"{s3_path}/web.mp4",
+            }
+        ]
+        upload_answer_and_task_status_update(
+            AnswerUpdateRequest(
+                mentor=request["mentor"],
+                question=request["question"],
+                transcript="",
+                media=media,
+            ),
+            UpdateTaskStatusRequest(
+                mentor=request["mentor"],
+                question=request["question"],
+                task_id=task["task_id"],
+                new_status="DONE",
+                media=media,
+            ),
+        )
+
+
 def handler(event, context):
     log.info(json.dumps(event))
     for record in event["Records"]:
@@ -69,58 +130,16 @@ def handler(event, context):
         if not task:
             log.warning("no transcoding-web task requested")
             return
-        log.info("video to process %s", request["video"])
-        upload_task = fetch_task(request["mentor"], request["question"])
-        stored_task = next(
-            (x for x in upload_task["taskList"] if x["task_id"] == task["task_id"]),
-            None,
-        )
-        if stored_task is None:
-            log.error("task it doesnt match %s %s", task, upload_task["taskList"])
-            raise Exception(
-                "task it doesnt match %s %s",
-                task["task_id"],
-                [t["task_id"] for t in upload_task["taskList"]],
-            )
-        if stored_task["status"].startswith("CANCEL"):
-            log.info("task cancelled, skipping transcription")
-            return
 
-        with tempfile.TemporaryDirectory() as work_dir:
-            work_file = os.path.join(work_dir, "original.mp4")
-            s3.download_file(s3_bucket, request["video"], work_file)
-            s3_path = os.path.dirname(
-                request["video"]
-            )  # same 'folder' as original file
-            log.info("%s downloaded to %s", request["video"], work_dir)
+        try:
+            process_task(request, task)
+        except Exception as x:
             upload_task_status_update(
                 UpdateTaskStatusRequest(
                     mentor=request["mentor"],
                     question=request["question"],
                     task_id=task["task_id"],
-                    new_status="IN_PROGRESS",
+                    new_status="FAILED",
                 )
             )
-            transcode_web(work_file, s3_path)
-            media = [
-                {
-                    "type": "video",
-                    "tag": "web",
-                    "url": f"{s3_path}/web.mp4",
-                }
-            ]
-            upload_answer_and_task_status_update(
-                AnswerUpdateRequest(
-                    mentor=request["mentor"],
-                    question=request["question"],
-                    transcript="",
-                    media=media,
-                ),
-                UpdateTaskStatusRequest(
-                    mentor=request["mentor"],
-                    question=request["question"],
-                    task_id=task["task_id"],
-                    new_status="DONE",
-                    media=media,
-                ),
-            )
+            raise x

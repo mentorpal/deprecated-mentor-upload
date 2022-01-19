@@ -222,7 +222,7 @@ resources:
         RedrivePolicy:
           deadLetterTargetArn:
             Fn::GetAtt: [TranscodeWebDLQ, Arn]
-          maxReceiveCount: 3 # try 3 times and then move to DLQ
+          maxReceiveCount: 1 # try once and then move to DLQ
     
     TranscodeMobileQueue:
       Type: AWS::SQS::Queue
@@ -233,7 +233,7 @@ resources:
         RedrivePolicy:
           deadLetterTargetArn:
             Fn::GetAtt: [TranscodeMobileDLQ, Arn]
-          maxReceiveCount: 3 # try 3 times and then move to DLQ
+          maxReceiveCount: 1 # try once then move to DLQ
     
     TranscribeQueue:
       Type: AWS::SQS::Queue
@@ -244,7 +244,7 @@ resources:
         RedrivePolicy:
           deadLetterTargetArn:
             Fn::GetAtt: [TranscribeDLQ, Arn]
-          maxReceiveCount: 2 # try 2 times and then move to DLQ
+          maxReceiveCount: 1 # try once and then move to DLQ
 
     ProcessUploadSnsTopic:
       Type: AWS::SNS::Topic
