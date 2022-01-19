@@ -11,6 +11,7 @@ from api import (
     fetch_question_name,
     upload_task_status_update,
     upload_answer_and_task_status_update,
+    fetch_task,
 )
 
 
@@ -110,6 +111,21 @@ def handler(event, context):
         task = next(filter(lambda t: t["task_name"] == "transcribing", task_list))
         if not task:
             log.warning("transcribe task not requested")
+            return
+        upload_task = fetch_task(request["mentor"], request["question"])
+        stored_task = next(
+            (x for x in upload_task["taskList"] if x["task_id"] == task["task_id"]),
+            None,
+        )
+        if stored_task is None:
+            log.error("task it doesnt match %s %s", task, upload_task["taskList"])
+            raise Exception(
+                "task it doesnt match %s %s",
+                task["task_id"],
+                [t["task_id"] for t in upload_task["taskList"]],
+            )
+        if stored_task["status"].startswith("CANCEL"):
+            log.info("task cancelled, skipping transcription")
             return
 
         is_idle = is_idle_question(request["question"])

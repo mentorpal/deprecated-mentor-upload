@@ -78,6 +78,34 @@ def fetch_question_name_gql(question_id: str) -> GQLQueryBody:
     }
 
 
+def fetch_task_gql(mentor_id: str, question_id) -> GQLQueryBody:
+    return {
+        "query": """query UploadTask($mentorId: ID!, $questionId: ID!) {
+            uploadTask(mentorId: $mentorId, questionId: $questionId){
+                taskList {
+                    task_id
+                    status
+                }
+            }
+        }""",
+        "variables": {
+            "mentorId": mentor_id,
+            "questionId": question_id,
+        },
+    }
+
+
+def fetch_task(mentor_id: str, question_id) -> dict:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = fetch_task_gql(mentor_id, question_id)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
+    return tdjson["data"]["uploadTask"]
+
+
 def fetch_question_name(question_id: str) -> str:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = fetch_question_name_gql(question_id)

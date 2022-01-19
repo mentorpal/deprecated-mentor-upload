@@ -9,6 +9,7 @@ from api import (
     AnswerUpdateRequest,
     upload_task_status_update,
     upload_answer_and_task_status_update,
+    fetch_task,
 )
 
 
@@ -69,6 +70,22 @@ def handler(event, context):
             log.warning("no transcoding-mobile task requested")
             return
         log.info("video to process %s", request["video"])
+        upload_task = fetch_task(request["mentor"], request["question"])
+        stored_task = next(
+            (x for x in upload_task["taskList"] if x["task_id"] == task["task_id"]),
+            None,
+        )
+        if stored_task is None:
+            log.error("task it doesnt match %s %s", task, upload_task["taskList"])
+            raise Exception(
+                "task it doesnt match %s %s",
+                task["task_id"],
+                [t["task_id"] for t in upload_task["taskList"]],
+            )
+        if stored_task["status"].startswith("CANCEL"):
+            log.info("task cancelled, skipping transcription")
+            return
+
         with tempfile.TemporaryDirectory() as work_dir:
             work_file = os.path.join(work_dir, "original.mp4")
             s3.download_file(s3_bucket, request["video"], work_file)
