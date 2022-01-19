@@ -176,20 +176,86 @@ def test_upload(
         )
     )
 
-@pytest.mark.only
 def test_upload_throws_incorrect_json_payload(
     client,
 ):
+    # No mentor provided
     with pytest.raises(Exception) as validation_error:
-        # No mentor provided
-        res = client.post(
-        "https://mentor.org/upload/answer",
-        data={
-            "body": json.dumps({"question": "fake_question"}),
-            "video": open(path.join(fixture_path("input_videos"), "video.mp4"), "rb"),
-        })
-    assert validation_error == '\'mentor\' is a required property'
+        client.post(
+            "/upload/answer",
+            data={
+                "body": json.dumps({"question": "fake_question"}),
+            }
+        )
+    assert "'mentor' is a required property" in str(validation_error.value)
 
+    # No question provided
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer",
+            data={
+                "body": json.dumps({"mentor": "fake_mentor"}),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert "'question' is a required property" in str(validation_error.value)
+
+    # Incorrect types
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer",
+            data={
+                "body": json.dumps({"mentor": 123, "question": 123}),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert "123 is not of type 'string'" in str(validation_error.value)
+
+def test_trim_existing_upload_throws_incorrect_json_payload(
+    client,
+):
+    # No mentor provided
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/trim_existing_upload",
+            data={
+                "body": json.dumps({"question": "fake_question"}),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert "'mentor' is a required property" in str(validation_error.value)
+
+    # No question provided
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/trim_existing_upload",
+            data={
+                "body": json.dumps({"mentor": "fake_mentor"}),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert "'question' is a required property" in str(validation_error.value)
+
+    # Optional Trim provided, but incorrect type
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/trim_existing_upload",
+            data={
+                "body": json.dumps({"mentor": "fake_mentor","question": "fake_question","trim":{"start":"123","end":"123"}}),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert '\'123\' is not of type \'number\'' in str(validation_error.value)
 
 @pytest.mark.parametrize(
     "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_trim_upload_task_id,fake_cancel_finalization_task_id,fake_cancel_transcribe_task_id,fake_cancel_transcode_task_id,fake_cancel_trim_upload_task_id",
@@ -339,6 +405,40 @@ def test_cancel(
         }
     }
 
+def test_cancel_upload_throw_incorrect_json_payload(client):
+    # Missing task_ids_to_cancel
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/cancel",
+            json={
+                "mentor": "input_mentor",
+                "question": "input_question",
+            },
+        )
+    assert "'task_ids_to_cancel' is a required property" in str(validation_error.value)
+
+    # Missing question
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/cancel",
+            json={
+                "mentor": "input_mentor",
+                "task_ids_to_cancel": ["123", "123"]
+            },
+        )
+    assert "'question' is a required property" in str(validation_error.value)
+
+    # Incorrect Types
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/cancel",
+            json={
+                "mentor": "input_mentor",
+                "question": "input_question",
+                "task_ids_to_cancel": [123, 123]
+            },
+        )
+    assert "123 is not of type 'string'" in str(validation_error.value)
 
 # ISSUE: if the upload api doesn't do end-to-end ssl
 # (e.g. if nginx terminates ssl),
