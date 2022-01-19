@@ -152,8 +152,6 @@ def upload():
     validate_json(body, video_upload_json_schema)
     mentor = body.get("mentor")
     question = body.get("question")
-    if not mentor or not question:
-        raise Exception("missing required param - mentor/question")
     trim = body.get("trim")
     upload_file = request.files["video"]
     root_ext = path.splitext(upload_file.filename)
