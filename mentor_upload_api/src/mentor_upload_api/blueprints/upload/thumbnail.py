@@ -18,6 +18,8 @@ from mentor_upload_api.api import (
     mentor_thumbnail_update,
 )
 
+from mentor_upload_api.helpers import validate_json
+
 thumbnail_blueprint = Blueprint("thumbnail", __name__)
 
 
@@ -37,6 +39,15 @@ def _create_s3_client() -> S3Client:
     )
 
 
+thumbnail_upload_json_schema = {
+    "type": "object",
+    "properties": {
+        "mentor": {"type": "string"},
+    },
+    "required": ["mentor"],
+}
+
+
 # TODO: probably want to force the size and quality of this image
 # ...make sure it's a PNG, etc. When we do all of that,
 # will probably move the processing out of the HTTP request handler
@@ -47,6 +58,7 @@ def upload():
     body = json.loads(request.form.get("body", "{}"))
     if not body:
         raise Exception("missing required param body")
+    validate_json(body, thumbnail_upload_json_schema)
     mentor = body.get("mentor")
     upload_file = request.files["thumbnail"]
     thumbnail_path = f"mentor/thumbnails/{mentor}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/thumbnail.png"

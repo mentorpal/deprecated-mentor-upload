@@ -18,6 +18,7 @@ import responses
 import uuid
 
 import pytest
+import jsonschema
 
 from .utils import Bunch, fixture_path
 
@@ -174,6 +175,20 @@ def test_upload(
             tmpdir, f"uploads/fake_uuid-{input_mentor}-{input_question}{root_ext[1]}"
         )
     )
+
+@pytest.mark.only
+def test_upload_throws_incorrect_json_payload(
+    client,
+):
+    with pytest.raises(Exception) as validation_error:
+        # No mentor provided
+        res = client.post(
+        "https://mentor.org/upload/answer",
+        data={
+            "body": json.dumps({"question": "fake_question"}),
+            "video": open(path.join(fixture_path("input_videos"), "video.mp4"), "rb"),
+        })
+    assert validation_error == '\'mentor\' is a required property'
 
 
 @pytest.mark.parametrize(

@@ -20,6 +20,9 @@ from mentor_upload_api.api import (
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
+from mentor_upload_api.helpers import validate_json
+
+
 log = logging.getLogger("answer")
 req_log = logging.getLogger("request")
 answer_blueprint = Blueprint("answer", __name__)
@@ -64,6 +67,21 @@ def begin_tasks_in_parallel(req):
     return my_chord.delay()
 
 
+trim_existing_upload_json_schema = {
+    "type": "object",
+    "properties": {
+        "mentor": {"type": "string"},
+        "question": {"type": "string"},
+        "trim": {
+            "type": "object",
+            "properties": {"start": {"type": "number"}, "end": {"type": "number"}},
+            "required": ["start", "end"],
+        },
+    },
+    "required": ["mentor", "question"],
+}
+
+
 @answer_blueprint.route("/trim_existing_upload/", methods=["POST"])
 @answer_blueprint.route("/trim_existing_upload", methods=["POST"])
 def trim_existing_upload():
@@ -71,6 +89,7 @@ def trim_existing_upload():
     body = json.loads(request.form.get("body", "{}"))
     if not body:
         raise Exception("missing required param body")
+    validate_json(body, trim_existing_upload_json_schema)
     mentor = body.get("mentor")
     question = body.get("question")
     trim = body.get("trim")
@@ -106,6 +125,21 @@ def trim_existing_upload():
     )
 
 
+video_upload_json_schema = {
+    "type": "object",
+    "properties": {
+        "mentor": {"type": "string"},
+        "question": {"type": "string"},
+        "trim": {
+            "type": "object",
+            "properties": {"start": {"type": "number"}, "end": {"type": "number"}},
+            "required": ["start", "end"],
+        },
+    },
+    "required": ["mentor", "question"],
+}
+
+
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
 def upload():
@@ -115,6 +149,7 @@ def upload():
     body = json.loads(request.form.get("body", "{}"))
     if not body:
         raise Exception("missing required param body")
+    validate_json(body, video_upload_json_schema)
     mentor = body.get("mentor")
     question = body.get("question")
     if not mentor or not question:
@@ -283,12 +318,24 @@ def download_video(mentor: str, question: str):
         logging.exception(x)
 
 
+cancel_upload_json_schema = {
+    "type": "object",
+    "properties": {
+        "mentor": {"type": "string"},
+        "question": {"type": "string"},
+        "task_ids_to_cancel": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["mentor", "question", "task_ids_to_cancel"],
+}
+
+
 @answer_blueprint.route("/cancel/", methods=["POST"])
 @answer_blueprint.route("/cancel", methods=["POST"])
 def cancel():
     body = request.json
     if not body:
         raise Exception("missing required param body")
+    validate_json(body, cancel_upload_json_schema)
     mentor = body.get("mentor")
     question = body.get("question")
     task_id_list = body.get("task_ids_to_cancel")
@@ -338,12 +385,20 @@ def task_status(task_name: str, task_id: str):
     )
 
 
+regen_vtt_json_schema = {
+    "type": "object",
+    "properties": {"mentor": {"type": "string"}, "question": {"type": "string"}},
+    "required": ["mentor", "question"],
+}
+
+
 @answer_blueprint.route("/regen_vtt/", methods=["POST"])
 @answer_blueprint.route("/regen_vtt", methods=["POST"])
 def regen_vtt():
     body = json.loads(request.form.get("body", "{}"))
     if not body:
         raise Exception("missing required param body")
+    validate_json(body, regen_vtt_json_schema)
     mentor = body.get("mentor")
     question = body.get("question")
     req = {
