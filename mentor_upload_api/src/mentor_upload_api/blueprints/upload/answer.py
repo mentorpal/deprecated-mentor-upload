@@ -20,6 +20,8 @@ from mentor_upload_api.api import (
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
+from mentor_upload_api.authorization_decorator import authorize_to_manage_content
+
 log = logging.getLogger("answer")
 req_log = logging.getLogger("request")
 answer_blueprint = Blueprint("answer", __name__)
@@ -210,6 +212,7 @@ def list_files_from_directory(file_directory: str):
 
 @answer_blueprint.route("/mounted_files/", methods=["GET"])
 @answer_blueprint.route("/mounted_files", methods=["GET"])
+@authorize_to_manage_content
 def mounted_files():
     try:
         file_directory = get_upload_root()
@@ -226,6 +229,7 @@ def mounted_files():
 
 @answer_blueprint.route("/remove_mounted_file/<file_name>/", methods=["POST"])
 @answer_blueprint.route("/remove_mounted_file/<file_name>", methods=["POST"])
+@authorize_to_manage_content
 def remove_mounted_file(file_name: str):
     try:
         file_path = path.join(get_upload_root(), file_name)
@@ -239,6 +243,7 @@ def remove_mounted_file(file_name: str):
 
 @answer_blueprint.route("/download_mounted_file/<file_name>/", methods=["GET"])
 @answer_blueprint.route("/download_mounted_file/<file_name>", methods=["GET"])
+@authorize_to_manage_content
 def download_mounted_file(file_name: str):
     try:
         file_directory = get_upload_root()
