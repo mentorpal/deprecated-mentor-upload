@@ -39,6 +39,7 @@ custom:
       TRANSCRIBE_AWS_S3_BUCKET_SOURCE: mentorpal-v2-mentorpal-transcribe-uploads
       TRANSCRIBE_AWS_SECRET_ACCESS_KEY: ${ssm:/mentorpal/v2/transcribe/secret_key}
       TRANSCRIBE_AWS_ACCESS_KEY_ID: ${ssm:/mentorpal/v2/transcribe/access_key}
+      ALERT_SNS_ARN: ${ssm:/mentorpal/v2/shared/sns_alert_topic_arn}
     qa:
       # TODO
       # S3_STATIC_ARN: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
@@ -49,6 +50,7 @@ custom:
       TRANSCRIBE_AWS_S3_BUCKET_SOURCE: mentorpal-v2-mentorpal-transcribe-uploads
       TRANSCRIBE_AWS_SECRET_ACCESS_KEY: ${ssm:/mentorpal/v2/transcribe/access_key}
       TRANSCRIBE_AWS_ACCESS_KEY_ID: ${ssm:/mentorpal/v2/transcribe/secret_key}
+      ALERT_SNS_ARN: ${ssm:/mentorpal/v2/shared/sns_alert_topic_arn}
     prod:
       LOG_LEVEL: 'info'
       IS_SENTRY_ENABLED: true
@@ -56,6 +58,7 @@ custom:
       # API_SECRET: '${ssm:/mentorpal/careerfair/shared/api_secret}'
       # TODO
       # S3_STATIC_ARN: ${ssm:/mentorpal/${self:provider.stage}/s3_static_arn}
+      # ALERT_SNS_ARN: ${ssm:/mentorpal/careerfair/shared/sns_alert_topic_arn}
 
   # serverless-layers requires a deployment bucket to be created before deploying this stack
   serverless-layers:
@@ -191,6 +194,11 @@ functions:
       - { Ref: BinariesLambdaLayer }
 
 resources:
+  Conditions:
+    CreateCloudWatchAlarm:
+      Fn::Or:
+        - Fn::Equals: ['${self:provider.stage}', 'qa']
+        - Fn::Equals: ['${self:provider.stage}', 'prod']
   Resources:
     TranscodeWebDLQ:
       Type: AWS::SQS::Queue
@@ -293,6 +301,29 @@ resources:
         Type: String
         Value: 
           Ref: ProcessUploadSnsTopic
+
+    Alarm:
+      Type: AWS::CloudWatch::Alarm
+      Condition: CreateCloudWatchAlarm
+      Properties:
+        ActionsEnabled: true
+        AlarmName: 'Number of failed upload jobs ${self:resources.Resources.TranscodeWebDLQ.Properties.QueueName}'
+        AlarmDescription: 'Number of failed upload jobs greater than zero'
+        Namespace: 'AWS/SQS'
+        Statistic: 'Sum'
+        MetricName: 'ApproximateNumberOfMessagesVisible'
+        ComparisonOperator: 'GreaterThanThreshold'
+        EvaluationPeriods: 1
+        Period: 300 # 5 minutes in seconds
+        Threshold: 0
+        TreatMissingData: 'notBreaching'
+        Dimensions:
+          - Name: QueueName
+            Value: ${self:resources.Resources.TranscodeWebDLQ.Properties.QueueName}
+        AlarmActions:
+          - ${self:custom.stages.${self:provider.stage}.ALERT_SNS_ARN}
+        OKActions:
+          - ${self:custom.stages.${self:provider.stage}.ALERT_SNS_ARN}
 
   Outputs:
     ProcessUploadSnsTopicName:
