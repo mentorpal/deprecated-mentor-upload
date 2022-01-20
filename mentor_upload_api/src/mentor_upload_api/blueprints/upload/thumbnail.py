@@ -5,7 +5,6 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from datetime import datetime
-import json
 from os import environ
 from urllib.parse import urljoin
 
@@ -54,11 +53,8 @@ thumbnail_upload_json_schema = {
 # and to an async worker, like video upload
 @thumbnail_blueprint.route("/", methods=["POST"])
 @thumbnail_blueprint.route("", methods=["POST"])
-def upload():
-    body = json.loads(request.form.get("body", "{}"))
-    if not body:
-        raise Exception("missing required param body")
-    validate_json(body, thumbnail_upload_json_schema)
+@validate_json(json_schema=thumbnail_upload_json_schema)
+def upload(body):
     mentor = body.get("mentor")
     upload_file = request.files["thumbnail"]
     thumbnail_path = f"mentor/thumbnails/{mentor}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/thumbnail.png"

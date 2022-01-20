@@ -4,7 +4,6 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-import json
 import logging
 import uuid
 from os import environ, path, makedirs, listdir, remove, scandir
@@ -70,11 +69,15 @@ def begin_tasks_in_parallel(req):
 trim_existing_upload_json_schema = {
     "type": "object",
     "properties": {
-        "mentor": {"type": "string"},
-        "question": {"type": "string"},
+        # Mongoose ObjectID == 24 characters
+        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
+        "question": {"type": "string", "maxLength": 24, "minLength": 24},
         "trim": {
             "type": "object",
-            "properties": {"start": {"type": "number"}, "end": {"type": "number"}},
+            "properties": {
+                "start": {"type": "number", "minimum": 0},
+                "end": {"type": "number", "exclusiveMinimum": 0},
+            },
             "required": ["start", "end"],
         },
     },
@@ -84,12 +87,9 @@ trim_existing_upload_json_schema = {
 
 @answer_blueprint.route("/trim_existing_upload/", methods=["POST"])
 @answer_blueprint.route("/trim_existing_upload", methods=["POST"])
-def trim_existing_upload():
+@validate_json(json_schema=trim_existing_upload_json_schema)
+def trim_existing_upload(body):
     req_log.info("trim existing, body: [%s]", request.form.get("body"))
-    body = json.loads(request.form.get("body", "{}"))
-    if not body:
-        raise Exception("missing required param body")
-    validate_json(body, trim_existing_upload_json_schema)
     mentor = body.get("mentor")
     question = body.get("question")
     trim = body.get("trim")
@@ -128,11 +128,15 @@ def trim_existing_upload():
 video_upload_json_schema = {
     "type": "object",
     "properties": {
-        "mentor": {"type": "string"},
-        "question": {"type": "string"},
+        # Mongoose ObjectID == 24 characters
+        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
+        "question": {"type": "string", "maxLength": 24, "minLength": 24},
         "trim": {
             "type": "object",
-            "properties": {"start": {"type": "number"}, "end": {"type": "number"}},
+            "properties": {
+                "start": {"type": "number", "minimum": 0},
+                "end": {"type": "number", "exclusiveMinimum": 0},
+            },
             "required": ["start", "end"],
         },
     },
@@ -142,14 +146,11 @@ video_upload_json_schema = {
 
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
-def upload():
+@validate_json(video_upload_json_schema)
+def upload(body):
     log.info("%s", {"files": request.files, "body": request.form.get("body")})
     # request.form contains the entire video encoded, dont want all that in the logs:
     # req_log.info(request.form(as_text=True)[:300])
-    body = json.loads(request.form.get("body", "{}"))
-    if not body:
-        raise Exception("missing required param body")
-    validate_json(body, video_upload_json_schema)
     mentor = body.get("mentor")
     question = body.get("question")
     trim = body.get("trim")
@@ -319,8 +320,9 @@ def download_video(mentor: str, question: str):
 cancel_upload_json_schema = {
     "type": "object",
     "properties": {
-        "mentor": {"type": "string"},
-        "question": {"type": "string"},
+        # Mongoose ObjectID == 24 characters
+        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
+        "question": {"type": "string", "maxLength": 24, "minLength": 24},
         "task_ids_to_cancel": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["mentor", "question", "task_ids_to_cancel"],
@@ -329,11 +331,8 @@ cancel_upload_json_schema = {
 
 @answer_blueprint.route("/cancel/", methods=["POST"])
 @answer_blueprint.route("/cancel", methods=["POST"])
-def cancel():
-    body = request.json
-    if not body:
-        raise Exception("missing required param body")
-    validate_json(body, cancel_upload_json_schema)
+@validate_json(json_schema=cancel_upload_json_schema)
+def cancel(body):
     mentor = body.get("mentor")
     question = body.get("question")
     task_id_list = body.get("task_ids_to_cancel")
@@ -385,18 +384,19 @@ def task_status(task_name: str, task_id: str):
 
 regen_vtt_json_schema = {
     "type": "object",
-    "properties": {"mentor": {"type": "string"}, "question": {"type": "string"}},
+    "properties": {
+        # Mongoose ObjectID == 24 characters
+        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
+        "question": {"type": "string", "maxLength": 24, "minLength": 24},
+    },
     "required": ["mentor", "question"],
 }
 
 
 @answer_blueprint.route("/regen_vtt/", methods=["POST"])
 @answer_blueprint.route("/regen_vtt", methods=["POST"])
-def regen_vtt():
-    body = json.loads(request.form.get("body", "{}"))
-    if not body:
-        raise Exception("missing required param body")
-    validate_json(body, regen_vtt_json_schema)
+@validate_json(json_schema=regen_vtt_json_schema)
+def regen_vtt(body):
     mentor = body.get("mentor")
     question = body.get("question")
     req = {

@@ -64,8 +64,8 @@ def python_path_env(monkeypatch, tmpdir):
     [
         (
             "https://mentor.org",
-            "mentor1",
-            "q1",
+            "mentor1-fake-mongoose-id",
+            "question1-fakemongooseid",
             "video.mp4",
             "fake_finalization_task_id",
             "fake_transcoding_task_id",
@@ -74,8 +74,8 @@ def python_path_env(monkeypatch, tmpdir):
         ),
         (
             "http://a.diff.org",
-            "mentor2",
-            "q2",
+            "mentor2-fake-mongoose-id",
+            "question2-fakemongooseid",
             "video.mp4",
             "fake_finalization_task_id_2",
             "fake_transcoding_task_id_2",
@@ -184,7 +184,7 @@ def test_upload_throws_incorrect_json_payload(
         client.post(
             "/upload/answer",
             data={
-                "body": json.dumps({"question": "fake_question"}),
+                "body": json.dumps({"question": "question1-fakemongooseid"}),
             },
         )
     assert "'mentor' is a required property" in str(validation_error.value)
@@ -194,7 +194,7 @@ def test_upload_throws_incorrect_json_payload(
         client.post(
             "/upload/answer",
             data={
-                "body": json.dumps({"mentor": "fake_mentor"}),
+                "body": json.dumps({"mentor": "mentor1-fake-mongoose-id"}),
                 "video": open(
                     path.join(fixture_path("input_videos"), "video.mp4"), "rb"
                 ),
@@ -224,7 +224,7 @@ def test_trim_existing_upload_throws_incorrect_json_payload(
         client.post(
             "/upload/answer/trim_existing_upload",
             data={
-                "body": json.dumps({"question": "fake_question"}),
+                "body": json.dumps({"question": "question1-fakemongooseid"}),
                 "video": open(
                     path.join(fixture_path("input_videos"), "video.mp4"), "rb"
                 ),
@@ -237,7 +237,7 @@ def test_trim_existing_upload_throws_incorrect_json_payload(
         client.post(
             "/upload/answer/trim_existing_upload",
             data={
-                "body": json.dumps({"mentor": "fake_mentor"}),
+                "body": json.dumps({"mentor": "mentor1-fake-mongoose-id"}),
                 "video": open(
                     path.join(fixture_path("input_videos"), "video.mp4"), "rb"
                 ),
@@ -252,8 +252,8 @@ def test_trim_existing_upload_throws_incorrect_json_payload(
             data={
                 "body": json.dumps(
                     {
-                        "mentor": "fake_mentor",
-                        "question": "fake_question",
+                        "mentor": "mentor1-fake-mongoose-id",
+                        "question": "question1-fakemongooseid",
                         "trim": {"start": "123", "end": "123"},
                     }
                 ),
@@ -270,8 +270,8 @@ def test_trim_existing_upload_throws_incorrect_json_payload(
     [
         (
             "https://mentor.org",
-            "mentor1",
-            "q1",
+            "mentor1-fake-mongoose-id",
+            "question1-fakemongooseid",
             "video.mp4",
             "fake_finalization_task_id",
             "fake_transcoding_task_id",
@@ -284,8 +284,8 @@ def test_trim_existing_upload_throws_incorrect_json_payload(
         ),
         (
             "http://a.diff.org",
-            "mentor2",
-            "q2",
+            "mentor2-fake-mongoose-id",
+            "question2-fakemongooseid",
             "video.mp4",
             "fake_finalization_task_id_2",
             "fake_transcoding_task_id_2",
@@ -420,8 +420,8 @@ def test_cancel_upload_throw_incorrect_json_payload(client):
         client.post(
             "/upload/answer/cancel",
             json={
-                "mentor": "input_mentor",
-                "question": "input_question",
+                "mentor": "mentor1-fake-mongoose-id",
+                "question": "question1-fakemongooseid",
             },
         )
     assert "'task_ids_to_cancel' is a required property" in str(validation_error.value)
@@ -430,7 +430,10 @@ def test_cancel_upload_throw_incorrect_json_payload(client):
     with pytest.raises(Exception) as validation_error:
         client.post(
             "/upload/answer/cancel",
-            json={"mentor": "input_mentor", "task_ids_to_cancel": ["123", "123"]},
+            json={
+                "mentor": "mentor1-fake-mongoose-id",
+                "task_ids_to_cancel": ["123", "123"],
+            },
         )
     assert "'question' is a required property" in str(validation_error.value)
 
@@ -439,8 +442,8 @@ def test_cancel_upload_throw_incorrect_json_payload(client):
         client.post(
             "/upload/answer/cancel",
             json={
-                "mentor": "input_mentor",
-                "question": "input_question",
+                "mentor": "mentor1-fake-mongoose-id",
+                "question": "question1-fakemongooseid",
                 "task_ids_to_cancel": [123, 123],
             },
         )
@@ -479,8 +482,8 @@ def test_env_fixes_ssl_status_url(
     monkeypatch,
     client,
 ):
-    fake_mentor_id = "mentor1"
-    fake_question_id = "question1"
+    fake_mentor_id = "mentor1-fake-mongoose-id"
+    fake_question_id = "question-fake-mongooseid"
     fake_video = open(path.join(fixture_path("input_videos"), "video.mp4"), "rb")
     if env_val is not None:
         monkeypatch.setenv("STATUS_URL_FORCE_HTTPS", env_val)
