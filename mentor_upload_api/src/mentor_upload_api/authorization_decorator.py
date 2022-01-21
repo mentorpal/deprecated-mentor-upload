@@ -58,8 +58,8 @@ def authorize_to_manage_content(f):
         token_authentication = bool(bearer_token.split(" ")[0].lower() == "bearer")
         headers = {"Authorization": bearer_token} if token_authentication else {}
         cookies = request.cookies if not token_authentication else {}
-        if not token_authentication and not request.cookies.get('refreshToken', ""):
-            log.debug('no authentication token provided')
+        if not token_authentication and not request.cookies.get("refreshToken", ""):
+            log.debug("no authentication token provided")
             abort(401)
         gql_query = get_authorization_gql()
         res_json = exec_graphql_with_json_validation(
