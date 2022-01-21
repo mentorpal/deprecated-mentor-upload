@@ -6,10 +6,12 @@
 #
 from functools import wraps
 from flask import request, abort
-import requests
 from os import environ
 from typing import TypedDict
-import json
+from mentor_upload_api.helpers import exec_graphql_with_json_validation
+import logging
+
+log = logging.getLogger("authorization")
 
 
 class GQLQueryBody(TypedDict):
@@ -30,6 +32,25 @@ def get_authorization_gql() -> GQLQueryBody:
     }
 
 
+authorize_gql_json_schema = {
+    "type": "object",
+    "properties": {
+        "data": {
+            "type": "object",
+            "properties": {
+                "me": {
+                    "type": "object",
+                    "properties": {"canManageContent": {"type": "boolean"}},
+                    "required": ["canManageContent"],
+                }
+            },
+            "required": ["me"],
+        },
+    },
+    "required": ["data"],
+}
+
+
 def authorize_to_manage_content(f):
     @wraps(f)
     def authorized_endpoint(*args, **kws):
@@ -37,21 +58,15 @@ def authorize_to_manage_content(f):
         token_authentication = bool(bearer_token.split(" ")[0].lower() == "bearer")
         headers = {"Authorization": bearer_token} if token_authentication else {}
         cookies = request.cookies if not token_authentication else {}
-        body = get_authorization_gql()
-        res = requests.post(
-            get_graphql_endpoint(), json=body, cookies=cookies, headers=headers
+        if not token_authentication and not request.cookies.get('refreshToken', ""):
+            log.debug('no authentication token provided')
+            abort(401)
+        gql_query = get_authorization_gql()
+        res_json = exec_graphql_with_json_validation(
+            gql_query, authorize_gql_json_schema, cookies=cookies, headers=headers
         )
-        res.raise_for_status()
-        tdjson = res.json()
-        if "errors" in tdjson:
-            raise Exception(json.dumps(tdjson.get("errors")))
-        if (
-            "data" not in tdjson
-            or "me" not in tdjson["data"]
-            or "canManageContent" not in tdjson["data"]["me"]
-        ):
-            raise Exception(f"query: {body} did not return proper data format")
-        is_authorized = tdjson["data"]["me"]["canManageContent"]
+
+        is_authorized = res_json["data"]["me"]["canManageContent"]
         if not is_authorized:
             abort(403)
         return f(*args, **kws)

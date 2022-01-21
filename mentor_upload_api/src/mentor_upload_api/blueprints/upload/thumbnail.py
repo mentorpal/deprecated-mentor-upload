@@ -17,7 +17,7 @@ from mentor_upload_api.api import (
     mentor_thumbnail_update,
 )
 
-from mentor_upload_api.helpers import validate_json
+from mentor_upload_api.helpers import validate_payload_json_decorator
 
 thumbnail_blueprint = Blueprint("thumbnail", __name__)
 
@@ -41,7 +41,8 @@ def _create_s3_client() -> S3Client:
 thumbnail_upload_json_schema = {
     "type": "object",
     "properties": {
-        "mentor": {"type": "string"},
+        # Mongoose ObjectID == 24 characters
+        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
     },
     "required": ["mentor"],
 }
@@ -53,7 +54,7 @@ thumbnail_upload_json_schema = {
 # and to an async worker, like video upload
 @thumbnail_blueprint.route("/", methods=["POST"])
 @thumbnail_blueprint.route("", methods=["POST"])
-@validate_json(json_schema=thumbnail_upload_json_schema)
+@validate_payload_json_decorator(json_schema=thumbnail_upload_json_schema)
 def upload(body):
     mentor = body.get("mentor")
     upload_file = request.files["thumbnail"]
