@@ -5,7 +5,6 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from datetime import datetime
-import json
 from os import environ
 from urllib.parse import urljoin
 
@@ -17,6 +16,8 @@ from mentor_upload_api.api import (
     MentorThumbnailUpdateRequest,
     mentor_thumbnail_update,
 )
+
+from mentor_upload_api.helpers import validate_payload_json_decorator
 
 thumbnail_blueprint = Blueprint("thumbnail", __name__)
 
@@ -37,16 +38,23 @@ def _create_s3_client() -> S3Client:
     )
 
 
+thumbnail_upload_json_schema = {
+    "type": "object",
+    "properties": {
+        "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
+    },
+    "required": ["mentor"],
+}
+
+
 # TODO: probably want to force the size and quality of this image
 # ...make sure it's a PNG, etc. When we do all of that,
 # will probably move the processing out of the HTTP request handler
 # and to an async worker, like video upload
 @thumbnail_blueprint.route("/", methods=["POST"])
 @thumbnail_blueprint.route("", methods=["POST"])
-def upload():
-    body = json.loads(request.form.get("body", "{}"))
-    if not body:
-        raise Exception("missing required param body")
+@validate_payload_json_decorator(json_schema=thumbnail_upload_json_schema)
+def upload(body):
     mentor = body.get("mentor")
     upload_file = request.files["thumbnail"]
     thumbnail_path = f"mentor/thumbnails/{mentor}/{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}/thumbnail.png"
