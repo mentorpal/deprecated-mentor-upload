@@ -18,8 +18,12 @@ from werkzeug.exceptions import HTTPException  # NOQA E402
 from mentor_upload_api.blueprints.ping import ping_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.answer import answer_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.transfer import transfer_blueprint  # NOQA E402
-from mentor_upload_api.blueprints.upload.thumbnail import thumbnail_blueprint  # NOQA E402
-from mentor_upload_api.blueprints.v2.upload.answer import answer_blueprint as v2_answer_blueprint  # NOQA E402
+from mentor_upload_api.blueprints.upload.thumbnail import (  # NOQA E402
+    thumbnail_blueprint,
+)
+from mentor_upload_api.blueprints.v2.upload.answer import (  # NOQA E402
+    answer_blueprint as v2_answer_blueprint,
+)
 
 
 if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
