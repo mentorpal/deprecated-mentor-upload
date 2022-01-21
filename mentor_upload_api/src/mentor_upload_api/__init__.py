@@ -14,16 +14,13 @@ import json  # NOQA E402
 from logging.config import dictConfig  # NOQA E402
 from flask import Flask, request, g, has_request_context  # NOQA E402
 from flask_cors import CORS  # NOQA E402
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException  # NOQA E402
 from mentor_upload_api.blueprints.ping import ping_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.answer import answer_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.transfer import transfer_blueprint  # NOQA E402
-from mentor_upload_api.blueprints.upload.thumbnail import (  # NOQA E402
-    thumbnail_blueprint,
-)
-from mentor_upload_api.blueprints.v2.upload.answer import (
-    answer_blueprint as v2_answer_blueprint,
-)  # NOQA E402
+from mentor_upload_api.blueprints.upload.thumbnail import thumbnail_blueprint  # NOQA E402
+from mentor_upload_api.blueprints.v2.upload.answer import answer_blueprint as v2_answer_blueprint  # NOQA E402
+
 
 if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
     import sentry_sdk  # NOQA E402
