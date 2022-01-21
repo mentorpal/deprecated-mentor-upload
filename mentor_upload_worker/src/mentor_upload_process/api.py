@@ -11,6 +11,8 @@ from typing import List, TypedDict
 
 import requests
 
+from mentor_upload_process.helpers import exec_graphql_with_json_validation
+
 
 def get_graphql_endpoint() -> str:
     return environ.get("GRAPHQL_ENDPOINT") or "http://graphql/graphql"
@@ -81,28 +83,6 @@ class GQLQueryBody(TypedDict):
     query: str
 
 
-def answer_query_gql(mentor: str, question: str) -> GQLQueryBody:
-    return {
-        "query": """query Answer($mentor: ID!, $question: ID!) {
-            answer(mentor: $mentor, question: $question) {
-                _id
-                transcript
-                hasUntransferredMedia
-                media {
-                    type
-                    tag
-                    url
-                    needsTransfer
-                }
-            }
-        }""",
-        "variables": {
-            "mentor": mentor,
-            "question": question,
-        },
-    }
-
-
 def answer_upload_update_gql(req: AnswerUpdateRequest) -> GQLQueryBody:
     variables = {}
     variables["mentorId"] = req.mentor
@@ -141,27 +121,68 @@ def upload_task_req_gql(req: UploadTaskRequest) -> GQLQueryBody:
     }
 
 
-def fetch_question_name_gql(question_id: str) -> GQLQueryBody:
+def answer_query_gql(mentor: str, question: str) -> GQLQueryBody:
     return {
-        "query": """query Question($id: ID!) {
-            question(id: $id){
-                name
+        "query": """query Answer($mentor: ID!, $question: ID!) {
+            answer(mentor: $mentor, question: $question) {
+                _id
+                transcript
+                hasUntransferredMedia
+                media {
+                    type
+                    tag
+                    url
+                    needsTransfer
+                }
             }
         }""",
         "variables": {
-            "id": question_id,
+            "mentor": mentor,
+            "question": question,
         },
     }
 
 
+fetch_answer_json_schema = {
+    "type": "object",
+    "properties": {
+        "data": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "object",
+                    "properties": {
+                        "hasUntransferredMedia": {"type": "boolean"},
+                        "transcript": {"type": "string"},
+                        "media": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {"type": "string"},
+                                    "tag": {"type": "string"},
+                                    "url": {"type": "string"},
+                                    "needsTransfer": {"type": "boolean"},
+                                },
+                                "required": ["type", "tag", "url", "needsTransfer"],
+                            },
+                        },
+                    },
+                    "required": ["transcript", "media", "hasUntransferredMedia"],
+                }
+            },
+            "required": ["answer"],
+        },
+    },
+    "required": ["data"],
+}
+
+
 def fetch_answer(mentor: str, question: str) -> dict:
     body = answer_query_gql(mentor, question)
-    res = requests.post(get_graphql_endpoint(), json=body)
-    res.raise_for_status()
-    tdjson = res.json()
-    if "errors" in tdjson:
-        raise Exception(json.dumps(tdjson.get("errors")))
-    data = tdjson["data"]["answer"]
+    gql_query = requests.post(get_graphql_endpoint(), json=body)
+    json_res = exec_graphql_with_json_validation(gql_query, fetch_answer_json_schema)
+    data = json_res["data"]["answer"]
     return data
 
 
@@ -215,21 +236,45 @@ def upload_task_status_update(req: UpdateTaskStatusRequest) -> None:
         raise Exception(json.dumps(tdjson.get("errors")))
 
 
+def fetch_question_name_gql(question_id: str) -> GQLQueryBody:
+    return {
+        "query": """query Question($id: ID!) {
+            question(id: $id){
+                name
+            }
+        }""",
+        "variables": {
+            "id": question_id,
+        },
+    }
+
+
+fetch_question_name_schema = {
+    "type": "object",
+    "properties": {
+        "data": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                    "required": ["name"],
+                },
+            },
+            "required": ["question"],
+        }
+    },
+    "required": ["data"],
+}
+
+
 def fetch_question_name(question_id: str) -> str:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
-    body = fetch_question_name_gql(question_id)
-    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
-    res.raise_for_status()
-    tdjson = res.json()
-    if "errors" in tdjson:
-        raise Exception(json.dumps(tdjson.get("errors")))
-    if (
-        "data" not in tdjson
-        or "question" not in tdjson["data"]
-        or "name" not in tdjson["data"]["question"]
-    ):
-        raise Exception(f"query: {body} did not return proper data format")
-    return tdjson["data"]["question"]["name"]
+    gql_query = fetch_question_name_gql(question_id)
+    json_res = exec_graphql_with_json_validation(
+        gql_query, fetch_question_name_schema, headers=headers
+    )
+    return json_res["data"]["question"]["name"]
 
 
 def fetch_answer_transcript_and_media_gql(mentor: str, question: str) -> GQLQueryBody:
@@ -249,27 +294,50 @@ def fetch_answer_transcript_and_media_gql(mentor: str, question: str) -> GQLQuer
     }
 
 
+fetch_answer_transcript_media_json_schema = {
+    "type": "object",
+    "properties": {
+        "data": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "object",
+                    "properties": {
+                        "hasEditedTranscript": {"type": "boolean"},
+                        "transcript": {"type": "string"},
+                        "media": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {"type": "string"},
+                                    "tag": {"type": "string"},
+                                    "url": {"type": "string"},
+                                },
+                                "required": ["type", "tag", "url"],
+                            },
+                        },
+                    },
+                    "required": ["hasEditedTranscript", "transcript", "media"],
+                }
+            },
+            "required": ["answer"],
+        },
+    },
+    "required": ["data"],
+}
+
+
 def fetch_answer_transcript_and_media(mentor: str, question: str):
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
-    body = fetch_answer_transcript_and_media_gql(mentor, question)
-    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
-
-    res.raise_for_status()
-    tdjson = res.json()
-    if "errors" in tdjson:
-        raise Exception(json.dumps(tdjson.get("errors")))
-    if (
-        "data" not in tdjson
-        or "answer" not in tdjson["data"]
-        or "media" not in tdjson["data"]["answer"]
-        or "transcript" not in tdjson["data"]["answer"]
-        or "hasEditedTranscript" not in tdjson["data"]["answer"]
-    ):
-        raise Exception(f"query: {body} did not return proper data format")
+    gql_query = fetch_answer_transcript_and_media_gql(mentor, question)
+    json_res = exec_graphql_with_json_validation(
+        gql_query, fetch_answer_transcript_media_json_schema, headers=headers
+    )
     return (
-        tdjson["data"]["answer"]["transcript"],
-        tdjson["data"]["answer"]["media"],
-        tdjson["data"]["answer"]["hasEditedTranscript"],
+        json_res["data"]["answer"]["transcript"],
+        json_res["data"]["answer"]["media"],
+        json_res["data"]["answer"]["hasEditedTranscript"],
     )
 
 
