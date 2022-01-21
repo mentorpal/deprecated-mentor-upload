@@ -17,6 +17,8 @@ from mentor_upload_api.api import (
     UploadTaskRequest,
     upload_task_update,
 )
+from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
+from mentor_upload_api.helpers import validate_payload_json_decorator
 
 log = logging.getLogger("v2/answer")
 req_log = logging.getLogger("v2/request")
@@ -78,19 +80,16 @@ def video_trim(
 
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
-def upload():
+@validate_payload_json_decorator(video_upload_json_schema)
+def upload(body):
     log.info("%s", {"files": request.files, "body": request.form.get("body")})
     # TODO reject request if there's already a job in progress
 
     # request.form contains the entire video encoded, dont want all that in the logs:
     # req_log.info(request.form(as_text=True)[:300])
-    body = json.loads(request.form.get("body", "{}"))
-    if not body:
-        raise Exception("missing required param body")
+
     mentor = body.get("mentor")
     question = body.get("question")
-    if not mentor or not question:
-        raise Exception("missing required param - mentor/question")
     trim = body.get("trim")
     upload_file = request.files["video"]
     root_ext = path.splitext(upload_file.filename)
