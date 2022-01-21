@@ -4,13 +4,14 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-from flask import Response
-from mentor_upload_api import create_app  # type: ignore
-import pytest
 import os
 
 os.environ["STATIC_AWS_REGION"] = "us-east-1"
 os.environ["STATIC_AWS_S3_BUCKET"] = "upload-test-bucket"
+
+from flask import Response  # NOQA E402
+from mentor_upload_api import create_app  # NOQA E402 # type: ignore
+import pytest  # NOQA E402
 
 
 @pytest.fixture
