@@ -64,8 +64,8 @@ def python_path_env(monkeypatch, tmpdir):
     [
         (
             "https://mentor.org",
-            "mentor1",
-            "q1",
+            "mentor1-fake-mongoose-id",
+            "question1-fakemongooseid",
             "video.mp4",
             "fake_finalization_task_id",
             "fake_transcoding_task_id",
@@ -74,8 +74,8 @@ def python_path_env(monkeypatch, tmpdir):
         ),
         (
             "http://a.diff.org",
-            "mentor2",
-            "q2",
+            "mentor2-fake-mongoose-id",
+            "question2-fakemongooseid",
             "video.mp4",
             "fake_finalization_task_id_2",
             "fake_transcoding_task_id_2",
@@ -176,13 +176,102 @@ def test_upload(
     )
 
 
+def test_upload_throws_incorrect_json_payload(
+    client,
+):
+    # No mentor provided
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer",
+            data={
+                "body": json.dumps({"question": "question1-fakemongooseid"}),
+            },
+        )
+    assert "'mentor' is a required property" in str(validation_error.value)
+
+    # No question provided
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer",
+            data={
+                "body": json.dumps({"mentor": "mentor1-fake-mongoose-id"}),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert "'question' is a required property" in str(validation_error.value)
+
+    # Incorrect types
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer",
+            data={
+                "body": json.dumps({"mentor": 123, "question": 123}),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert "123 is not of type 'string'" in str(validation_error.value)
+
+
+def test_trim_existing_upload_throws_incorrect_json_payload(
+    client,
+):
+    # No mentor provided
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/trim_existing_upload",
+            data={
+                "body": json.dumps({"question": "question1-fakemongooseid"}),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert "'mentor' is a required property" in str(validation_error.value)
+
+    # No question provided
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/trim_existing_upload",
+            data={
+                "body": json.dumps({"mentor": "mentor1-fake-mongoose-id"}),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert "'question' is a required property" in str(validation_error.value)
+
+    # Optional Trim provided, but incorrect type
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/trim_existing_upload",
+            data={
+                "body": json.dumps(
+                    {
+                        "mentor": "mentor1-fake-mongoose-id",
+                        "question": "question1-fakemongooseid",
+                        "trim": {"start": "123", "end": "123"},
+                    }
+                ),
+                "video": open(
+                    path.join(fixture_path("input_videos"), "video.mp4"), "rb"
+                ),
+            },
+        )
+    assert "'123' is not of type 'number'" in str(validation_error.value)
+
+
 @pytest.mark.parametrize(
     "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_trim_upload_task_id,fake_cancel_finalization_task_id,fake_cancel_transcribe_task_id,fake_cancel_transcode_task_id,fake_cancel_trim_upload_task_id",
     [
         (
             "https://mentor.org",
-            "mentor1",
-            "q1",
+            "mentor1-fake-mongoose-id",
+            "question1-fakemongooseid",
             "video.mp4",
             "fake_finalization_task_id",
             "fake_transcoding_task_id",
@@ -195,8 +284,8 @@ def test_upload(
         ),
         (
             "http://a.diff.org",
-            "mentor2",
-            "q2",
+            "mentor2-fake-mongoose-id",
+            "question2-fakemongooseid",
             "video.mp4",
             "fake_finalization_task_id_2",
             "fake_transcoding_task_id_2",
@@ -325,6 +414,42 @@ def test_cancel(
     }
 
 
+def test_cancel_upload_throw_incorrect_json_payload(client):
+    # Missing task_ids_to_cancel
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/cancel",
+            json={
+                "mentor": "mentor1-fake-mongoose-id",
+                "question": "question1-fakemongooseid",
+            },
+        )
+    assert "'task_ids_to_cancel' is a required property" in str(validation_error.value)
+
+    # Missing question
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/cancel",
+            json={
+                "mentor": "mentor1-fake-mongoose-id",
+                "task_ids_to_cancel": ["123", "123"],
+            },
+        )
+    assert "'question' is a required property" in str(validation_error.value)
+
+    # Incorrect Types
+    with pytest.raises(Exception) as validation_error:
+        client.post(
+            "/upload/answer/cancel",
+            json={
+                "mentor": "mentor1-fake-mongoose-id",
+                "question": "question1-fakemongooseid",
+                "task_ids_to_cancel": [123, 123],
+            },
+        )
+    assert "123 is not of type 'string'" in str(validation_error.value)
+
+
 # ISSUE: if the upload api doesn't do end-to-end ssl
 # (e.g. if nginx terminates ssl),
 # then upload-api doesn't know that its TRUE
@@ -357,8 +482,8 @@ def test_env_fixes_ssl_status_url(
     monkeypatch,
     client,
 ):
-    fake_mentor_id = "mentor1"
-    fake_question_id = "question1"
+    fake_mentor_id = "mentor1-fake-mongoose-id"
+    fake_question_id = "question-fake-mongooseid"
     fake_video = open(path.join(fixture_path("input_videos"), "video.mp4"), "rb")
     if env_val is not None:
         monkeypatch.setenv("STATUS_URL_FORCE_HTTPS", env_val)
