@@ -33,9 +33,14 @@ def get_authorization_gql() -> GQLQueryBody:
 def authorize_to_manage_content(f):
     @wraps(f)
     def authorized_endpoint(*args, **kws):
-        cookies = request.cookies
+        bearer_token = request.headers.get("Authorization", "")
+        token_authentication = bool(bearer_token.split(" ")[0].lower() == "bearer")
+        headers = {"Authorization": bearer_token} if token_authentication else {}
+        cookies = request.cookies if not token_authentication else {}
         body = get_authorization_gql()
-        res = requests.post(get_graphql_endpoint(), json=body, cookies=cookies)
+        res = requests.post(
+            get_graphql_endpoint(), json=body, cookies=cookies, headers=headers
+        )
         res.raise_for_status()
         tdjson = res.json()
         if "errors" in tdjson:
