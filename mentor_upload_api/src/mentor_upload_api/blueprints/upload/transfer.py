@@ -11,6 +11,10 @@ from flask import Blueprint, jsonify, request
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
+
+from mentor_upload_api.helpers import validate_json
+
+
 transfer_blueprint = Blueprint("transfer", __name__)
 
 
@@ -22,12 +26,20 @@ def get_upload_root() -> str:
     return environ.get("UPLOAD_ROOT") or "./uploads"
 
 
+transfer_media_json_schema = {
+    "type": "object",
+    "properties": {"mentor": {"type": "string"}, "question": {"type": "string"}},
+    "required": ["mentor", "question"],
+}
+
+
 @transfer_blueprint.route("/", methods=["POST"])
 @transfer_blueprint.route("", methods=["POST"])
 def transfer():
     body = request.json
     if not body:
         raise Exception("missing required param body")
+    validate_json(body, transfer_media_json_schema)
     mentor = body.get("mentor")
     question = body.get("question")
     req = {
@@ -47,12 +59,24 @@ def transfer():
     )
 
 
+cancel_transfer_media_json_schema = {
+    "type": "object",
+    "properties": {
+        "mentor": {"type": "string"},
+        "question": {"type": "string"},
+        "task": {"type": "string"},
+    },
+    "required": ["mentor", "question", "task"],
+}
+
+
 @transfer_blueprint.route("/cancel/", methods=["POST"])
 @transfer_blueprint.route("/cancel", methods=["POST"])
 def cancel():
     body = request.json
     if not body:
         raise Exception("missing required param body")
+    validate_json(body, cancel_transfer_media_json_schema)
     mentor = body.get("mentor")
     question = body.get("question")
     task_id = body.get("task")
