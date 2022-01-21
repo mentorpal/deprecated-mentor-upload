@@ -69,9 +69,8 @@ def begin_tasks_in_parallel(req):
 trim_existing_upload_json_schema = {
     "type": "object",
     "properties": {
-        # Mongoose ObjectID == 24 characters
-        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
-        "question": {"type": "string", "maxLength": 24, "minLength": 24},
+        "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
+        "question": {"type": "string", "maxLength": 60, "minLength": 5},
         "trim": {
             "type": "object",
             "properties": {
@@ -128,9 +127,8 @@ def trim_existing_upload(body):
 video_upload_json_schema = {
     "type": "object",
     "properties": {
-        # Mongoose ObjectID == 24 characters
-        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
-        "question": {"type": "string", "maxLength": 24, "minLength": 24},
+        "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
+        "question": {"type": "string", "maxLength": 60, "minLength": 5},
         "trim": {
             "type": "object",
             "properties": {
@@ -323,9 +321,8 @@ def download_video(mentor: str, question: str):
 cancel_upload_json_schema = {
     "type": "object",
     "properties": {
-        # Mongoose ObjectID == 24 characters
-        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
-        "question": {"type": "string", "maxLength": 24, "minLength": 24},
+        "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
+        "question": {"type": "string", "maxLength": 60, "minLength": 5},
         "task_ids_to_cancel": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["mentor", "question", "task_ids_to_cancel"],
@@ -388,9 +385,8 @@ def task_status(task_name: str, task_id: str):
 regen_vtt_json_schema = {
     "type": "object",
     "properties": {
-        # Mongoose ObjectID == 24 characters
-        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
-        "question": {"type": "string", "maxLength": 24, "minLength": 24},
+        "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
+        "question": {"type": "string", "maxLength": 60, "minLength": 5},
     },
     "required": ["mentor", "question"],
 }

@@ -59,9 +59,8 @@ def transfer(body):
 cancel_transfer_media_json_schema = {
     "type": "object",
     "properties": {
-        # Mongoose ObjectID == 24 characters
-        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
-        "question": {"type": "string", "maxLength": 24, "minLength": 24},
+        "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
+        "question": {"type": "string", "maxLength": 60, "minLength": 5},
         "task": {"type": "string"},
     },
     "required": ["mentor", "question", "task"],

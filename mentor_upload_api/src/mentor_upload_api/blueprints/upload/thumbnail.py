@@ -41,8 +41,7 @@ def _create_s3_client() -> S3Client:
 thumbnail_upload_json_schema = {
     "type": "object",
     "properties": {
-        # Mongoose ObjectID == 24 characters
-        "mentor": {"type": "string", "maxLength": 24, "minLength": 24},
+        "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
     },
     "required": ["mentor"],
 }

@@ -55,7 +55,7 @@ def authorize_to_manage_content(f):
     @wraps(f)
     def authorized_endpoint(*args, **kws):
         bearer_token = request.headers.get("Authorization", "")
-        token_authentication = bool(bearer_token.split(" ")[0].lower() == "bearer")
+        token_authentication = bearer_token.lower().startswith("bearer")
         if not token_authentication and not request.cookies.get("refreshToken", ""):
             log.debug("no authentication token provided")
             abort(401)
