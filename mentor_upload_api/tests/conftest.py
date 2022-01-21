@@ -9,8 +9,9 @@ from mentor_upload_api import create_app  # type: ignore
 import pytest
 import os
 
-os.environ["STATIC_AWS_REGION"] = 'us-east-1'
-os.environ["STATIC_AWS_S3_BUCKET"] = 'upload-test-bucket'
+os.environ["STATIC_AWS_REGION"] = "us-east-1"
+os.environ["STATIC_AWS_S3_BUCKET"] = "upload-test-bucket"
+
 
 @pytest.fixture
 def app():
