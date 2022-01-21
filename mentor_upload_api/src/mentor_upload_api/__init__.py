@@ -168,7 +168,7 @@ def create_app():
         response.content_type = "application/json"
         return response
 
-    app.register_error_handler(Exception, error_handler)
+    # app.register_error_handler(Exception, error_handler)
 
     if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
         logging.info("SENTRY enabled, calling init")
