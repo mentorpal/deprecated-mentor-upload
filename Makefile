@@ -38,6 +38,7 @@ license: LICENSE LICENSE_HEADER $(VENV)
 		&& python -m licenseheaders -t LICENSE_HEADER -d mentor_upload_worker/tests $(args) \
 		&& python -m licenseheaders -t LICENSE_HEADER -d mentor_upload_api/src $(args) \
 		&& python -m licenseheaders -t LICENSE_HEADER -d mentor_upload_api/tests $(args) \
+		&& python -m licenseheaders -t LICENSE_HEADER -d queue_processor $(args) \
 		&& python -m licenseheaders -t LICENSE_HEADER -d tools $(args) \
 		&& python -m licenseheaders -t LICENSE_HEADER -d word2vec $(args)
 	$(MAKE) format

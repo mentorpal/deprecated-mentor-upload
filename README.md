@@ -2,10 +2,11 @@
 
 Handles uploads of mentor answer videos, transcoding, transcription, etc.
 
-This repo contains two subprojects:
+This repo contains three subprojects:
 
 - mentor-upload-api: api for starting and tracking upload job
 - mentor-upload-worker: back end services handle processing
+- queue_processor: backend service that just handles answer uploads using SQS
 
 Celery is used for task management, and redis as a broker.
 

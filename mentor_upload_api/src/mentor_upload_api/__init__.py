@@ -14,12 +14,16 @@ import json  # NOQA E402
 from logging.config import dictConfig  # NOQA E402
 from flask import Flask, request, g, has_request_context  # NOQA E402
 from flask_cors import CORS  # NOQA E402
+from werkzeug.exceptions import HTTPException
 from mentor_upload_api.blueprints.ping import ping_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.answer import answer_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.transfer import transfer_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.thumbnail import (  # NOQA E402
     thumbnail_blueprint,
 )
+from mentor_upload_api.blueprints.v2.upload.answer import (
+    answer_blueprint as v2_answer_blueprint,
+)  # NOQA E402
 
 if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
     import sentry_sdk  # NOQA E402
@@ -146,6 +150,25 @@ def create_app():
     app = Flask(__name__)
     CORS(app)
 
+    def error_handler(e):
+        # pass through HTTP errors
+        if isinstance(e, HTTPException):
+            return e
+
+        response = e.get_response()
+        # replace the body with JSON
+        response.data = json.dumps(
+            {
+                "code": e.code,
+                "name": e.name,
+                "description": e.description,
+            }
+        )
+        response.content_type = "application/json"
+        return response
+
+    app.register_error_handler(Exception, error_handler)
+
     if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
         logging.info("SENTRY enabled, calling init")
         sentry_sdk.init(
@@ -162,6 +185,7 @@ def create_app():
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
     app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
+    app.register_blueprint(v2_answer_blueprint, url_prefix="/v2/upload/answer")
     app.register_blueprint(transfer_blueprint, url_prefix="/upload/transfer")
     app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")
 
