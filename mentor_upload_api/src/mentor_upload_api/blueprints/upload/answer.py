@@ -19,7 +19,10 @@ from mentor_upload_api.api import (
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
-from mentor_upload_api.authorization_decorator import authorize_to_manage_content
+from mentor_upload_api.authorization_decorator import (
+    authorize_to_manage_content,
+    authorize_to_edit_mentor,
+)
 from mentor_upload_api.helpers import validate_payload_json_decorator
 
 log = logging.getLogger("answer")

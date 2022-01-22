@@ -7,68 +7,107 @@
 from functools import wraps
 from flask import request, abort
 from os import environ
-from typing import TypedDict
-from mentor_upload_api.helpers import exec_graphql_with_json_validation
 import logging
+import jwt
+import json
+
+from mentor_upload_api.helpers import validate_json
 
 log = logging.getLogger("authorization")
 
 
-class GQLQueryBody(TypedDict):
-    query: str
-
-
-def get_graphql_endpoint() -> str:
-    return environ.get("GRAPHQL_ENDPOINT") or "http://graphql:3001/graphql"
-
-
-def get_authorization_gql() -> GQLQueryBody:
-    return {
-        "query": """query {
-            me {
-              canManageContent
-            }
-          }"""
-    }
-
-
-authorize_gql_json_schema = {
+jwt_payload_schema = {
     "type": "object",
     "properties": {
-        "data": {
-            "type": "object",
-            "properties": {
-                "me": {
-                    "type": "object",
-                    "properties": {"canManageContent": {"type": "boolean"}},
-                    "required": ["canManageContent"],
-                }
-            },
-            "required": ["me"],
+        "id": {"type": "string", "maxLength": 60, "minLength": 5},
+        "role": {"type": "string"},
+        "mentorIds": {
+            "type": "array",
+            "items": {"type": "string", "maxLength": 60, "minLength": 5},
         },
     },
-    "required": ["data"],
+    "required": ["id", "role", "mentorIds"],
 }
 
 
 def authorize_to_manage_content(f):
+    """Confirms the issuer is an admin or content manager via JWT"""
+
     @wraps(f)
     def authorized_endpoint(*args, **kws):
         bearer_token = request.headers.get("Authorization", "")
         token_authentication = bearer_token.lower().startswith("bearer")
-        if not token_authentication and not request.cookies.get("refreshToken", ""):
+        token_split = bearer_token.split(" ")
+        if not token_authentication or len(token_split) == 1:
             log.debug("no authentication token provided")
             abort(401)
-        headers = {"Authorization": bearer_token} if token_authentication else {}
-        cookies = request.cookies if not token_authentication else {}
-        gql_query = get_authorization_gql()
-        res_json = exec_graphql_with_json_validation(
-            gql_query, authorize_gql_json_schema, cookies=cookies, headers=headers
+        token = token_split[1]
+        jwt_secret = environ.get("JWT_SECRET")
+        try:
+            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            abort(401, "access token has expired")
+        validate_json(payload, jwt_payload_schema)
+        is_authorized = (
+            payload["role"] == "CONTENT_MANAGER" or payload["role"] == "ADMIN"
+        )
+        if not is_authorized:
+            abort(401)
+        return f(*args, **kws)
+
+    return authorized_endpoint
+
+
+authorize_edit_mentor_payload_schema = {
+    "type": "object",
+    "properties": {"mentor": {"type": "string", "minLength": 5, "maxLength": 60}},
+    "required": ["mentor"],
+}
+
+
+def authorize_to_edit_mentor(f):
+    """Crosschecks JWTs mentorId with the mentor being edited, or validates that the editor is an admin/content manager"""
+
+    @wraps(f)
+    def authorized_endpoint(*args, **kws):
+        # Get the mentor being edited from the request body
+        body = request.form.get("body", {})
+        if body:
+            json_body = json.loads(body)
+        else:
+            json_body = request.json
+        if not json_body:
+            raise Exception("missing required param body")
+
+        validate_json(json_body, authorize_edit_mentor_payload_schema)
+        mentor_being_edited = json_body["mentor"]
+
+        # Auth/authz requester via JWT data
+        bearer_token = request.headers.get("Authorization", "")
+        token_authentication = bearer_token.lower().startswith("bearer")
+        token_split = bearer_token.split(" ")
+        if not token_authentication or len(token_split) == 1:
+            log.debug("no authentication token provided")
+            abort(401)
+        token = token_split[1]
+        jwt_secret = environ.get("JWT_SECRET")
+        try:
+            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            abort(401, "access token has expired")
+        validate_json(payload, jwt_payload_schema)
+
+        # Check if the requester is either editing their own mentor, or has permissions to edit other mentors
+        requester_mentorids = payload["mentorIds"]
+        requester_can_manage_content = (
+            payload["role"] == "CONTENT_MANAGER" or payload["role"] == "ADMIN"
         )
 
-        is_authorized = res_json["data"]["me"]["canManageContent"]
-        if not is_authorized:
-            abort(403)
+        if (
+            mentor_being_edited not in requester_mentorids
+            and not requester_can_manage_content
+        ):
+            abort(401)
         return f(*args, **kws)
 
     return authorized_endpoint

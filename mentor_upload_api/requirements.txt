@@ -11,3 +11,4 @@ requests==2.26.0
 werkzeug==2.0.1
 sentry-sdk==1.5.1
 jsonschema==4.4.0
+pyjwt==2.3.0
