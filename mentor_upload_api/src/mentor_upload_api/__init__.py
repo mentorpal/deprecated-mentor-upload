@@ -14,12 +14,18 @@ import json  # NOQA E402
 from logging.config import dictConfig  # NOQA E402
 from flask import Flask, request, g, has_request_context  # NOQA E402
 from flask_cors import CORS  # NOQA E402
+from werkzeug.exceptions import HTTPException  # NOQA E402
+from jsonschema import ValidationError  # NOQA E402
 from mentor_upload_api.blueprints.ping import ping_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.answer import answer_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.transfer import transfer_blueprint  # NOQA E402
 from mentor_upload_api.blueprints.upload.thumbnail import (  # NOQA E402
     thumbnail_blueprint,
 )
+from mentor_upload_api.blueprints.v2.upload.answer import (  # NOQA E402
+    answer_blueprint as v2_answer_blueprint,
+)
+
 
 if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
     import sentry_sdk  # NOQA E402
@@ -146,6 +152,46 @@ def create_app():
     app = Flask(__name__)
     CORS(app)
 
+    def generic_exception_handler(e):
+        """Return JSON instead of generic 500 internal error for Exceptions"""
+        response = app.response_class(
+            response=json.dumps({"error": "Exception", "message": str(e)}),
+            status=400,
+            content_type="application/json",
+        )
+        return response
+
+    app.register_error_handler(Exception, generic_exception_handler)
+
+    def http_error_handler(e):
+        """Return JSON instead of HTML for HTTP errors."""
+        # start with the correct headers and status code from the error
+        response = e.get_response()
+        # replace the body with JSON
+        response.data = json.dumps(
+            {
+                "code": e.code,
+                "name": e.name,
+                "description": e.description,
+            }
+        )
+        response.content_type = "application/json"
+        return response
+
+    app.register_error_handler(HTTPException, http_error_handler)
+
+    def json_validation_error_handler(e):
+        response = app.response_class(
+            response=json.dumps(
+                {"error": "ValidationError", "message": str(e.message)}
+            ),
+            status=400,
+            content_type="application/json",
+        )
+        return response
+
+    app.register_error_handler(ValidationError, json_validation_error_handler)
+
     if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
         logging.info("SENTRY enabled, calling init")
         sentry_sdk.init(
@@ -162,6 +208,7 @@ def create_app():
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
     app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
+    app.register_blueprint(v2_answer_blueprint, url_prefix="/v2/upload/answer")
     app.register_blueprint(transfer_blueprint, url_prefix="/upload/transfer")
     app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")
 

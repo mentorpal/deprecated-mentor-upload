@@ -13,4 +13,3 @@ exclude =
     .venv,
     .vscode,
     build,
-

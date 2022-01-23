@@ -217,6 +217,7 @@ def upload(body):
         {
             "data": {
                 "taskList": task_list,
+                # this seems incorrect, passing multiple ids:
                 "statusUrl": _to_status_url(request.url_root, task_ids),
             }
         }

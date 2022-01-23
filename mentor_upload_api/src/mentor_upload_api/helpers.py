@@ -6,8 +6,7 @@
 #
 import json
 from functools import wraps
-import jsonschema
-from jsonschema import validate
+from jsonschema import validate, ValidationError
 from flask import request
 import requests
 import logging
@@ -31,9 +30,9 @@ def exec_graphql_with_json_validation(request_query, json_schema, **req_kwargs):
 def validate_json(json_data, json_schema):
     try:
         validate(instance=json_data, schema=json_schema)
-    except jsonschema.exceptions.ValidationError as err:
+    except ValidationError as err:
         logging.error(msg=err)
-        raise Exception(err)
+        raise ValidationError(err)
 
 
 def validate_payload_json_decorator(json_schema):
@@ -52,9 +51,9 @@ def validate_payload_json_decorator(json_schema):
                     raise Exception("missing required param body")
                 validate(instance=json_body, schema=json_schema)
                 return f(json_body, *args, **kwargs)
-            except jsonschema.exceptions.ValidationError as err:
+            except ValidationError as err:
                 logging.error(msg=err)
-                raise Exception(err)
+                raise ValidationError(err)
 
         return json_validated_function
 
