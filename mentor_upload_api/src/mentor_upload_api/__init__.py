@@ -156,7 +156,7 @@ def create_app():
         """Return JSON instead of generic 500 internal error for Exceptions"""
         response = app.response_class(
             response=json.dumps({"error": "Exception", "message": str(e)}),
-            status=400,
+            status=500,
             content_type="application/json",
         )
         return response
@@ -208,7 +208,7 @@ def create_app():
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
     app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
-    app.register_blueprint(v2_answer_blueprint, url_prefix="/v2/upload/answer")
+    app.register_blueprint(v2_answer_blueprint, url_prefix="/upload/v2/answer")
     app.register_blueprint(transfer_blueprint, url_prefix="/upload/transfer")
     app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")
 

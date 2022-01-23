@@ -32,7 +32,7 @@ def validate_json(json_data, json_schema):
         validate(instance=json_data, schema=json_schema)
     except ValidationError as err:
         logging.error(msg=err)
-        raise ValidationError(err)
+        raise err
 
 
 def validate_payload_json_decorator(json_schema):
@@ -53,7 +53,7 @@ def validate_payload_json_decorator(json_schema):
                 return f(json_body, *args, **kwargs)
             except ValidationError as err:
                 logging.error(msg=err)
-                raise ValidationError(err)
+                raise err
 
         return json_validated_function
 
