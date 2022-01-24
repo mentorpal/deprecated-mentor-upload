@@ -8,5 +8,6 @@ python-dotenv==0.19.0
 py_transcribe_aws>=1.0.0
 redis==3.5.3
 requests==2.26.0
-sentry-sdk[celery]==1.5.1
+sentry-sdk==1.5.1
+blinker==1.4
 jsonschema==4.4.0
