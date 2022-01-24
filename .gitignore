@@ -23,3 +23,5 @@ docker-test-train-out
 htmlcov
 htmlcov
 models
+.env
+scripts
