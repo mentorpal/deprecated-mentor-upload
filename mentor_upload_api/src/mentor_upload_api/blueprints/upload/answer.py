@@ -20,8 +20,8 @@ import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
 from mentor_upload_api.authorization_decorator import (
-    authorize_to_manage_content,
     authorize_to_edit_mentor,
+    authorize_to_manage_content,
 )
 from mentor_upload_api.helpers import validate_payload_json_decorator
 
@@ -90,6 +90,7 @@ trim_existing_upload_json_schema = {
 @answer_blueprint.route("/trim_existing_upload/", methods=["POST"])
 @answer_blueprint.route("/trim_existing_upload", methods=["POST"])
 @validate_payload_json_decorator(json_schema=trim_existing_upload_json_schema)
+@authorize_to_edit_mentor
 def trim_existing_upload(body):
     req_log.info("trim existing, body: [%s]", request.form.get("body"))
     mentor = body.get("mentor")
@@ -148,6 +149,7 @@ video_upload_json_schema = {
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
 @validate_payload_json_decorator(video_upload_json_schema)
+@authorize_to_edit_mentor
 def upload(body):
     log.info("%s", {"files": request.files, "body": request.form.get("body")})
     # request.form contains the entire video encoded, dont want all that in the logs:
@@ -335,6 +337,7 @@ cancel_upload_json_schema = {
 @answer_blueprint.route("/cancel/", methods=["POST"])
 @answer_blueprint.route("/cancel", methods=["POST"])
 @validate_payload_json_decorator(json_schema=cancel_upload_json_schema)
+@authorize_to_edit_mentor
 def cancel(body):
     mentor = body.get("mentor")
     question = body.get("question")
@@ -398,6 +401,7 @@ regen_vtt_json_schema = {
 @answer_blueprint.route("/regen_vtt/", methods=["POST"])
 @answer_blueprint.route("/regen_vtt", methods=["POST"])
 @validate_payload_json_decorator(json_schema=regen_vtt_json_schema)
+@authorize_to_edit_mentor
 def regen_vtt(body):
     mentor = body.get("mentor")
     question = body.get("question")
