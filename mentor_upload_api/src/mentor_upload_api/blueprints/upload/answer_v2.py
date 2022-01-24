@@ -20,9 +20,9 @@ from mentor_upload_api.api import (
 from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
 from mentor_upload_api.helpers import validate_payload_json_decorator
 
-log = logging.getLogger("v2/answer")
-req_log = logging.getLogger("v2/request")
-answer_blueprint = Blueprint("v2/answer", __name__)
+log = logging.getLogger("answer_v2")
+req_log = logging.getLogger("request")
+answer_v2_blueprint = Blueprint("answer_v2", __name__)
 
 
 def _require_env(n: str) -> str:
@@ -78,8 +78,8 @@ def video_trim(
     log.debug(ff)
 
 
-@answer_blueprint.route("/", methods=["POST"])
-@answer_blueprint.route("", methods=["POST"])
+@answer_v2_blueprint.route("/", methods=["POST"])
+@answer_v2_blueprint.route("", methods=["POST"])
 @validate_payload_json_decorator(video_upload_json_schema)
 def upload(body):
     log.info("%s", {"files": request.files, "body": request.form.get("body")})

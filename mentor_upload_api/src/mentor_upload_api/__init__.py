@@ -22,8 +22,8 @@ from mentor_upload_api.blueprints.upload.transfer import transfer_blueprint  # N
 from mentor_upload_api.blueprints.upload.thumbnail import (  # NOQA E402
     thumbnail_blueprint,
 )
-from mentor_upload_api.blueprints.v2.upload.answer import (  # NOQA E402
-    answer_blueprint as v2_answer_blueprint,
+from mentor_upload_api.blueprints.upload.answer_v2 import (  # NOQA E402
+    answer_v2_blueprint,
 )
 
 
@@ -208,7 +208,7 @@ def create_app():
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
     app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
-    app.register_blueprint(v2_answer_blueprint, url_prefix="/upload/v2/answer")
+    app.register_blueprint(answer_v2_blueprint, url_prefix="/upload/answer_v2")
     app.register_blueprint(transfer_blueprint, url_prefix="/upload/transfer")
     app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")
 
