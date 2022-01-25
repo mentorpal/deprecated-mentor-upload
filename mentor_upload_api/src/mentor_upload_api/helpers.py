@@ -12,6 +12,8 @@ import requests
 import logging
 from os import environ
 
+log = logging.getLogger()
+
 
 def get_graphql_endpoint() -> str:
     return environ.get("GRAPHQL_ENDPOINT") or "http://graphql:3001/graphql"
@@ -31,7 +33,7 @@ def validate_json(json_data, json_schema):
     try:
         validate(instance=json_data, schema=json_schema)
     except ValidationError as err:
-        logging.error(msg=err)
+        log.error(err)
         raise err
 
 
@@ -52,7 +54,7 @@ def validate_payload_json_decorator(json_schema):
                 validate(instance=json_body, schema=json_schema)
                 return f(json_body, *args, **kwargs)
             except ValidationError as err:
-                logging.error(msg=err)
+                log.error(err)
                 raise err
 
         return json_validated_function

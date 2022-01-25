@@ -33,9 +33,24 @@ def _require_env(n: str) -> str:
 
 static_s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
 log.info("using s3 bucket %s", static_s3_bucket)
-s3_client = boto3.client("s3")
-sns = boto3.client("sns", region_name=os.environ.get("STATIC_AWS_REGION"))
-ssm = boto3.client("ssm", region_name=os.environ.get("STATIC_AWS_REGION"))
+s3_client = boto3.client(
+    "s3",
+    region_name=_require_env("STATIC_AWS_REGION"),
+    aws_access_key_id=_require_env("STATIC_AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=_require_env("STATIC_AWS_SECRET_ACCESS_KEY"),
+)
+sns = boto3.client(
+    "sns",
+    region_name=os.environ.get("STATIC_AWS_REGION"),
+    aws_access_key_id=_require_env("STATIC_AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=_require_env("STATIC_AWS_SECRET_ACCESS_KEY"),
+)
+ssm = boto3.client(
+    "ssm",
+    region_name=os.environ.get("STATIC_AWS_REGION"),
+    aws_access_key_id=_require_env("STATIC_AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=_require_env("STATIC_AWS_SECRET_ACCESS_KEY"),
+)
 
 
 def _to_status_url(root: str, id: str) -> str:
