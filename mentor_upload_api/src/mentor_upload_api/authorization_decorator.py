@@ -11,7 +11,7 @@ from typing import TypedDict
 from mentor_upload_api.helpers import exec_graphql_with_json_validation
 import logging
 
-log = logging.getLogger("authorization")
+log = logging.getLogger()
 
 
 class GQLQueryBody(TypedDict):

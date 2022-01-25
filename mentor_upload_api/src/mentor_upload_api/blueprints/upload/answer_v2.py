@@ -20,8 +20,7 @@ from mentor_upload_api.api import (
 from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
 from mentor_upload_api.helpers import validate_payload_json_decorator
 
-log = logging.getLogger("answer_v2")
-req_log = logging.getLogger("request")
+log = logging.getLogger()
 answer_v2_blueprint = Blueprint("answer_v2", __name__)
 
 
