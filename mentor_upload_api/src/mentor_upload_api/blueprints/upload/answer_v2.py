@@ -21,7 +21,7 @@ from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
 from mentor_upload_api.helpers import validate_payload_json_decorator
 
 log = logging.getLogger()
-answer_v2_blueprint = Blueprint("answer_v2", __name__)
+answer_v2_blueprint = Blueprint("answer-v2", __name__)
 
 
 def _require_env(n: str) -> str:
@@ -39,7 +39,7 @@ ssm = boto3.client("ssm", region_name=os.environ.get("STATIC_AWS_REGION"))
 
 
 def _to_status_url(root: str, id: str) -> str:
-    return f"{request.url_root.replace('http://', 'https://', 1) if (environ.get('STATUS_URL_FORCE_HTTPS') or '').lower() in ('1', 'y', 'true', 'on') and str.startswith(request.url_root,'http://') else request.url_root}v2/upload/answer/status/{id}"
+    return f"{request.url_root.replace('http://', 'https://', 1) if (environ.get('STATUS_URL_FORCE_HTTPS') or '').lower() in ('1', 'y', 'true', 'on') and str.startswith(request.url_root,'http://') else request.url_root}/upload/answer/status/{id}"
 
 
 def get_upload_root() -> str:

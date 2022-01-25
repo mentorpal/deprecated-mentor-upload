@@ -208,7 +208,7 @@ def create_app():
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
     app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
-    app.register_blueprint(answer_v2_blueprint, url_prefix="/upload/answer_v2")
+    app.register_blueprint(answer_v2_blueprint, url_prefix="/upload/answer-v2")
     app.register_blueprint(transfer_blueprint, url_prefix="/upload/transfer")
     app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")
 
