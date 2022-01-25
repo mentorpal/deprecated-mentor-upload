@@ -5,6 +5,7 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
+from json import JSONDecodeError
 from functools import wraps
 from jsonschema import validate, ValidationError
 from flask import request
@@ -44,7 +45,10 @@ def validate_payload_json_decorator(json_schema):
                 raise Exception("'json_schema' param not provided to validator")
             body = request.form.get("body", {})
             if body:
-                json_body = json.loads(body)
+                try:
+                    json_body = json.loads(body)
+                except JSONDecodeError as err:
+                    raise err
             else:
                 json_body = request.json
             if not json_body:

@@ -11,6 +11,7 @@ from os import environ
 import logging
 import jwt
 import json
+from json import JSONDecodeError
 
 from mentor_upload_api.helpers import validate_json
 
@@ -83,7 +84,10 @@ def authorize_to_edit_mentor(f):
         # Get the mentor being edited from the request body
         body = request.form.get("body", {})
         if body:
-            json_body = json.loads(body)
+            try:
+                json_body = json.loads(body)
+            except JSONDecodeError as err:
+                raise err
         else:
             json_body = request.json
         if not json_body:
