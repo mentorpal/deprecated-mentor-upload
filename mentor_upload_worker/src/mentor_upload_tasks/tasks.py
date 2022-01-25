@@ -24,7 +24,7 @@ from mentor_upload_process import (  # NOQA
     RegenVTTRequest,
 )
 
-log = logging.getLogger("upload-worker-tasks")
+log = logging.getLogger()
 
 if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
     log.info("SENTRY enabled, calling init")
