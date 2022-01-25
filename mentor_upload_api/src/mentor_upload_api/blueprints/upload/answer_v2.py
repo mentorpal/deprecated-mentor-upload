@@ -20,9 +20,8 @@ from mentor_upload_api.api import (
 from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
 from mentor_upload_api.helpers import validate_payload_json_decorator
 
-log = logging.getLogger("answer_v2")
-req_log = logging.getLogger("request")
-answer_v2_blueprint = Blueprint("answer_v2", __name__)
+log = logging.getLogger()
+answer_v2_blueprint = Blueprint("answer-v2", __name__)
 
 
 def _require_env(n: str) -> str:
@@ -34,13 +33,28 @@ def _require_env(n: str) -> str:
 
 static_s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
 log.info("using s3 bucket %s", static_s3_bucket)
-s3_client = boto3.client("s3")
-sns = boto3.client("sns", region_name=os.environ.get("STATIC_AWS_REGION"))
-ssm = boto3.client("ssm", region_name=os.environ.get("STATIC_AWS_REGION"))
+s3_client = boto3.client(
+    "s3",
+    region_name=_require_env("STATIC_AWS_REGION"),
+    aws_access_key_id=_require_env("STATIC_AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=_require_env("STATIC_AWS_SECRET_ACCESS_KEY"),
+)
+sns = boto3.client(
+    "sns",
+    region_name=os.environ.get("STATIC_AWS_REGION"),
+    aws_access_key_id=_require_env("STATIC_AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=_require_env("STATIC_AWS_SECRET_ACCESS_KEY"),
+)
+ssm = boto3.client(
+    "ssm",
+    region_name=os.environ.get("STATIC_AWS_REGION"),
+    aws_access_key_id=_require_env("STATIC_AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=_require_env("STATIC_AWS_SECRET_ACCESS_KEY"),
+)
 
 
 def _to_status_url(root: str, id: str) -> str:
-    return f"{request.url_root.replace('http://', 'https://', 1) if (environ.get('STATUS_URL_FORCE_HTTPS') or '').lower() in ('1', 'y', 'true', 'on') and str.startswith(request.url_root,'http://') else request.url_root}v2/upload/answer/status/{id}"
+    return f"{request.url_root.replace('http://', 'https://', 1) if (environ.get('STATUS_URL_FORCE_HTTPS') or '').lower() in ('1', 'y', 'true', 'on') and str.startswith(request.url_root,'http://') else request.url_root}/upload/answer/status/{id}"
 
 
 def get_upload_root() -> str:

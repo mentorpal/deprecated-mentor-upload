@@ -22,7 +22,7 @@ import mentor_upload_tasks.tasks
 from mentor_upload_api.authorization_decorator import authorize_to_manage_content
 from mentor_upload_api.helpers import validate_payload_json_decorator
 
-log = logging.getLogger("answer")
+log = logging.getLogger()
 req_log = logging.getLogger("request")
 answer_blueprint = Blueprint("answer", __name__)
 

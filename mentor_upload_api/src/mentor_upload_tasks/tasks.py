@@ -23,7 +23,7 @@ from . import (
     get_queue_cancel_task,
 )
 
-log = logging.getLogger("api-tasks")
+log = logging.getLogger()
 
 broker_url = (
     os.environ.get("UPLOAD_CELERY_BROKER_URL")

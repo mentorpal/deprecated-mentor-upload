@@ -8,6 +8,8 @@ import os
 
 os.environ["STATIC_AWS_REGION"] = "us-east-1"
 os.environ["STATIC_AWS_S3_BUCKET"] = "upload-test-bucket"
+os.environ["STATIC_AWS_ACCESS_KEY_ID"] = "secret"
+os.environ["STATIC_AWS_SECRET_ACCESS_KEY"] = "secret"
 
 from flask import Response  # NOQA E402
 from mentor_upload_api import create_app  # NOQA E402 # type: ignore
