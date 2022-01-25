@@ -5,6 +5,7 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from functools import wraps
+from xml.dom import ValidationErr
 from flask import request, abort
 from os import environ
 import logging
@@ -30,24 +31,33 @@ jwt_payload_schema = {
 }
 
 
+def parse_payload_from_auth_header_jwt(request):
+    bearer_token = request.headers.get("Authorization", "")
+    token_authentication = bearer_token.lower().startswith("bearer")
+    token_split = bearer_token.split(" ")
+    if not token_authentication or len(token_split) == 1:
+        log.debug("no authentication token provided")
+        abort(401)
+    token = token_split[1]
+    jwt_secret = environ.get("JWT_SECRET")
+    try:
+        payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        abort(401, "access token has expired")
+
+    try:
+        validate_json(payload, jwt_payload_schema)
+    except ValidationErr as err:
+        raise err
+    return payload
+
+
 def authorize_to_manage_content(f):
     """Confirms the issuer is an admin or content manager via JWT"""
 
     @wraps(f)
     def authorized_endpoint(*args, **kws):
-        bearer_token = request.headers.get("Authorization", "")
-        token_authentication = bearer_token.lower().startswith("bearer")
-        token_split = bearer_token.split(" ")
-        if not token_authentication or len(token_split) == 1:
-            log.debug("no authentication token provided")
-            abort(401)
-        token = token_split[1]
-        jwt_secret = environ.get("JWT_SECRET")
-        try:
-            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-        except jwt.ExpiredSignatureError:
-            abort(401, "access token has expired")
-        validate_json(payload, jwt_payload_schema)
+        payload = parse_payload_from_auth_header_jwt(request)
         is_authorized = (
             payload["role"] == "CONTENT_MANAGER" or payload["role"] == "ADMIN"
         )
@@ -82,25 +92,12 @@ def authorize_to_edit_mentor(f):
         validate_json(json_body, authorize_edit_mentor_payload_schema)
         mentor_being_edited = json_body["mentor"]
 
-        # Auth/authz requester via JWT data
-        bearer_token = request.headers.get("Authorization", "")
-        token_authentication = bearer_token.lower().startswith("bearer")
-        token_split = bearer_token.split(" ")
-        if not token_authentication or len(token_split) == 1:
-            log.debug("no authentication token provided")
-            abort(401)
-        token = token_split[1]
-        jwt_secret = environ.get("JWT_SECRET")
-        try:
-            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-        except jwt.ExpiredSignatureError:
-            abort(401, "access token has expired")
-        validate_json(payload, jwt_payload_schema)
+        jwt_payload = parse_payload_from_auth_header_jwt(request)
 
         # Check if the requester is either editing their own mentor, or has permissions to edit other mentors
-        requester_mentorids = payload["mentorIds"]
+        requester_mentorids = jwt_payload["mentorIds"]
         requester_can_manage_content = (
-            payload["role"] == "CONTENT_MANAGER" or payload["role"] == "ADMIN"
+            jwt_payload["role"] == "CONTENT_MANAGER" or jwt_payload["role"] == "ADMIN"
         )
 
         if (
