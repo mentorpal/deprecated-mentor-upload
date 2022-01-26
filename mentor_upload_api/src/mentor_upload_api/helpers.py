@@ -14,7 +14,10 @@ import requests
 import logging
 from os import environ
 
+
 from flask_wtf import FlaskForm
+
+log = logging.getLogger()
 
 
 def get_graphql_endpoint() -> str:
@@ -35,7 +38,7 @@ def validate_json(json_data, json_schema):
     try:
         validate(instance=json_data, schema=json_schema)
     except ValidationError as err:
-        logging.error(msg=err)
+        log.error(err)
         raise err
 
 
@@ -59,7 +62,7 @@ def validate_json_payload_decorator(json_schema):
                 validate(instance=json_body, schema=json_schema)
                 return f(json_body, *args, **kwargs)
             except ValidationError as err:
-                logging.error(err)
+                log.error(err)
                 raise err
 
         return json_validated_function

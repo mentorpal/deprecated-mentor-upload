@@ -35,7 +35,7 @@ from mentor_upload_api.helpers import (
     ValidateFormJsonBody,
 )
 
-log = logging.getLogger("answer")
+log = logging.getLogger()
 req_log = logging.getLogger("request")
 answer_blueprint = Blueprint("answer", __name__)
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from os import environ
 from typing import TypedDict, List
 
-log = logging.getLogger("api")
+log = logging.getLogger()
 
 
 def get_graphql_endpoint() -> str:

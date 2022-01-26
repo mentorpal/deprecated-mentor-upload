@@ -15,7 +15,7 @@ from json import JSONDecodeError
 
 from mentor_upload_api.helpers import validate_json
 
-log = logging.getLogger("authorization")
+log = logging.getLogger()
 
 
 jwt_payload_schema = {

@@ -13,7 +13,7 @@ import math
 import ffmpy
 from pymediainfo import MediaInfo
 
-log = logging.getLogger("media-tools")
+log = logging.getLogger()
 
 
 def find_duration(audio_or_video_file: str) -> float:
