@@ -52,6 +52,7 @@ thumbnail_upload_json_schema = {
         "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
     },
     "required": ["mentor"],
+    "additionalProperties": False,
 }
 
 

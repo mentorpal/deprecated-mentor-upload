@@ -93,7 +93,8 @@ trim_existing_upload_json_schema = {
             "required": ["start", "end"],
         },
     },
-    "required": ["mentor", "question"],
+    "required": ["mentor", "question", "trim"],
+    "additionalPoperties": False,
 }
 
 
@@ -153,6 +154,7 @@ video_upload_json_schema = {
         },
     },
     "required": ["mentor", "question"],
+    "additionalPoperties": False,
 }
 
 
@@ -357,6 +359,7 @@ cancel_upload_json_schema = {
         "task_ids_to_cancel": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["mentor", "question", "task_ids_to_cancel"],
+    "additionalPoperties": False,
 }
 
 
@@ -421,6 +424,7 @@ regen_vtt_json_schema = {
         "question": {"type": "string", "maxLength": 60, "minLength": 5},
     },
     "required": ["mentor", "question"],
+    "additionalPoperties": False,
 }
 
 
