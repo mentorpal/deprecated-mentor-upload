@@ -208,9 +208,11 @@ def create_app():
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
     if os.environ.get("UPLOAD_ANSWER_VERSION", "queue") == "queue":
+        logging.info("using queues to process answer uploads")
         app.register_blueprint(answer_queue_blueprint, url_prefix="/upload/answer")
         app.register_blueprint(answer_blueprint, url_prefix="/upload/answer-queue")
     else:
+        logging.info("using celery to process answer uploads")
         app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
         app.register_blueprint(
             answer_queue_blueprint, url_prefix="/upload/answer-queue"
