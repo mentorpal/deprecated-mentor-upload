@@ -21,7 +21,7 @@ from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
 from mentor_upload_api.helpers import validate_payload_json_decorator
 
 log = logging.getLogger()
-answer_v2_blueprint = Blueprint("answer-v2", __name__)
+answer_queue_blueprint = Blueprint("answer-queue", __name__)
 
 
 def _require_env(n: str) -> str:
@@ -92,8 +92,8 @@ def video_trim(
     log.debug(ff)
 
 
-@answer_v2_blueprint.route("/", methods=["POST"])
-@answer_v2_blueprint.route("", methods=["POST"])
+@answer_queue_blueprint.route("/", methods=["POST"])
+@answer_queue_blueprint.route("", methods=["POST"])
 @validate_payload_json_decorator(video_upload_json_schema)
 def upload(body):
     log.info("%s", {"files": request.files, "body": request.form.get("body")})
@@ -174,11 +174,7 @@ def upload(body):
         }
     )
     task_list.append(
-        {
-            "task_name": "transcribing",
-            "task_id": str(uuid.uuid4()),
-            "status": "QUEUED",
-        }
+        {"task_name": "transcribing", "task_id": str(uuid.uuid4()), "status": "QUEUED"}
     )
 
     req = {

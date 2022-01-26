@@ -22,8 +22,8 @@ from mentor_upload_api.blueprints.upload.transfer import transfer_blueprint  # N
 from mentor_upload_api.blueprints.upload.thumbnail import (  # NOQA E402
     thumbnail_blueprint,
 )
-from mentor_upload_api.blueprints.upload.answer_v2 import (  # NOQA E402
-    answer_v2_blueprint,
+from mentor_upload_api.blueprints.upload.answer_queue import (  # NOQA E402
+    answer_queue_blueprint,
 )
 
 
@@ -207,8 +207,15 @@ def create_app():
         )
 
     app.register_blueprint(ping_blueprint, url_prefix="/upload/ping")
-    app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
-    app.register_blueprint(answer_v2_blueprint, url_prefix="/upload/answer-v2")
+    if os.environ.get("UPLOAD_ANSWER_VERSION", "queue") == "queue":
+        app.register_blueprint(answer_queue_blueprint, url_prefix="/upload/answer")
+        app.register_blueprint(answer_blueprint, url_prefix="/upload/answer-queue")
+    else:
+        app.register_blueprint(answer_blueprint, url_prefix="/upload/answer")
+        app.register_blueprint(
+            answer_queue_blueprint, url_prefix="/upload/answer-queue"
+        )
+
     app.register_blueprint(transfer_blueprint, url_prefix="/upload/transfer")
     app.register_blueprint(thumbnail_blueprint, url_prefix="/upload/thumbnail")
 
