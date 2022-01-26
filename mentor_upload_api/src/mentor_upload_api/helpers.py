@@ -14,6 +14,8 @@ import requests
 import logging
 from os import environ
 
+from flask_wtf import FlaskForm
+
 
 def get_graphql_endpoint() -> str:
     return environ.get("GRAPHQL_ENDPOINT") or "http://graphql:3001/graphql"
@@ -37,7 +39,7 @@ def validate_json(json_data, json_schema):
         raise err
 
 
-def validate_payload_json_decorator(json_schema):
+def validate_json_payload_decorator(json_schema):
     def validate_json_wrapper(f):
         @wraps(f)
         def json_validated_function(*args, **kwargs):
@@ -63,3 +65,38 @@ def validate_payload_json_decorator(json_schema):
         return json_validated_function
 
     return validate_json_wrapper
+
+
+class ValidateFormJsonBody(object):
+    def __init__(self, json_schema):
+        self.json_schema = json_schema
+
+    def __call__(self, form, body):
+        try:
+            json_data = json.loads(body.data)
+        except json.decoder.JSONDecodeError as e:
+            logging.error(e)
+            raise e
+        try:
+            validate_json(json_data, self.json_schema)
+        except ValidationError as e:
+            logging.error(e)
+            raise e
+
+
+def validate_form_payload_decorator(flask_form: FlaskForm):
+    def validate_form_wrapper(f):
+        @wraps(f)
+        def form_validated_function(*args, **kwargs):
+            form = flask_form(meta={"csrf": False})
+            is_valid = form.validate_on_submit()
+            if not is_valid:
+                logging.error(form.errors)
+                raise BadRequest(form.errors)
+            body = form.data.get("body")
+            json_body = json.loads(body)
+            return f(json_body, *args, **kwargs)
+
+        return form_validated_function
+
+    return validate_form_wrapper
