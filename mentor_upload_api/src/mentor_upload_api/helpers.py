@@ -67,6 +67,7 @@ def validate_json_payload_decorator(json_schema):
     return validate_json_wrapper
 
 
+# Used as a validator for FlaskForms (Flask-WTF) with json bodies
 class ValidateFormJsonBody(object):
     def __init__(self, json_schema):
         self.json_schema = json_schema
@@ -94,8 +95,11 @@ def validate_form_payload_decorator(flask_form: FlaskForm):
                 logging.error(form.errors)
                 raise BadRequest(form.errors)
             body = form.data.get("body")
-            json_body = json.loads(body)
-            return f(json_body, *args, **kwargs)
+            # Return body in json if one exists
+            if body:
+                json_body = json.loads(body)
+                return f(json_body, *args, **kwargs)
+            return f(*args, **kwargs)
 
         return form_validated_function
 
