@@ -5,12 +5,17 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 import json
+from json import JSONDecodeError
 from functools import wraps
 from jsonschema import validate, ValidationError
 from flask import request
+from werkzeug.exceptions import BadRequest
 import requests
 import logging
 from os import environ
+
+
+from flask_wtf import FlaskForm
 
 log = logging.getLogger()
 
@@ -37,20 +42,23 @@ def validate_json(json_data, json_schema):
         raise err
 
 
-def validate_payload_json_decorator(json_schema):
+def validate_json_payload_decorator(json_schema):
     def validate_json_wrapper(f):
         @wraps(f)
         def json_validated_function(*args, **kwargs):
-            try:
-                if not json_schema:
-                    raise Exception("'json_schema' param not provided to validator")
-                body = request.form.get("body", {})
-                if body:
+            if not json_schema:
+                raise Exception("'json_schema' param not provided to validator")
+            body = request.form.get("body", {})
+            if body:
+                try:
                     json_body = json.loads(body)
-                else:
-                    json_body = request.json
-                if not json_body:
-                    raise Exception("missing required param body")
+                except JSONDecodeError as err:
+                    raise err
+            else:
+                json_body = request.json
+            if not json_body:
+                raise BadRequest("missing required param body")
+            try:
                 validate(instance=json_body, schema=json_schema)
                 return f(json_body, *args, **kwargs)
             except ValidationError as err:
@@ -60,3 +68,42 @@ def validate_payload_json_decorator(json_schema):
         return json_validated_function
 
     return validate_json_wrapper
+
+
+# Used as a validator for FlaskForms (Flask-WTF) with json bodies
+class ValidateFormJsonBody(object):
+    def __init__(self, json_schema):
+        self.json_schema = json_schema
+
+    def __call__(self, form, body):
+        try:
+            json_data = json.loads(body.data)
+        except json.decoder.JSONDecodeError as e:
+            logging.error(e)
+            raise e
+        try:
+            validate_json(json_data, self.json_schema)
+        except ValidationError as e:
+            logging.error(e)
+            raise e
+
+
+def validate_form_payload_decorator(flask_form: FlaskForm):
+    def validate_form_wrapper(f):
+        @wraps(f)
+        def form_validated_function(*args, **kwargs):
+            form = flask_form(meta={"csrf": False})
+            is_valid = form.validate_on_submit()
+            if not is_valid:
+                logging.error(form.errors)
+                raise BadRequest(form.errors)
+            body = form.data.get("body")
+            # Return body in json if one exists
+            if body:
+                json_body = json.loads(body)
+                return f(json_body, *args, **kwargs)
+            return f(*args, **kwargs)
+
+        return form_validated_function
+
+    return validate_form_wrapper

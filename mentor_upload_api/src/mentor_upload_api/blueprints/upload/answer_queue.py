@@ -18,7 +18,7 @@ from mentor_upload_api.api import (
     upload_task_update,
 )
 from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
-from mentor_upload_api.helpers import validate_payload_json_decorator
+from mentor_upload_api.helpers import validate_json_payload_decorator
 
 log = logging.getLogger()
 answer_queue_blueprint = Blueprint("answer-queue", __name__)
@@ -94,7 +94,7 @@ def video_trim(
 
 @answer_queue_blueprint.route("/", methods=["POST"])
 @answer_queue_blueprint.route("", methods=["POST"])
-@validate_payload_json_decorator(video_upload_json_schema)
+@validate_json_payload_decorator(video_upload_json_schema)
 def upload(body):
     log.info("%s", {"files": request.files, "body": request.form.get("body")})
     # TODO reject request if there's already a job in progress

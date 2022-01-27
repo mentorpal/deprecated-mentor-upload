@@ -68,7 +68,7 @@ def _test_env(monkeypatch, timestamp: str):
 @pytest.mark.parametrize(
     "input_mentor,input_thumbnail,timestamp",
     [
-        ("mentor1-fake-mongoose-id", "thumbnail.txt", TIMESTAMP_DEFAULT),
+        ("mentor1-fake-mongoose-id", "thumbnail.png", TIMESTAMP_DEFAULT),
     ],
 )
 @patch("boto3.client")

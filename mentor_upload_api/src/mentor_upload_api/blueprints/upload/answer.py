@@ -12,6 +12,12 @@ from dateutil import tz
 from flask import Blueprint, jsonify, request, send_from_directory
 from celery import group, chord
 
+
+from flask_wtf import FlaskForm
+from wtforms import StringField
+from wtforms.validators import DataRequired
+from flask_wtf.file import FileRequired, FileAllowed, FileField
+
 from mentor_upload_api.api import (
     UploadTaskRequest,
     upload_task_update,
@@ -19,8 +25,15 @@ from mentor_upload_api.api import (
 import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
-from mentor_upload_api.authorization_decorator import authorize_to_manage_content
-from mentor_upload_api.helpers import validate_payload_json_decorator
+from mentor_upload_api.authorization_decorator import (
+    authorize_to_edit_mentor,
+    authorize_to_manage_content,
+)
+from mentor_upload_api.helpers import (
+    validate_json_payload_decorator,
+    validate_form_payload_decorator,
+    ValidateFormJsonBody,
+)
 
 log = logging.getLogger()
 req_log = logging.getLogger("request")
@@ -80,13 +93,15 @@ trim_existing_upload_json_schema = {
             "required": ["start", "end"],
         },
     },
-    "required": ["mentor", "question"],
+    "required": ["mentor", "question", "trim"],
+    "additionalProperties": False,
 }
 
 
 @answer_blueprint.route("/trim_existing_upload/", methods=["POST"])
 @answer_blueprint.route("/trim_existing_upload", methods=["POST"])
-@validate_payload_json_decorator(json_schema=trim_existing_upload_json_schema)
+@validate_json_payload_decorator(json_schema=trim_existing_upload_json_schema)
+@authorize_to_edit_mentor
 def trim_existing_upload(body):
     req_log.info("trim existing, body: [%s]", request.form.get("body"))
     mentor = body.get("mentor")
@@ -139,12 +154,29 @@ video_upload_json_schema = {
         },
     },
     "required": ["mentor", "question"],
+    "additionalProperties": False,
 }
+
+
+# Flask-WTF form: defines schema for multipart/form-data request
+class UploadVideoFormSchema(FlaskForm):
+    body = StringField(
+        "body",
+        [DataRequired(), ValidateFormJsonBody(json_schema=video_upload_json_schema)],
+    )
+    video = FileField(
+        "video",
+        [
+            FileRequired(),
+            FileAllowed(["mp3", "mp4"], "mp3 or mp4 file format required."),
+        ],
+    )
 
 
 @answer_blueprint.route("/", methods=["POST"])
 @answer_blueprint.route("", methods=["POST"])
-@validate_payload_json_decorator(video_upload_json_schema)
+@validate_form_payload_decorator(UploadVideoFormSchema)
+@authorize_to_edit_mentor
 def upload(body):
     log.info("%s", {"files": request.files, "body": request.form.get("body")})
     # request.form contains the entire video encoded, dont want all that in the logs:
@@ -327,12 +359,14 @@ cancel_upload_json_schema = {
         "task_ids_to_cancel": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["mentor", "question", "task_ids_to_cancel"],
+    "additionalProperties": False,
 }
 
 
 @answer_blueprint.route("/cancel/", methods=["POST"])
 @answer_blueprint.route("/cancel", methods=["POST"])
-@validate_payload_json_decorator(json_schema=cancel_upload_json_schema)
+@validate_json_payload_decorator(json_schema=cancel_upload_json_schema)
+@authorize_to_edit_mentor
 def cancel(body):
     mentor = body.get("mentor")
     question = body.get("question")
@@ -390,12 +424,14 @@ regen_vtt_json_schema = {
         "question": {"type": "string", "maxLength": 60, "minLength": 5},
     },
     "required": ["mentor", "question"],
+    "additionalProperties": False,
 }
 
 
 @answer_blueprint.route("/regen_vtt/", methods=["POST"])
 @answer_blueprint.route("/regen_vtt", methods=["POST"])
-@validate_payload_json_decorator(json_schema=regen_vtt_json_schema)
+@validate_json_payload_decorator(json_schema=regen_vtt_json_schema)
+@authorize_to_edit_mentor
 def regen_vtt(body):
     mentor = body.get("mentor")
     question = body.get("question")
