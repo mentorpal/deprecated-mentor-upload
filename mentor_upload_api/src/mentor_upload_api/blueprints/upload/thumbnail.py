@@ -12,12 +12,20 @@ import boto3
 from boto3_type_annotations.s3 import Client as S3Client
 from flask import Blueprint, jsonify, request
 
+from flask_wtf import FlaskForm
+from wtforms import StringField
+from wtforms.validators import DataRequired
+from flask_wtf.file import FileRequired, FileAllowed, FileField
+
 from mentor_upload_api.api import (
     MentorThumbnailUpdateRequest,
     mentor_thumbnail_update,
 )
 
-from mentor_upload_api.helpers import validate_payload_json_decorator
+from mentor_upload_api.helpers import (
+    validate_form_payload_decorator,
+    ValidateFormJsonBody,
+)
 
 thumbnail_blueprint = Blueprint("thumbnail", __name__)
 
@@ -44,7 +52,26 @@ thumbnail_upload_json_schema = {
         "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
     },
     "required": ["mentor"],
+    "additionalProperties": False,
 }
+
+
+# Flask-WTF validation class
+class UploadThumbnailFormSchema(FlaskForm):
+    body = StringField(
+        "body",
+        [
+            DataRequired(),
+            ValidateFormJsonBody(json_schema=thumbnail_upload_json_schema),
+        ],
+    )
+    thumbnail = FileField(
+        "thumbnail",
+        [
+            FileRequired(),
+            FileAllowed(["jpg", "png"], "JPG or PNG file format required."),
+        ],
+    )
 
 
 # TODO: probably want to force the size and quality of this image
@@ -53,7 +80,7 @@ thumbnail_upload_json_schema = {
 # and to an async worker, like video upload
 @thumbnail_blueprint.route("/", methods=["POST"])
 @thumbnail_blueprint.route("", methods=["POST"])
-@validate_payload_json_decorator(json_schema=thumbnail_upload_json_schema)
+@validate_form_payload_decorator(UploadThumbnailFormSchema)
 def upload(body):
     mentor = body.get("mentor")
     upload_file = request.files["thumbnail"]

@@ -91,9 +91,11 @@ def python_path_env(monkeypatch, tmpdir):
 @patch("mentor_upload_tasks.tasks.transcode_stage")
 @patch("mentor_upload_tasks.tasks.transcribe_stage")
 @patch("mentor_upload_tasks.tasks.finalization_stage")
+@patch("mentor_upload_api.authorization_decorator.jwt.decode")
 @patch.object(uuid, "uuid4")
 def test_upload(
     mock_uuid,
+    jwt_decode_mock: Mock,
     finalization_stage_task,
     transcribe_stage_task,
     transcode_stage_task,
@@ -110,6 +112,11 @@ def test_upload(
     fake_trim_upload_task_id,
     client,
 ):
+    jwt_decode_mock.return_value = {
+        "id": input_mentor,
+        "role": "USER",
+        "mentorIds": [input_mentor, "123456"],
+    }
     mock_uuid.return_value = "fake_uuid"
     mock_chord_result = Bunch(
         parent=Bunch(
@@ -160,6 +167,7 @@ def test_upload(
             "body": json.dumps({"mentor": input_mentor, "question": input_question}),
             "video": open(path.join(fixture_path("input_videos"), input_video), "rb"),
         },
+        headers={"Authorization": "bearer abcdefg1234567"},
     )
     _expect_gql([expected_status_update_query])
     assert res.status_code == 200
@@ -313,9 +321,11 @@ def test_trim_existing_upload_throws_incorrect_json_payload(
 @patch("mentor_upload_tasks.tasks.transcode_stage")
 @patch("mentor_upload_tasks.tasks.transcribe_stage")
 @patch("mentor_upload_tasks.tasks.finalization_stage")
+@patch("mentor_upload_api.authorization_decorator.jwt.decode")
 @patch.object(uuid, "uuid4")
 def test_cancel(
     mock_uuid,
+    jwt_decode_mock: Mock,
     finalization_stage_task,
     transcribe_stage_task,
     transcode_stage_task,
@@ -338,6 +348,11 @@ def test_cancel(
     fake_cancel_trim_upload_task_id,
     client,
 ):
+    jwt_decode_mock.return_value = {
+        "id": "mentor1-fake-mongoose-id",
+        "role": "ADMIN",
+        "mentorIds": ["123456", "123456"],
+    }
     mock_uuid.return_value = "fake_uuid"
     # mocking the result of the chord
     mock_chord_result = Bunch(
@@ -389,6 +404,7 @@ def test_cancel(
             "body": json.dumps({"mentor": input_mentor, "question": input_question}),
             "video": open(path.join(fixture_path("input_videos"), input_video), "rb"),
         },
+        headers={"Authorization": "bearer abcdefg1234567"},
     )
     _expect_gql([expected_status_update_query])
     assert res.status_code == 200
@@ -411,6 +427,7 @@ def test_cancel(
             "question": input_question,
             "task_ids_to_cancel": [fake_trim_upload_task_id],
         },
+        headers={"Authorization": "bearer abcdefg1234567"},
     )
     assert res.status_code == 200
     assert res.json == {
@@ -480,7 +497,9 @@ def test_cancel_upload_throw_incorrect_json_payload(client):
 @patch("mentor_upload_tasks.tasks.transcode_stage")
 @patch("mentor_upload_tasks.tasks.transcribe_stage")
 @patch("mentor_upload_tasks.tasks.finalization_stage")
+@patch("mentor_upload_api.authorization_decorator.jwt.decode")
 def test_env_fixes_ssl_status_url(
+    jwt_decode_mock: Mock,
     finalization_stage_task,
     transcribe_stage_task,
     transcode_stage_task,
@@ -492,6 +511,11 @@ def test_env_fixes_ssl_status_url(
     monkeypatch,
     client,
 ):
+    jwt_decode_mock.return_value = {
+        "id": "mentor1-fake-mongoose-id",
+        "role": "ADMIN",
+        "mentorIds": ["123456", "123456"],
+    }
     fake_mentor_id = "mentor1-fake-mongoose-id"
     fake_question_id = "question-fake-mongooseid"
     fake_video = open(path.join(fixture_path("input_videos"), "video.mp4"), "rb")
@@ -546,6 +570,7 @@ def test_env_fixes_ssl_status_url(
             ),
             "video": fake_video,
         },
+        headers={"Authorization": "bearer abcdefg1234567"},
     )
     _expect_gql([expected_status_update_query])
     assert res.status_code == 200

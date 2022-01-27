@@ -11,6 +11,7 @@ load_dotenv()  # take environment variables from .env.
 import os  # NOQA E402
 import logging  # NOQA E402
 import json  # NOQA E402
+from json import JSONDecodeError  # NOQA E402
 from logging.config import dictConfig  # NOQA E402
 from flask import Flask, request, g, has_request_context  # NOQA E402
 from flask_cors import CORS  # NOQA E402
@@ -191,6 +192,16 @@ def create_app():
         return response
 
     app.register_error_handler(ValidationError, json_validation_error_handler)
+
+    def json_parse_error_handler(e):
+        response = app.response_class(
+            response=json.dumps({"error": "JSON Parse Error", "message": str(e)}),
+            status=400,
+            content_type="application/json",
+        )
+        return response
+
+    app.register_error_handler(JSONDecodeError, json_parse_error_handler)
 
     if os.environ.get("IS_SENTRY_ENABLED", "") == "true":
         logging.info("SENTRY enabled, calling init")

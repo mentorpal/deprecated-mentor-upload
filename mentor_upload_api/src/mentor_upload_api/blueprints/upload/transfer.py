@@ -12,7 +12,7 @@ import mentor_upload_tasks
 import mentor_upload_tasks.tasks
 
 
-from mentor_upload_api.helpers import validate_payload_json_decorator
+from mentor_upload_api.helpers import validate_json_payload_decorator
 
 
 transfer_blueprint = Blueprint("transfer", __name__)
@@ -30,12 +30,13 @@ transfer_media_json_schema = {
     "type": "object",
     "properties": {"mentor": {"type": "string"}, "question": {"type": "string"}},
     "required": ["mentor", "question"],
+    "additionalProperties": False,
 }
 
 
 @transfer_blueprint.route("/", methods=["POST"])
 @transfer_blueprint.route("", methods=["POST"])
-@validate_payload_json_decorator(json_schema=transfer_media_json_schema)
+@validate_json_payload_decorator(json_schema=transfer_media_json_schema)
 def transfer(body):
     mentor = body.get("mentor")
     question = body.get("question")
@@ -64,12 +65,13 @@ cancel_transfer_media_json_schema = {
         "task": {"type": "string"},
     },
     "required": ["mentor", "question", "task"],
+    "additionalProperties": False,
 }
 
 
 @transfer_blueprint.route("/cancel/", methods=["POST"])
 @transfer_blueprint.route("/cancel", methods=["POST"])
-@validate_payload_json_decorator(json_schema=cancel_transfer_media_json_schema)
+@validate_json_payload_decorator(json_schema=cancel_transfer_media_json_schema)
 def cancel(body):
     mentor = body.get("mentor")
     question = body.get("question")
