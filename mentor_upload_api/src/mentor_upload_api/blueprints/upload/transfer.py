@@ -30,7 +30,7 @@ transfer_media_json_schema = {
     "type": "object",
     "properties": {"mentor": {"type": "string"}, "question": {"type": "string"}},
     "required": ["mentor", "question"],
-    "additionalPoperties": False,
+    "additionalProperties": False,
 }
 
 
@@ -65,7 +65,7 @@ cancel_transfer_media_json_schema = {
         "task": {"type": "string"},
     },
     "required": ["mentor", "question", "task"],
-    "additionalPoperties": False,
+    "additionalProperties": False,
 }
 
 
