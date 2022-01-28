@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from os import environ
 from typing import TypedDict, List
 
+from mentor_upload_api.helpers import validate_json
+
 log = logging.getLogger()
 
 
@@ -147,3 +149,61 @@ def mentor_thumbnail_update(req: MentorThumbnailUpdateRequest) -> None:
     tdjson = res.json()
     if "errors" in tdjson:
         raise Exception(json.dumps(tdjson.get("errors")))
+
+
+@dataclass
+class FetchUploadTaskReq:
+    mentor: str
+    question: str
+
+
+def fetch_upload_task_gql(req: FetchUploadTaskReq) -> GQLQueryBody:
+    return {
+        "query": """query UploadTask($mentorId: ID!, $questionId: ID!) {
+            uploadTask(mentorId: $mentorId, questionId: $questionId){
+                taskList{
+                    task_name
+                }
+            }
+            }""",
+        "variables": {"mentorId": req.mentor, "questionId": req.question},
+    }
+
+
+fetch_upload_task_schema = {
+    "type": "object",
+    "properties": {
+        "data": {
+            "type": "object",
+            "properties": {
+                "uploadTask": {
+                    "type": ["object", "null"],
+                    "properties": {
+                        "taskList": {
+                            "type": "array",
+                            "item": {
+                                "type": "object",
+                                "properties": {"task_name": {"type": "string"}},
+                            },
+                        }
+                    },
+                }
+            },
+            "required": ["uploadTask"],
+        }
+    },
+    "required": ["data"],
+}
+
+
+def is_upload_in_progress(req: FetchUploadTaskReq) -> bool:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = fetch_upload_task_gql(req)
+    log.debug(body)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    validate_json(tdjson, fetch_upload_task_schema)
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
+    return bool(tdjson["data"]["uploadTask"])
