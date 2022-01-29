@@ -92,6 +92,66 @@ def video_trim(
     log.debug(ff)
 
 
+def submit_job(req):
+    arn_param = f"/mentorpal/{os.environ.get('STAGE')}/shared/upload_sns_arn"
+    response = ssm.get_parameters(Names=[arn_param], WithDecryption=False)
+    log.debug("ssm response %s", response)
+    upload_arn = response["Parameters"][0]["Value"]
+    log.info("publishing job request to %s", upload_arn)
+    # todo test failure if we need to check sns_msg.ResponseMetadata.HTTPStatusCode != 200
+    sns_msg = sns.publish(TopicArn=upload_arn, Message=json.dumps(req))
+    log.info("sns message published %s", sns_msg["MessageId"])
+
+
+def create_task_list(trim):
+    task_list = []
+    if trim:
+        task_list.append(
+            {
+                "task_name": "trim_upload",
+                "task_id": str(uuid.uuid4()),
+                "status": "DONE",
+            }
+        )
+
+    task_list.append(
+        {
+            "task_name": "transcoding-web",
+            "task_id": str(uuid.uuid4()),
+            "status": "QUEUED",
+        }
+    )
+    task_list.append(
+        {
+            "task_name": "transcoding-mobile",
+            "task_id": str(uuid.uuid4()),
+            "status": "QUEUED",
+        }
+    )
+    task_list.append(
+        {"task_name": "transcribing", "task_id": str(uuid.uuid4()), "status": "QUEUED"}
+    )
+
+    return task_list
+
+
+def upload_to_s3(file_path, s3_path):
+    log.info("uploading %s to %s", file_path, s3_path)
+    # to prevent data inconsistency by partial failures (new web.mp3 - old transcript...)
+    all_artifacts = ["original.mp4", "web.mp4", "mobile.mp4", "en.vtt"]
+    s3_client.delete_objects(
+        Bucket=static_s3_bucket,
+        Delete={"Objects": [{"Key": f"{s3_path}/{name}"} for name in all_artifacts]},
+    )
+
+    s3_client.upload_file(
+        file_path,
+        static_s3_bucket,
+        f"{s3_path}/original.mp4",
+        ExtraArgs={"ContentType": "video/mp4"},
+    )
+
+
 @answer_queue_blueprint.route("/", methods=["POST"])
 @answer_queue_blueprint.route("", methods=["POST"])
 @validate_json_payload_decorator(video_upload_json_schema)
@@ -134,48 +194,9 @@ def upload(body):
         file_path = trim_file  # from now on work with the trimmed file
 
     s3_path = f"videos/{mentor}/{question}"
-    log.info("uploading %s to %s", file_path, s3_path)
-    # to prevent data inconsistency by partial failures (new web.mp3 - old transcript...)
-    all_artifacts = ["original.mp4", "web.mp4", "mobile.mp4", "en.vtt"]
-    s3_client.delete_objects(
-        Bucket=static_s3_bucket,
-        Delete={"Objects": [{"Key": f"{s3_path}/{name}"} for name in all_artifacts]},
-    )
+    upload_to_s3(file_path, s3_path)
 
-    s3_client.upload_file(
-        file_path,
-        static_s3_bucket,
-        f"{s3_path}/original.mp4",
-        ExtraArgs={"ContentType": "video/mp4"},
-    )
-
-    task_list = []
-    if trim:
-        task_list.append(
-            {
-                "task_name": "trim_upload",
-                "task_id": str(uuid.uuid4()),
-                "status": "DONE",
-            }
-        )
-
-    task_list.append(
-        {
-            "task_name": "transcoding-web",
-            "task_id": str(uuid.uuid4()),
-            "status": "QUEUED",
-        }
-    )
-    task_list.append(
-        {
-            "task_name": "transcoding-mobile",
-            "task_id": str(uuid.uuid4()),
-            "status": "QUEUED",
-        }
-    )
-    task_list.append(
-        {"task_name": "transcribing", "task_id": str(uuid.uuid4()), "status": "QUEUED"}
-    )
+    task_list = create_task_list(trim)
 
     req = {
         "request": {
@@ -186,14 +207,8 @@ def upload(body):
         }
     }
 
-    arn_param = f"/mentorpal/{os.environ.get('STAGE')}/shared/upload_sns_arn"
-    response = ssm.get_parameters(Names=[arn_param], WithDecryption=False)
-    log.debug("ssm response %s", response)
-    upload_arn = response["Parameters"][0]["Value"]
-    log.info("publishing job request to %s", upload_arn)
-    # todo test failure if we need to check sns_msg.ResponseMetadata.HTTPStatusCode != 200
-    sns_msg = sns.publish(TopicArn=upload_arn, Message=json.dumps(req))
-    log.info("sns message published %s", sns_msg["MessageId"])
+    submit_job(req)
+
     # we risk here overriding values, perhaps processing was already done, so status is DONE
     # but this will overwrite and revert them back to QUEUED. Can we just append?
     upload_task_update(
