@@ -14,11 +14,22 @@ from typing import Tuple, Union
 from os import environ, path, makedirs
 from flask import Blueprint, jsonify, request
 from mentor_upload_api.api import (
+    FetchUploadTaskReq,
     UploadTaskRequest,
+    is_upload_in_progress,
     upload_task_update,
 )
 from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
-from mentor_upload_api.helpers import validate_json_payload_decorator
+from mentor_upload_api.helpers import (
+    validate_form_payload_decorator,
+    ValidateFormJsonBody,
+)
+
+from werkzeug.exceptions import BadRequest
+from flask_wtf import FlaskForm
+from wtforms import StringField
+from wtforms.validators import DataRequired
+from flask_wtf.file import FileRequired, FileAllowed, FileField
 
 log = logging.getLogger()
 answer_queue_blueprint = Blueprint("answer-queue", __name__)
@@ -152,18 +163,39 @@ def upload_to_s3(file_path, s3_path):
     )
 
 
+def verify_no_upload_in_progress(mentor, question):
+    upload_in_progress = is_upload_in_progress(FetchUploadTaskReq(mentor, question))
+    if upload_in_progress:
+        raise BadRequest("There is an upload already in progress, please wait.")
+
+
+# Flask-WTF form: defines schema for multipart/form-data request
+class UploadVideoFormSchema(FlaskForm):
+    body = StringField(
+        "body",
+        [DataRequired(), ValidateFormJsonBody(json_schema=video_upload_json_schema)],
+    )
+    video = FileField(
+        "video",
+        [
+            FileRequired(),
+            FileAllowed(["mp3", "mp4"], "mp3 or mp4 file format required."),
+        ],
+    )
+
+
 @answer_queue_blueprint.route("/", methods=["POST"])
 @answer_queue_blueprint.route("", methods=["POST"])
-@validate_json_payload_decorator(video_upload_json_schema)
+@validate_form_payload_decorator(UploadVideoFormSchema)
 def upload(body):
     log.info("%s", {"files": request.files, "body": request.form.get("body")})
-    # TODO reject request if there's already a job in progress
 
     # request.form contains the entire video encoded, dont want all that in the logs:
     # req_log.info(request.form(as_text=True)[:300])
 
     mentor = body.get("mentor")
     question = body.get("question")
+    verify_no_upload_in_progress(mentor, question)
     trim = body.get("trim")
     upload_file = request.files["video"]
     root_ext = path.splitext(upload_file.filename)
