@@ -24,7 +24,7 @@ from mentor_upload_api.helpers import (
     validate_form_payload_decorator,
     ValidateFormJsonBody,
 )
-
+from pymediainfo import MediaInfo
 from werkzeug.exceptions import BadRequest
 from flask_wtf import FlaskForm
 from wtforms import StringField
@@ -213,6 +213,11 @@ def upload(body):
     )
     makedirs(get_upload_root(), exist_ok=True)
     upload_file.save(file_path)
+    minfo = MediaInfo.parse(file_path)
+    if len(minfo.video_tracks) == 0:
+        raise BadRequest("No video tracks found!")
+    if minfo.video_tracks[0].duration < 1000:  # 1sec
+        raise BadRequest("Video too short!")
 
     if trim:
         log.info("trimming file %s", trim)
