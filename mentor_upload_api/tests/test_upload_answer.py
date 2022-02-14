@@ -280,6 +280,203 @@ def test_trim_existing_upload_throws_incorrect_json_payload(
     assert "'123' is not of type 'number'" in res.json["message"]
 
 
+@pytest.mark.parametrize(
+    "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_trim_upload_task_id,fake_cancel_finalization_task_id,fake_cancel_transcribe_task_id,fake_cancel_transcode_task_id,fake_cancel_trim_upload_task_id",
+    [
+        (
+            "https://mentor.org",
+            "mentor1-fake-mongoose-id",
+            "question1-fakemongooseid",
+            "video.mp4",
+            "fake_finalization_task_id",
+            "fake_transcoding_task_id",
+            "fake_transcribing_task_id",
+            "fake_trim_upload_task_id",
+            "fake_cancel_finalization_task_id",
+            "fake_cancel_transcribe_task_id",
+            "fake_cancel_transcode_task_id",
+            "fake_cancel_trim_upload_task_id",
+        ),
+        (
+            "http://a.diff.org",
+            "mentor2-fake-mongoose-id",
+            "question2-fakemongooseid",
+            "video.mp4",
+            "fake_finalization_task_id_2",
+            "fake_transcoding_task_id_2",
+            "fake_transcribing_task_id_2",
+            "fake_trim_upload_task_id_2",
+            "fake_cancel_finalization_task_id_2",
+            "fake_cancel_transcribe_task_id_2",
+            "fake_cancel_transcode_task_id_2",
+            "fake_cancel_trim_upload_task_id_2",
+        ),
+    ],
+)
+@responses.activate
+@patch("mentor_upload_api.blueprints.upload.answer.group")
+@patch("mentor_upload_api.blueprints.upload.answer.begin_tasks_in_parallel")
+@patch("mentor_upload_tasks.tasks.cancel_task")
+@patch("mentor_upload_tasks.tasks.trim_upload_stage")
+@patch("mentor_upload_tasks.tasks.transcode_stage")
+@patch("mentor_upload_tasks.tasks.transcribe_stage")
+@patch("mentor_upload_tasks.tasks.finalization_stage")
+@patch("mentor_upload_api.authorization_decorator.jwt.decode")
+@patch.object(uuid, "uuid4")
+def test_cancel(
+    mock_uuid,
+    jwt_decode_mock: Mock,
+    finalization_stage_task,
+    transcribe_stage_task,
+    transcode_stage_task,
+    trim_upload_stage_task,
+    mock_cancel_task,
+    mock_begin_tasks_in_parallel,
+    mock_task_group,
+    tmpdir,
+    upload_domain,
+    input_mentor,
+    input_question,
+    input_video,
+    fake_finalization_task_id,
+    fake_transcoding_task_id,
+    fake_transcribing_task_id,
+    fake_trim_upload_task_id,
+    fake_cancel_finalization_task_id,
+    fake_cancel_transcribe_task_id,
+    fake_cancel_transcode_task_id,
+    fake_cancel_trim_upload_task_id,
+    client,
+):
+    jwt_decode_mock.return_value = {
+        "id": "mentor1-fake-mongoose-id",
+        "role": "ADMIN",
+        "mentorIds": ["123456", "123456"],
+    }
+    mock_uuid.return_value = "fake_uuid"
+    # mocking the result of the chord
+    mock_chord_result = Bunch(
+        parent=Bunch(
+            results=[
+                Bunch(id=fake_transcoding_task_id),
+                Bunch(id=fake_transcribing_task_id),
+            ],
+            parent=Bunch(results=[Bunch(id=fake_trim_upload_task_id)]),
+        ),
+        id=fake_finalization_task_id,
+    )
+    mock_begin_tasks_in_parallel.return_value = mock_chord_result
+
+    fake_task_id_collection = [
+        fake_transcoding_task_id,
+        fake_transcribing_task_id,
+        fake_trim_upload_task_id,
+        fake_finalization_task_id,
+    ]
+    task_list = [
+        {
+            "task_name": "trim_upload",
+            "task_id": fake_trim_upload_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcoding",
+            "task_id": fake_transcoding_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "transcribing",
+            "task_id": fake_transcribing_task_id,
+            "status": "QUEUED",
+        },
+        {
+            "task_name": "finalization",
+            "task_id": fake_finalization_task_id,
+            "status": "QUEUED",
+        },
+    ]
+    expected_status_update_query = _mock_gql_upload_task_update(
+        mentor=input_mentor, question=input_question, task_list=task_list
+    )
+    res = client.post(
+        f"{upload_domain}/upload/answer",
+        data={
+            "body": json.dumps({"mentor": input_mentor, "question": input_question}),
+            "video": open(path.join(fixture_path("input_videos"), input_video), "rb"),
+        },
+        headers={"Authorization": "bearer abcdefg1234567"},
+    )
+    _expect_gql([expected_status_update_query])
+    assert res.status_code == 200
+    assert res.json == {
+        "data": {
+            "taskList": task_list,
+            "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
+        }
+    }
+
+    mock_task_group().apply_async.return_value = Bunch(
+        id=fake_cancel_trim_upload_task_id
+    )
+    mock_cancel_trim_upload_task_id = Bunch(id=fake_cancel_trim_upload_task_id)
+    mock_cancel_task.si.set.return_value = mock_cancel_trim_upload_task_id
+    res = client.post(
+        f"{upload_domain}/upload/answer/cancel",
+        json={
+            "mentor": input_mentor,
+            "question": input_question,
+            "task_ids_to_cancel": [fake_trim_upload_task_id],
+        },
+        headers={"Authorization": "bearer abcdefg1234567"},
+    )
+    assert res.status_code == 200
+    assert res.json == {
+        "data": {
+            "id": fake_cancel_trim_upload_task_id,
+            "cancelledIds": [fake_trim_upload_task_id],
+        }
+    }
+
+
+def test_cancel_upload_throw_incorrect_json_payload(client):
+    # Missing task_ids_to_cancel
+    res = client.post(
+        "/upload/answer/cancel",
+        json={
+            "mentor": "mentor1-fake-mongoose-id",
+            "question": "question1-fakemongooseid",
+        },
+    )
+    json_data = res.json
+    validate_json(json_data, json_validation_fail_response_schema)
+    assert "'task_ids_to_cancel' is a required property" in res.json["message"]
+
+    # # Missing question
+    res = client.post(
+        "/upload/answer/cancel",
+        json={
+            "mentor": "mentor1-fake-mongoose-id",
+            "task_ids_to_cancel": ["123", "123"],
+        },
+    )
+    json_data = res.json
+    validate_json(json_data, json_validation_fail_response_schema)
+    assert "'question' is a required property" in res.json["message"]
+
+    # # Incorrect Types
+    res = client.post(
+        "/upload/answer/cancel",
+        json={
+            "mentor": "mentor1-fake-mongoose-id",
+            "question": "question1-fakemongooseid",
+            "task_ids_to_cancel": [123, 123],
+        },
+    )
+    json_data = res.json
+    validate_json(json_data, json_validation_fail_response_schema)
+    assert "123 is not of type 'string'" in res.json["message"]
+
+
 # ISSUE: if the upload api doesn't do end-to-end ssl
 # (e.g. if nginx terminates ssl),
 # then upload-api doesn't know that its TRUE
