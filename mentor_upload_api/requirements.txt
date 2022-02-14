@@ -16,4 +16,5 @@ urllib3==1.26.8
 jsonschema==4.4.0
 pyjwt==2.3.0
 ffmpy==0.3.0
+pymediainfo==5.1.0
 Flask-WTF==1.0.0
