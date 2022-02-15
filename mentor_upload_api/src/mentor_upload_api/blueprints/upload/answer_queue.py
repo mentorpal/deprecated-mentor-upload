@@ -248,7 +248,7 @@ def upload(body):
     }
 
     submit_job(req)
-
+    original_video_url = get_original_video_url(mentor, question)
     # we risk here overriding values, perhaps processing was already done, so status is DONE
     # but this will overwrite and revert them back to QUEUED. Can we just append?
     upload_task_update(
@@ -256,10 +256,12 @@ def upload(body):
             mentor=mentor,
             question=question,
             task_list=task_list,
+            original_video_url=original_video_url,
             transcript="",
             media=[],
         )
     )
+
     return jsonify(
         {
             "data": {
@@ -268,9 +270,15 @@ def upload(body):
                 "statusUrl": _to_status_url(
                     request.url_root, [t["task_id"] for t in task_list]
                 ),
+                "originalVideoUrl": original_video_url,
             }
         }
     )
+
+
+def get_original_video_url(mentor: str, question: str) -> str:
+    base_url = os.environ.get("STATIC_URL_BASE", "")
+    return f"{base_url}/videos/{mentor}/{question}/original.mp4"
 
 
 def list_files_from_directory(file_directory: str):
