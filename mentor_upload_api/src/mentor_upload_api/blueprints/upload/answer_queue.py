@@ -4,8 +4,8 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-from datetime import tzinfo
-import datetime
+from datetime import datetime
+from dateutil import tz
 import json
 import logging
 import uuid
@@ -275,7 +275,7 @@ def upload(body):
 
 def list_files_from_directory(file_directory: str):
     files = []
-    cali_tz = tzinfo.gettz("America/Los_Angeles")
+    cali_tz = tz.gettz("America/Los_Angeles")
     for entry in scandir(file_directory):
         files.append(
             {
