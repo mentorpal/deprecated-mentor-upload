@@ -6,7 +6,7 @@
 #
 import logging
 import uuid
-from os import environ, path, makedirs, listdir, remove, scandir
+from os import environ, listdir, path, makedirs, remove, scandir
 from datetime import datetime
 from dateutil import tz
 from flask import Blueprint, jsonify, request, send_from_directory
