@@ -27,7 +27,6 @@ def _mock_gql_upload_task_update(
     mentor: str,
     question: str,
     task_list: List[TaskInfo],
-    original_video_url: str,
     transcript: str = None,
     media=None,
 ) -> dict:
@@ -36,7 +35,6 @@ def _mock_gql_upload_task_update(
             mentor=mentor,
             question=question,
             task_list=task_list,
-            original_video_url=original_video_url,
             transcript="",
             media=[],
         )
@@ -160,14 +158,10 @@ def test_upload(
             "status": "QUEUED",
         },
     ]
-    original_video_url = (
-        f"test-static.mentorpal.org/videos/{input_mentor}/{input_question}/original.mp4"
-    )
     expected_status_update_query = _mock_gql_upload_task_update(
         mentor=input_mentor,
         question=input_question,
         task_list=task_list,
-        original_video_url=original_video_url,
     )
     res = client.post(
         f"{upload_domain}/upload/answer",
@@ -183,7 +177,6 @@ def test_upload(
         "data": {
             "taskList": task_list,
             "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
-            "originalVideoUrl": original_video_url,
         }
     }
     root_ext = path.splitext(input_video)
@@ -404,14 +397,10 @@ def test_cancel(
             "status": "QUEUED",
         },
     ]
-    original_video_url = (
-        f"test-static.mentorpal.org/videos/{input_mentor}/{input_question}/original.mp4"
-    )
     expected_status_update_query = _mock_gql_upload_task_update(
         mentor=input_mentor,
         question=input_question,
         task_list=task_list,
-        original_video_url=original_video_url,
     )
     res = client.post(
         f"{upload_domain}/upload/answer",
@@ -427,7 +416,6 @@ def test_cancel(
         "data": {
             "taskList": task_list,
             "statusUrl": f"{upload_domain}/upload/answer/status/{fake_task_id_collection}",
-            "originalVideoUrl": original_video_url,
         }
     }
 
@@ -575,12 +563,10 @@ def test_env_fixes_ssl_status_url(
             "status": "QUEUED",
         },
     ]
-    original_video_url = f"test-static.mentorpal.org/videos/{fake_mentor_id}/{fake_question_id}/original.mp4"
     expected_status_update_query = _mock_gql_upload_task_update(
         mentor=fake_mentor_id,
         question=fake_question_id,
         task_list=task_list,
-        original_video_url=original_video_url,
     )
     res = client.post(
         f"{request_root}/upload/answer",
@@ -598,7 +584,6 @@ def test_env_fixes_ssl_status_url(
         "data": {
             "taskList": task_list,
             "statusUrl": f"{expected_status_url_root}/upload/answer/status/{[fake_transcode_task_id,fake_transcribe_task_id,fake_trim_upload_task_id,fake_finalization_task_id]}",
-            "originalVideoUrl": original_video_url,
         }
     }
 

@@ -236,13 +236,11 @@ def upload(body):
             "status": "QUEUED",
         },
     ]
-    original_video_url = get_original_video_url(mentor, question)
     upload_task_update(
         UploadTaskRequest(
             mentor=mentor,
             question=question,
             task_list=task_list,
-            original_video_url=original_video_url,
             transcript="",
             media=[],
         )
@@ -253,15 +251,9 @@ def upload(body):
                 "taskList": task_list,
                 # this seems incorrect, passing multiple ids:
                 "statusUrl": _to_status_url(request.url_root, task_ids),
-                "originalVideoUrl": original_video_url,
             }
         }
     )
-
-
-def get_original_video_url(mentor: str, question: str) -> str:
-    base_url = environ.get("STATIC_URL_BASE", "")
-    return f"{base_url}/videos/{mentor}/{question}/original.mp4"
 
 
 def list_files_from_directory(file_directory: str):

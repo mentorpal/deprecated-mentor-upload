@@ -277,7 +277,6 @@ def upload(body):
                 "statusUrl": _to_status_url(
                     request.url_root, [t["task_id"] for t in task_list]
                 ),
-                "originalVideoUrl": original_video_url,
             }
         }
     )

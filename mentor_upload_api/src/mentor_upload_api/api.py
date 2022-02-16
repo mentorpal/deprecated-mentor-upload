@@ -52,7 +52,6 @@ class UploadTaskRequest:
     mentor: str
     question: str
     task_list: List[TaskInfo]
-    original_video_url: str
     transcript: str = None
     media: List[Media] = None
 
@@ -71,7 +70,6 @@ def thumbnail_update_gql(req: MentorThumbnailUpdateRequest) -> GQLQueryBody:
 def upload_task_req_gql(req: UploadTaskRequest) -> GQLQueryBody:
     status = {}
     status["taskList"] = req.task_list
-    status["originalVideoUrl"] = req.original_video_url
     if req.transcript:
         status["transcript"] = req.transcript
     if req.media:
