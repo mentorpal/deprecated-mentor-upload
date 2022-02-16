@@ -5,7 +5,8 @@ RUN apt-get update && \
 
 ADD requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt \
-    && rm -rf /tmp/requirements.txt
+    && rm -rf /tmp/requirements.txt \
+    && apt-get install -y libmediainfo0v5 
 
 ENV FLASK_APP=mentor_upload_api
 WORKDIR /app

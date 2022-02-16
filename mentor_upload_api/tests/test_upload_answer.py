@@ -159,7 +159,9 @@ def test_upload(
         },
     ]
     expected_status_update_query = _mock_gql_upload_task_update(
-        mentor=input_mentor, question=input_question, task_list=task_list
+        mentor=input_mentor,
+        question=input_question,
+        task_list=task_list,
     )
     res = client.post(
         f"{upload_domain}/upload/answer",
@@ -396,7 +398,9 @@ def test_cancel(
         },
     ]
     expected_status_update_query = _mock_gql_upload_task_update(
-        mentor=input_mentor, question=input_question, task_list=task_list
+        mentor=input_mentor,
+        question=input_question,
+        task_list=task_list,
     )
     res = client.post(
         f"{upload_domain}/upload/answer",
@@ -560,7 +564,9 @@ def test_env_fixes_ssl_status_url(
         },
     ]
     expected_status_update_query = _mock_gql_upload_task_update(
-        mentor=fake_mentor_id, question=fake_question_id, task_list=task_list
+        mentor=fake_mentor_id,
+        question=fake_question_id,
+        task_list=task_list,
     )
     res = client.post(
         f"{request_root}/upload/answer",
