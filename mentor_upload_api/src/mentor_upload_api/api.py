@@ -210,3 +210,55 @@ def is_upload_in_progress(req: FetchUploadTaskReq) -> bool:
     if "errors" in tdjson:
         raise Exception(json.dumps(tdjson.get("errors")))
     return bool(tdjson["data"]["uploadTask"])
+
+
+@dataclass
+class AnswerUpdateRequest:
+    mentor: str
+    question: str
+    transcript: str
+    media: List[Media]
+    has_edited_transcript: bool = None
+
+
+def upload_answer_and_task_req_gql(
+    answer_req: AnswerUpdateRequest, task_req: UploadTaskRequest
+) -> GQLQueryBody:
+    variables = {}
+    variables["mentorId"] = answer_req.mentor
+    variables["questionId"] = answer_req.question
+
+    variables["answer"] = {
+        "transcript": answer_req.transcript,
+        "media": answer_req.media,
+    }
+    if answer_req.has_edited_transcript is not None:
+        variables["answer"]["hasEditedTranscript"] = answer_req.has_edited_transcript
+
+    variables["status"] = {"taskList": task_req.task_list}
+    if task_req.transcript:
+        variables["status"]["transcript"] = task_req.transcript
+
+    if task_req.media:
+        variables["status"]["media"] = task_req.media
+    return {
+        "query": """mutation UpdateUploadAnswerAndTaskStatus($mentorId: ID!, $questionId: ID!, $answer: UploadAnswerType!, $status: UploadTaskInputType!) {
+            api {
+                uploadAnswer(mentorId: $mentorId, questionId: $questionId, answer: $answer)
+                uploadTaskUpdate(mentorId: $mentorId, questionId: $questionId, status: $status)
+            }
+        }""",
+        "variables": variables,
+    }
+
+
+def upload_answer_and_task_update(
+    answer_req: AnswerUpdateRequest, task_req: UpdateTaskStatusRequest
+) -> None:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = upload_answer_and_task_req_gql(answer_req, task_req)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))

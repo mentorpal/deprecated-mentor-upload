@@ -16,10 +16,11 @@ from typing import Tuple, Union
 from os import environ, path, makedirs, remove, scandir
 from flask import Blueprint, jsonify, request, send_from_directory
 from mentor_upload_api.api import (
+    AnswerUpdateRequest,
     FetchUploadTaskReq,
     UploadTaskRequest,
     is_upload_in_progress,
-    upload_task_update,
+    upload_answer_and_task_update,
 )
 from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
 from mentor_upload_api.helpers import (
@@ -251,15 +252,21 @@ def upload(body):
     original_video_url = get_original_video_url(mentor, question)
     # we risk here overriding values, perhaps processing was already done, so status is DONE
     # but this will overwrite and revert them back to QUEUED. Can we just append?
-    upload_task_update(
+    upload_answer_and_task_update(
+        AnswerUpdateRequest(
+            mentor=mentor,
+            question=question,
+            transcript="",
+            media=[{"type": "video", "tag": "web", "url": original_video_url}],
+        ),
         UploadTaskRequest(
             mentor=mentor,
             question=question,
             task_list=task_list,
             original_video_url=original_video_url,
             transcript="",
-            media=[],
-        )
+            media=[{"type": "video", "tag": "web", "url": original_video_url}],
+        ),
     )
 
     return jsonify(
