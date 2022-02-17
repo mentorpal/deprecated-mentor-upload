@@ -115,7 +115,7 @@ def submit_job(req):
     log.info("publishing job request to %s", upload_arn)
     # todo test failure if we need to check sns_msg.ResponseMetadata.HTTPStatusCode != 200
     sns_msg = sns.publish(TopicArn=upload_arn, Message=json.dumps(req))
-    log.info("sns message published %s", sns_msg["MessageId"])
+    log.info("sns message published %s", json.dumps(sns_msg))
 
 
 def create_task_list(trim):
@@ -248,7 +248,6 @@ def upload(body):
         }
     }
 
-    submit_job(req)
     original_video_url = get_original_video_url(mentor, question)
     # we risk here overriding values, perhaps processing was already done, so status is DONE
     # but this will overwrite and revert them back to QUEUED. Can we just append?
@@ -267,6 +266,7 @@ def upload(body):
             media=[{"type": "video", "tag": "web", "url": original_video_url}],
         ),
     )
+    submit_job(req)
 
     return jsonify(
         {
