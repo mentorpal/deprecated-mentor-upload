@@ -118,7 +118,7 @@ def submit_job(req):
     log.info("sns message published %s", sns_msg["MessageId"])
 
 
-def create_task_list(trim):
+def create_task_list(trim, hasEditedTranscript):
     task_list = []
     if trim:
         task_list.append(
@@ -143,9 +143,14 @@ def create_task_list(trim):
             "status": "QUEUED",
         }
     )
-    task_list.append(
-        {"task_name": "transcribing", "task_id": str(uuid.uuid4()), "status": "QUEUED"}
-    )
+    if not hasEditedTranscript:
+        task_list.append(
+            {
+                "task_name": "transcribing",
+                "task_id": str(uuid.uuid4()),
+                "status": "QUEUED",
+            }
+        )
 
     return task_list
 
@@ -199,6 +204,7 @@ def upload(body):
 
     mentor = body.get("mentor")
     question = body.get("question")
+    hasEditedTranscript = body.get("hasEditedTranscript")
     verify_no_upload_in_progress(mentor, question)
     trim = body.get("trim")
     upload_file = request.files["video"]
@@ -237,7 +243,11 @@ def upload(body):
     s3_path = f"videos/{mentor}/{question}"
     upload_to_s3(file_path, s3_path)
 
-    task_list = create_task_list(trim)
+    # if hasEditedTranscript:
+    # TODO: manual vtt update, upload to s3, pass to media for upload task and answer update
+
+    # TODO: should pass hasEditedTranscript so it knows if it is going to skip transcription
+    task_list = create_task_list(trim, hasEditedTranscript)
 
     req = {
         "request": {
@@ -263,7 +273,6 @@ def upload(body):
             mentor=mentor,
             question=question,
             task_list=task_list,
-            original_video_url=original_video_url,
             transcript="",
             media=[{"type": "video", "tag": "web", "url": original_video_url}],
         ),

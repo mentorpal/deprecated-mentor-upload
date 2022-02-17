@@ -152,6 +152,7 @@ video_upload_json_schema = {
             },
             "required": ["start", "end"],
         },
+        "hasEditedTranscript": {"type": "boolean"},
     },
     "required": ["mentor", "question"],
     "additionalProperties": False,
