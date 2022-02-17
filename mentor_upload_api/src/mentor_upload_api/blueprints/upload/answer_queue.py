@@ -263,7 +263,6 @@ def upload(body):
             mentor=mentor,
             question=question,
             task_list=task_list,
-            original_video_url=original_video_url,
             transcript="",
             media=[{"type": "video", "tag": "web", "url": original_video_url}],
         ),
