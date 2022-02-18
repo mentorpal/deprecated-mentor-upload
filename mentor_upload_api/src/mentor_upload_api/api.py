@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from os import environ
 from typing import TypedDict, List
 
-from mentor_upload_api.helpers import validate_json
+from mentor_upload_api.helpers import validate_json, exec_graphql_with_json_validation
 
 log = logging.getLogger()
 
@@ -227,9 +227,10 @@ def upload_answer_and_task_req_gql(
     variables["questionId"] = answer_req.question
 
     variables["answer"] = {
-        "transcript": answer_req.transcript,
         "media": answer_req.media,
     }
+    if answer_req.transcript:
+        variables["answer"]["transcript"] = (answer_req.transcript,)
     if answer_req.has_edited_transcript is not None:
         variables["answer"]["hasEditedTranscript"] = answer_req.has_edited_transcript
 
@@ -260,3 +261,64 @@ def upload_answer_and_task_update(
     tdjson = res.json()
     if "errors" in tdjson:
         raise Exception(json.dumps(tdjson.get("errors")))
+
+
+def fetch_answer_transcript_and_media_gql(mentor: str, question: str) -> GQLQueryBody:
+    return {
+        "query": """query Answer($mentor: ID!, $question: ID!) {
+            answer(mentor: $mentor, question: $question){
+                transcript
+                media {
+                type
+                tag
+                url
+              }
+            }
+        }""",
+        "variables": {"mentor": mentor, "question": question},
+    }
+
+
+fetch_answer_transcript_media_json_schema = {
+    "type": "object",
+    "properties": {
+        "data": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "object",
+                    "properties": {
+                        "transcript": {"type": "string"},
+                        "media": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {"type": "string"},
+                                    "tag": {"type": "string"},
+                                    "url": {"type": "string"},
+                                },
+                                "required": ["type", "tag", "url"],
+                            },
+                        },
+                    },
+                    "required": ["transcript", "media"],
+                }
+            },
+            "required": ["answer"],
+        },
+    },
+    "required": ["data"],
+}
+
+
+def fetch_answer_transcript_and_media(mentor: str, question: str):
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    gql_query = fetch_answer_transcript_and_media_gql(mentor, question)
+    json_res = exec_graphql_with_json_validation(
+        gql_query, fetch_answer_transcript_media_json_schema, headers=headers
+    )
+    return (
+        json_res["data"]["answer"]["transcript"],
+        json_res["data"]["answer"]["media"],
+    )
