@@ -5,6 +5,7 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 from datetime import datetime
+import tempfile
 from dateutil import tz
 import json
 import logging
@@ -21,19 +22,26 @@ from mentor_upload_api.api import (
     UploadTaskRequest,
     is_upload_in_progress,
     upload_answer_and_task_update,
+    fetch_answer_transcript_and_media,
 )
 from mentor_upload_api.blueprints.upload.answer import video_upload_json_schema
 from mentor_upload_api.helpers import (
     validate_form_payload_decorator,
+    validate_json_payload_decorator,
     ValidateFormJsonBody,
 )
-from mentor_upload_api.authorization_decorator import authorize_to_manage_content
+from mentor_upload_api.authorization_decorator import (
+    authorize_to_manage_content,
+    authorize_to_edit_mentor,
+)
 from pymediainfo import MediaInfo
 from werkzeug.exceptions import BadRequest
 from flask_wtf import FlaskForm
 from wtforms import StringField
 from wtforms.validators import DataRequired
 from flask_wtf.file import FileRequired, FileAllowed, FileField
+
+from mentor_upload_api.media_tools import transcript_to_vtt
 
 log = logging.getLogger()
 answer_queue_blueprint = Blueprint("answer-queue", __name__)
@@ -118,7 +126,7 @@ def submit_job(req):
     log.info("sns message published %s", json.dumps(sns_msg))
 
 
-def create_task_list(trim, hasEditedTranscript):
+def create_task_list(trim, has_edited_transcript):
     task_list = []
     if trim:
         task_list.append(
@@ -143,7 +151,7 @@ def create_task_list(trim, hasEditedTranscript):
             "status": "QUEUED",
         }
     )
-    if not hasEditedTranscript:
+    if not has_edited_transcript:
         task_list.append(
             {
                 "task_name": "transcribing",
@@ -204,7 +212,7 @@ def upload(body):
 
     mentor = body.get("mentor")
     question = body.get("question")
-    hasEditedTranscript = body.get("hasEditedTranscript")
+    has_edited_transcript = body.get("hasEditedTranscript")
     verify_no_upload_in_progress(mentor, question)
     trim = body.get("trim")
     upload_file = request.files["video"]
@@ -243,11 +251,7 @@ def upload(body):
     s3_path = f"videos/{mentor}/{question}"
     upload_to_s3(file_path, s3_path)
 
-    # if hasEditedTranscript:
-    # TODO: manual vtt update, upload to s3, pass to media for upload task and answer update
-
-    # TODO: should pass hasEditedTranscript so it knows if it is going to skip transcription
-    task_list = create_task_list(trim, hasEditedTranscript)
+    task_list = create_task_list(trim, has_edited_transcript)
 
     req = {
         "request": {
@@ -266,14 +270,14 @@ def upload(body):
             mentor=mentor,
             question=question,
             transcript="",
-            media=[{"type": "video", "tag": "web", "url": original_video_url}],
+            media=[{"type": "video", "tag": "original", "url": original_video_url}],
         ),
         UploadTaskRequest(
             mentor=mentor,
             question=question,
             task_list=task_list,
             transcript="",
-            media=[{"type": "video", "tag": "web", "url": original_video_url}],
+            media=[{"type": "video", "tag": "original", "url": original_video_url}],
         ),
     )
     submit_job(req)
@@ -356,3 +360,63 @@ def download_mounted_file(file_name: str):
             f"failed to find video file {file_name} in folder {file_directory}"
         )
         logging.exception(x)
+
+
+regen_vtt_json_schema = {
+    "type": "object",
+    "properties": {
+        "mentor": {"type": "string", "maxLength": 60, "minLength": 5},
+        "question": {"type": "string", "maxLength": 60, "minLength": 5},
+    },
+    "required": ["mentor", "question"],
+    "additionalProperties": False,
+}
+
+
+@answer_queue_blueprint.route("/regen_vtt/", methods=["POST"])
+@answer_queue_blueprint.route("/regen_vtt", methods=["POST"])
+@validate_json_payload_decorator(json_schema=regen_vtt_json_schema)
+@authorize_to_edit_mentor
+def regen_vtt(body):
+    mentor = body.get("mentor")
+    question = body.get("question")
+    result = _regen_vtt(mentor, question)
+    return jsonify({"data": result})
+
+
+def _regen_vtt(mentor: str, question: str):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        try:
+            vtt_file_path = os.path.join(tmp_dir, "en.vtt")
+            (
+                transcript,
+                answer_media,
+            ) = fetch_answer_transcript_and_media(mentor, question)
+            web_media = next((x for x in answer_media if x["tag"] == "web"), None)
+            if not web_media:
+                raise Exception(
+                    f"failed to find answer media for mentor: {mentor} and question: {question}"
+                )
+            transcript_to_vtt(web_media["url"], vtt_file_path, transcript)
+            video_path_base = f"videos/{mentor}/{question}/"
+            if path.isfile(vtt_file_path):
+                item_path = f"{video_path_base}en.vtt"
+                s3_client.upload_file(
+                    str(vtt_file_path),
+                    static_s3_bucket,
+                    item_path,
+                    ExtraArgs={"ContentType": "text/vtt"},
+                )
+            else:
+                import logging
+
+                logging.error(f"Failed to find file at {vtt_file_path}")
+            return {"regen_vtt": True}
+        except Exception as x:
+            import logging
+
+            logging.error(
+                f"failed to regenerate vtt for mentor {mentor} and question {question}"
+            )
+            logging.exception(x)
+            return {"regen_vtt": False}
