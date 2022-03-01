@@ -234,7 +234,7 @@ def upload(body):
     minfo = MediaInfo.parse(file_path)
     if len(minfo.video_tracks) == 0:
         raise BadRequest("No video tracks found!")
-    if minfo.video_tracks[0].duration < 1000:  # 1sec
+    if minfo.video_tracks[0].duration and minfo.video_tracks[0].duration < 1000:  # 1sec
         raise BadRequest("Video too short!")
 
     if trim:
