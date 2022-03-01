@@ -238,7 +238,7 @@ def upload(body):
         if minfo.video_tracks[0].duration < 1000:  # 1sec
             raise BadRequest("Video too short!")
     except Exception as e:
-        log.info(f"Failed to compare video duration: {e}")
+        log.info(f"Failed to check video duration: {e}")
 
     if trim:
         log.info("trimming file %s", trim)
