@@ -13,6 +13,7 @@ import logging
 from . import (
     CancelTaskRequest,
     ProcessAnswerRequest,
+    ProcessTransferMentor,
     ProcessTransferRequest,
     TrimExistingUploadRequest,
     RegenVTTRequest,
@@ -142,6 +143,11 @@ def finalization_stage(dict_tuple: dict, req: ProcessAnswerRequest):
 
 @celery.task()
 def process_transfer_video(req: ProcessTransferRequest):
+    pass
+
+
+@celery.task()
+def process_transfer_mentor(req: ProcessTransferMentor):
     pass
 
 

@@ -4,7 +4,7 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-from typing import TypedDict
+from typing import TypedDict, List
 
 
 class TrimRequest(TypedDict):
@@ -58,3 +58,83 @@ class CancelTaskResponse(TypedDict):
     mentor: str
     question: str
     task_id: str
+
+
+class Media:
+    type: str
+    tag: str
+    url: str
+    needsTransfer: bool  # noqa: N815
+
+
+class MentorInfo:
+    name: str
+    firstName: str
+    title: str
+    email: str
+    thumbnail: str
+    allowContact: bool
+    defaultSubject: str
+    mentorType: str
+
+
+class Question:
+    _id: str
+    question: str
+    type: str
+    name: str
+    clientId: str
+    paraphrases: List[str]
+    mentor: str
+    mentorType: str
+    minVideoLength: str
+
+
+class Category:
+    id: str
+    name: str
+    description: str
+
+
+class Topic:
+    id: str
+    name: str
+    description: str
+
+
+class SubjectQuestionGQL:
+    question: Question
+    category: Category
+    topics: List[Topic]
+
+
+class Subject:
+    _id: str
+    name: str
+    description: str
+    isRequired: str
+    categories: List[Category]
+    topics: List[Topic]
+    questions: List[SubjectQuestionGQL]
+
+
+class Answer:
+    _id: str
+    question: Question
+    hasEditedTranscript: bool
+    transcript: str
+    status: str
+    media: List[Media]
+
+
+class MentorExportJson:
+    id: str
+    mentorInfo: MentorInfo
+    subjects: List[Subject]
+    questions: List[Question]
+    answers: List[Answer]
+
+
+class ProcessTransferMentor(TypedDict):
+    mentor: str
+    mentorExportJson: MentorExportJson

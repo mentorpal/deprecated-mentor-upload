@@ -322,3 +322,56 @@ def fetch_answer_transcript_and_media(mentor: str, question: str):
         json_res["data"]["answer"]["transcript"],
         json_res["data"]["answer"]["media"],
     )
+
+
+@dataclass
+class ImportTaskCreateGraphQLUpdate:
+    status: str
+    errorMessage: str = ""
+
+
+@dataclass
+class AnswerMediaMigrationTask:
+    question: str
+    status: str
+    errorMessage: str = ""
+
+
+@dataclass
+class ImportTaskCreateS3VideoMigration:
+    status: str
+    answerMediaMigrations: List[AnswerMediaMigrationTask]
+
+
+@dataclass
+class ImportTaskGQLRequest:
+    mentor: str
+    graphql_update: ImportTaskCreateGraphQLUpdate
+    s3_video_migration: ImportTaskCreateS3VideoMigration
+
+
+def import_task_create_gql_query(req: ImportTaskGQLRequest) -> GQLQueryBody:
+    return {
+        "query": """mutation ImportTaskCreate($mentor: ID!,
+        $graphQLUpdate: GraphQLUpdateInputType!,
+        $s3VideoMigrate: S3VideoMigrationInputType!) {
+            api {
+                importTaskCreate(graphQLUpdate: $graphQLUpdate, mentor: $mentor, s3VideoMigrate: $s3VideoMigrate)
+            }
+        }""",
+        "variables": {
+            "mentor": req.mentor,
+            "graphQLUpdate": req.graphql_update,
+            "s3VideoMigrate": req.s3_video_migration,
+        },
+    }
+
+
+def import_task_create_gql(req: ImportTaskGQLRequest) -> None:
+    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
+    body = import_task_create_gql_query(req)
+    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
+    res.raise_for_status()
+    tdjson = res.json()
+    if "errors" in tdjson:
+        raise Exception(json.dumps(tdjson.get("errors")))
