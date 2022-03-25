@@ -847,7 +847,7 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
         answers = mentor_import_res["answers"]
         answers_with_media_transfers = list(
             filter(
-                lambda a: a["hasUntransferredMedia"] and len(a["media"] or []) > 0,
+                lambda a: len(a["media"] or []) > 0,
                 answers,
             )
         )
@@ -938,11 +938,6 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
                         },
                     )
                 )
-        import_task_update_gql(
-            ImportTaskUpdateGQLRequest(
-                mentor=mentor, s3_video_migration={"status": "DONE"}
-            )
-        )
 
     except Exception as e:
         logging.error("failed to process mentor transfer")
