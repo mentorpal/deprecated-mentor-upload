@@ -13,7 +13,7 @@ import requests
 
 from mentor_upload_process.helpers import exec_graphql_with_json_validation
 
-from . import MentorExportJson
+from . import MentorExportJson, ReplacedMentorDataChanges
 
 
 def get_graphql_endpoint() -> str:
@@ -430,13 +430,14 @@ def import_task_create_gql(req: ImportTaskGQLRequest) -> None:
 class ImportMentorGQLRequest:
     mentor: str
     json: MentorExportJson
+    replacedMentorDataChanges: ReplacedMentorDataChanges
 
 
 def import_mentor_gql_query(req: ImportMentorGQLRequest) -> GQLQueryBody:
     return {
-        "query": """mutation MentorImport($mentor: ID!,$json:MentorImportJsonType!){
+        "query": """mutation MentorImport($mentor: ID!,$json:MentorImportJsonType!, $replacedMentorDataChanges: ReplacedMentorDataChangesType!){
             api{
-                mentorImport(mentor: $mentor,json:$json){
+                mentorImport(mentor: $mentor,json:$json, replacedMentorDataChanges: $replacedMentorDataChanges){
                     answers{
                         hasUntransferredMedia
                         question{
@@ -452,7 +453,11 @@ def import_mentor_gql_query(req: ImportMentorGQLRequest) -> GQLQueryBody:
                 }
             }
             }""",
-        "variables": {"mentor": req.mentor, "json": req.json},
+        "variables": {
+            "mentor": req.mentor,
+            "json": req.json,
+            "replacedMentorDataChanges": req.replacedMentorDataChanges,
+        },
     }
 
 

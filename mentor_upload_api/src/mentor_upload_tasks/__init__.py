@@ -145,6 +145,32 @@ class MentorExportJson:
     answers: List[Answer]
 
 
+class AnswerGQL:
+    _id: str
+    question: Question
+    hasEditedTranscript: bool
+    transcript: str
+    status: str
+    media: List[Media]
+    hasUntransferredMedia: bool
+
+
+class ReplacedMentorQuestionChanges:
+    editType: str
+    data: Question
+
+
+class ReplacedMentorAnswerChanges:
+    editType: str
+    data: AnswerGQL
+
+
+class ReplacedMentorDataChanges:
+    questionChanges: List[ReplacedMentorQuestionChanges]
+    answerChanges: List[ReplacedMentorAnswerChanges]
+
+
 class ProcessTransferMentor(TypedDict):
     mentor: str
     mentorExportJson: MentorExportJson
+    replacedMentorDataChanges: List[ReplacedMentorDataChanges]

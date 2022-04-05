@@ -824,122 +824,125 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
 
 
 def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
-    try:
-        import logging
+    import logging
 
-        mentor = req.get("mentor")
-        mentorExportJson = req.get("mentorExportJson")
+    mentor = req.get("mentor")
+    mentorExportJson = req.get("mentorExportJson")
+    replacedMentorDataChanges = req.get("replacedMentorDataChanges")
 
-        graphql_update = {"status": "IN_PROGRESS"}
-        import_task_update_gql(
-            ImportTaskUpdateGQLRequest(mentor=mentor, graphql_update=graphql_update)
+    graphql_update = {"status": "IN_PROGRESS"}
+    import_task_update_gql(
+        ImportTaskUpdateGQLRequest(mentor=mentor, graphql_update=graphql_update)
+    )
+
+    mentor_import_res = import_mentor_gql(
+        ImportMentorGQLRequest(mentor, mentorExportJson, replacedMentorDataChanges)
+    )
+
+    graphql_update = {"status": "DONE"}
+    import_task_update_gql(
+        ImportTaskUpdateGQLRequest(mentor=mentor, graphql_update=graphql_update)
+    )
+
+    answers = mentor_import_res["answers"]
+    answers_with_media_transfers = list(
+        filter(
+            lambda a: len(a["media"] or []) > 0,
+            answers,
         )
+    )
+    answer_media_migrations = [
+        {"question": q["_id"], "status": "QUEUED"}
+        for q in list(map(lambda a: a["question"], answers_with_media_transfers))
+    ]
+    s3_video_migration = {
+        "status": "IN_PROGRESS",
+        "answerMediaMigrations": answer_media_migrations,
+    }
+    import_task_update_gql(
+        ImportTaskUpdateGQLRequest(mentor=mentor, s3_video_migration=s3_video_migration)
+    )
 
-        mentor_import_res = import_mentor_gql(
-            ImportMentorGQLRequest(mentor, mentorExportJson)
-        )
-
-        graphql_update = {"status": "DONE"}
-        import_task_update_gql(
-            ImportTaskUpdateGQLRequest(mentor=mentor, graphql_update=graphql_update)
-        )
-
-        answers = mentor_import_res["answers"]
-        answers_with_media_transfers = list(
-            filter(
-                lambda a: len(a["media"] or []) > 0,
-                answers,
-            )
-        )
-        answer_media_migrations = [
-            {"question": q["_id"], "status": "QUEUED"}
-            for q in list(map(lambda a: a["question"], answers_with_media_transfers))
-        ]
-        s3_video_migration = {
-            "status": "IN_PROGRESS",
-            "answerMediaMigrations": answer_media_migrations,
-        }
-        import_task_update_gql(
-            ImportTaskUpdateGQLRequest(
-                mentor=mentor, s3_video_migration=s3_video_migration
-            )
-        )
-
-        for answer in answers_with_media_transfers:
-            try:
-                question = answer["question"]["_id"]
-                logging.error(f"starting media transfer for question {question}")
-                for m in answer["media"]:
-                    if m.get("needsTransfer", False):
-                        typ = m.get("type", "")
-                        tag = m.get("tag", "")
-                        root_ext = "vtt" if typ == "subtitles" else "mp4"
-                        try:
-                            file_path, headers = urllib.request.urlretrieve(
-                                m.get("url", "")
+    for answer in answers_with_media_transfers:
+        try:
+            question = answer["question"]["_id"]
+            logging.error(f"starting media transfer for question {question}")
+            for m in answer["media"]:
+                if m.get("needsTransfer", False):
+                    typ = m.get("type", "")
+                    tag = m.get("tag", "")
+                    root_ext = "vtt" if typ == "subtitles" else "mp4"
+                    try:
+                        file_path, headers = urllib.request.urlretrieve(
+                            m.get("url", "")
+                        )
+                        item_path = f"videos/{mentor}/{question}/{tag}.{root_ext}"
+                        logging.error(f"uploading to {item_path}")
+                        s3 = _create_s3_client()
+                        s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
+                        content_type = "text/vtt" if typ == "subtitles" else "video/mp4"
+                        s3.upload_file(
+                            file_path,
+                            s3_bucket,
+                            item_path,
+                            ExtraArgs={"ContentType": content_type},
+                        )
+                        logging.error("Succesfully uploaded")
+                        m["needsTransfer"] = False
+                        m["url"] = item_path
+                        update_media(
+                            MediaUpdateRequest(
+                                mentor=mentor, question=question, media=m
                             )
-                            item_path = f"videos/{mentor}/{question}/{tag}.{root_ext}"
-                            logging.error(f"uploading to {item_path}")
-                            s3 = _create_s3_client()
-                            s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
-                            content_type = (
-                                "text/vtt" if typ == "subtitles" else "video/mp4"
-                            )
-                            s3.upload_file(
-                                file_path,
-                                s3_bucket,
-                                item_path,
-                                ExtraArgs={"ContentType": content_type},
-                            )
-                            logging.error("Succesfully uploaded")
-                            m["needsTransfer"] = False
-                            m["url"] = item_path
-                            update_media(
-                                MediaUpdateRequest(
-                                    mentor=mentor, question=question, media=m
-                                )
-                            )
-                            answerMediaMigrateUpdate = {
-                                "question": question,
-                                "status": "DONE",
-                            }
-                            import_task_update_gql(
-                                ImportTaskUpdateGQLRequest(
-                                    mentor=mentor,
-                                    answerMediaMigrateUpdate=answerMediaMigrateUpdate,
-                                )
-                            )
-
-                            logging.error("sucessfully updated GQL")
-                        except Exception as x:
-                            logging.error(f"Failed to upload video to s3 {x}")
-                            logging.exception(x)
-                            raise x
-                        finally:
-                            try:
-                                remove(file_path)
-                            except Exception as x:
-                                import logging
-
-                                logging.error(f"failed to delete file '{file_path}'")
-                                logging.exception(x)
-            except Exception as e:
-                logging.error(
-                    f"Failed to process media for answer with question {question}"
-                )
-                logging.exception(e)
-                import_task_update_gql(
-                    ImportTaskUpdateGQLRequest(
-                        mentor=mentor,
-                        answerMediaMigrateUpdate={
+                        )
+                        answerMediaMigrateUpdate = {
                             "question": question,
-                            "status": "FAILED",
-                            "errorMessage": str(e),
-                        },
-                    )
-                )
+                            "status": "DONE",
+                        }
+                        import_task_update_gql(
+                            ImportTaskUpdateGQLRequest(
+                                mentor=mentor,
+                                answerMediaMigrateUpdate=answerMediaMigrateUpdate,
+                            )
+                        )
 
-    except Exception as e:
-        logging.error("failed to process mentor transfer")
-        logging.error(e)
-        raise e
+                        logging.error("sucessfully updated GQL")
+                    except Exception as x:
+                        logging.error(f"Failed to upload video to s3 {x}")
+                        logging.exception(x)
+                        raise x
+                    finally:
+                        try:
+                            remove(file_path)
+                        except Exception as x:
+                            import logging
+
+                            logging.error(f"failed to delete file '{file_path}'")
+                            logging.exception(x)
+                else:
+                    answerMediaMigrateUpdate = {
+                        "question": question,
+                        "status": "DONE",
+                    }
+                    import_task_update_gql(
+                        ImportTaskUpdateGQLRequest(
+                            mentor=mentor,
+                            answerMediaMigrateUpdate=answerMediaMigrateUpdate,
+                        )
+                    )
+        except Exception as e:
+            logging.error(
+                f"Failed to process media for answer with question {question}"
+            )
+            logging.exception(e)
+            import_task_update_gql(
+                ImportTaskUpdateGQLRequest(
+                    mentor=mentor,
+                    answerMediaMigrateUpdate={
+                        "question": question,
+                        "status": "FAILED",
+                        "errorMessage": str(e),
+                    },
+                )
+            )
+    logging.error(f"Finished importing mentor {mentor}")

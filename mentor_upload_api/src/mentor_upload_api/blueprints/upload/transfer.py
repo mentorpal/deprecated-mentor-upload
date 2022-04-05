@@ -107,34 +107,38 @@ transfer_mentor_json_schema = {
                 "questions": {"type": "array", "items": {"$ref": "#/$defs/Question"}},
                 "answers": {
                     "type": "array",
+                    "items": {"$ref": "#/$defs/AnswerGQL"},
+                },
+            },
+        },
+        "replacedMentorDataChanges": {
+            "type": "object",
+            "properties": {
+                "questionChanges": {
+                    "type": "array",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "_id": {"type": "string"},
-                            "question": {"$ref": "#/$defs/Question"},
-                            "hasEditedTranscript": {"type": "boolean"},
-                            "transcript": {"type": "string"},
-                            "status": {"type": "string"},
-                            "media": {
-                                "type": ["array", "null"],
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "type": {"type": "string"},
-                                        "tag": {"type": "string"},
-                                        "url": {"type": "string"},
-                                        "needsTransfer": {"type": "boolean"},
-                                    },
-                                },
-                            },
-                            "hasUntransferredMedia": {"type": "boolean"},
+                            "editType": {"type": "string"},
+                            "data": {"$ref": "#/$defs/Question"},
+                        },
+                    },
+                },
+                "answerChanges": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "editType": {"type": "string"},
+                            "data": {"$ref": "#/$defs/AnswerGQL"},
                         },
                     },
                 },
             },
+            "required": ["questionChanges", "answerChanges"],
         },
     },
-    "required": ["mentor", "mentorExportJson"],
+    "required": ["mentor", "mentorExportJson", "replacedMentorDataChanges"],
     "$defs": {
         "Category": {
             "type": ["object", "null"],
@@ -174,6 +178,29 @@ transfer_mentor_json_schema = {
                 "topics": {"type": "array", "items": {"$ref": "#/$defs/Topic"}},
             },
         },
+        "AnswerGQL": {
+            "type": "object",
+            "properties": {
+                "_id": {"type": "string"},
+                "question": {"$ref": "#/$defs/Question"},
+                "hasEditedTranscript": {"type": "boolean"},
+                "transcript": {"type": "string"},
+                "status": {"type": "string"},
+                "media": {
+                    "type": ["array", "null"],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string"},
+                            "tag": {"type": "string"},
+                            "url": {"type": "string"},
+                            "needsTransfer": {"type": "boolean"},
+                        },
+                    },
+                },
+                "hasUntransferredMedia": {"type": "boolean"},
+            },
+        },
     },
     "additionalProperties": False,
 }
@@ -185,6 +212,7 @@ transfer_mentor_json_schema = {
 def transfer_mentor(body):
     mentor = body.get("mentor")
     mentorExportJson = body.get("mentorExportJson")
+    replacedMentorDataChanges = body.get("replacedMentorDataChanges")
 
     graphql_update = {"status": "QUEUED"}
     s3_video_migration = {"status": "QUEUED", "answerMediaMigrations": []}
@@ -195,6 +223,7 @@ def transfer_mentor(body):
     req = {
         "mentor": mentor,
         "mentorExportJson": mentorExportJson,
+        "replacedMentorDataChanges": replacedMentorDataChanges,
     }
 
     t = mentor_upload_tasks.tasks.process_transfer_mentor.apply_async(
