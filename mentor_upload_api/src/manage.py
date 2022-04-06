@@ -30,7 +30,7 @@ def before_request():
 
 @app.after_request
 def after_request(response):
-    """ Logging after every request. """
+    """Logging after every request."""
     if response.response and (
         response.status_code < 500
     ):  # 5xx should be logged in error handler
