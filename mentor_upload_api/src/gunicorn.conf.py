@@ -14,3 +14,6 @@ bind = "0.0.0.0:5000"
 
 # workers silent for this many seconds get killed and restarted (default: 30)
 timeout = 120
+
+# to prevent any memory leaks:
+max_requests = 1000
