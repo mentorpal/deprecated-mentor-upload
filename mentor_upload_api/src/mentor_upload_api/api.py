@@ -327,20 +327,20 @@ def fetch_answer_transcript_and_media(mentor: str, question: str):
 @dataclass
 class ImportTaskCreateGraphQLUpdate:
     status: str
-    errorMessage: str = ""
+    errorMessage: str = ""  # noqa
 
 
 @dataclass
 class AnswerMediaMigrationTask:
     question: str
     status: str
-    errorMessage: str = ""
+    errorMessage: str = ""  # noqa
 
 
 @dataclass
 class ImportTaskCreateS3VideoMigration:
     status: str
-    answerMediaMigrations: List[AnswerMediaMigrationTask]
+    answerMediaMigrations: List[AnswerMediaMigrationTask]  # noqa
 
 
 @dataclass

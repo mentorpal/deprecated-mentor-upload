@@ -211,8 +211,8 @@ transfer_mentor_json_schema = {
 @validate_json_payload_decorator(json_schema=transfer_mentor_json_schema)
 def transfer_mentor(body):
     mentor = body.get("mentor")
-    mentorExportJson = body.get("mentorExportJson")
-    replacedMentorDataChanges = body.get("replacedMentorDataChanges")
+    mentor_export_json = body.get("mentorExportJson")
+    mentor_export_json = body.get("replacedMentorDataChanges")
 
     graphql_update = {"status": "QUEUED"}
     s3_video_migration = {"status": "QUEUED", "answerMediaMigrations": []}
@@ -222,8 +222,8 @@ def transfer_mentor(body):
 
     req = {
         "mentor": mentor,
-        "mentorExportJson": mentorExportJson,
-        "replacedMentorDataChanges": replacedMentorDataChanges,
+        "mentorExportJson": mentor_export_json,
+        "replacedMentorDataChanges": mentor_export_json,
     }
 
     t = mentor_upload_tasks.tasks.process_transfer_mentor.apply_async(

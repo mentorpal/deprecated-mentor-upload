@@ -52,8 +52,6 @@ from .api import (
     MediaUpdateRequest,
     fetch_answer_transcript_and_media,
     fetch_text_from_url,
-    import_task_create_gql,
-    ImportTaskGQLRequest,
     import_task_update_gql,
     ImportTaskUpdateGQLRequest,
 )
@@ -827,8 +825,8 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
     import logging
 
     mentor = req.get("mentor")
-    mentorExportJson = req.get("mentorExportJson")
-    replacedMentorDataChanges = req.get("replacedMentorDataChanges")
+    mentor_export_json = req.get("mentorExportJson")
+    replaced_mentor_data_changes = req.get("replacedMentorDataChanges")
 
     graphql_update = {"status": "IN_PROGRESS"}
     import_task_update_gql(
@@ -836,7 +834,7 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
     )
 
     mentor_import_res = import_mentor_gql(
-        ImportMentorGQLRequest(mentor, mentorExportJson, replacedMentorDataChanges)
+        ImportMentorGQLRequest(mentor, mentor_export_json, replaced_mentor_data_changes)
     )
 
     graphql_update = {"status": "DONE"}
@@ -895,14 +893,14 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
                                 mentor=mentor, question=question, media=m
                             )
                         )
-                        answerMediaMigrateUpdate = {
+                        answer_media_migrate_update = {
                             "question": question,
                             "status": "DONE",
                         }
                         import_task_update_gql(
                             ImportTaskUpdateGQLRequest(
                                 mentor=mentor,
-                                answerMediaMigrateUpdate=answerMediaMigrateUpdate,
+                                answerMediaMigrateUpdate=answer_media_migrate_update,
                             )
                         )
 
@@ -921,14 +919,14 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
                             logging.error(f"failed to delete file '{file_path}'")
                             logging.exception(x)
                 else:
-                    answerMediaMigrateUpdate = {
+                    answer_media_migrate_update = {
                         "question": question,
                         "status": "DONE",
                     }
                     import_task_update_gql(
                         ImportTaskUpdateGQLRequest(
                             mentor=mentor,
-                            answerMediaMigrateUpdate=answerMediaMigrateUpdate,
+                            answerMediaMigrateUpdate=answer_media_migrate_update,
                         )
                     )
         except Exception as e:
