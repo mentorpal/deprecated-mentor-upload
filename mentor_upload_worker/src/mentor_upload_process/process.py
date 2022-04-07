@@ -908,7 +908,8 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
 
                         logging.error("sucessfully updated GQL")
                     except Exception as x:
-                        logging.error(f"Failed to upload video to s3 {x}")
+                        media_url = m.get("url", "")
+                        logging.error(f"Failed to upload video {media_url} to s3 {x}")
                         logging.exception(x)
                         raise x
                     finally:
