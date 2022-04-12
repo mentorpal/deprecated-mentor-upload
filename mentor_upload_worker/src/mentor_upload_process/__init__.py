@@ -128,12 +128,40 @@ class Answer:
     media: List[Media]
 
 
+class UserQuestionMentor:
+    _id: str
+    name: str
+
+
+class UserQuestionQuestion:
+    _id: str
+    question: str
+
+
+class UserQuestionAnswer:
+    _id: str
+    transcript: str
+    question: UserQuestionQuestion
+
+
+class UserQuestion:
+    _id: str
+    question: str
+    confidence: float
+    classifierEntryType: str
+    feedback: str
+    mentor: UserQuestionMentor
+    classifierAnswer: UserQuestionAnswer
+    graderAnswer: UserQuestionAnswer
+
+
 class MentorExportJson:
     id: str
     mentorInfo: MentorInfo
     subjects: List[Subject]
     questions: List[Question]
     answers: List[Answer]
+    userQuestions: List[UserQuestion]
 
 
 class AnswerGQL:

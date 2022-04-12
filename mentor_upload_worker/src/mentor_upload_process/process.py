@@ -13,7 +13,7 @@ from tempfile import mkdtemp
 from shutil import copyfile, rmtree
 from typing import List, Tuple
 import urllib.request
-
+import json
 
 import boto3
 from boto3_type_annotations.s3 import Client as S3Client
@@ -824,19 +824,27 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
 def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
     import logging
 
+    logging.error("starting transfer process")
+    logging.error("req:")
     mentor = req.get("mentor")
     mentor_export_json = req.get("mentorExportJson")
     replaced_mentor_data_changes = req.get("replacedMentorDataChanges")
-
+    logging.error(json.dumps(req))
     graphql_update = {"status": "IN_PROGRESS"}
     import_task_update_gql(
         ImportTaskUpdateGQLRequest(mentor=mentor, graphql_update=graphql_update)
     )
-
-    mentor_import_res = import_mentor_gql(
-        ImportMentorGQLRequest(mentor, mentor_export_json, replaced_mentor_data_changes)
-    )
-
+    logging.error("created import task")
+    try:
+        mentor_import_res = import_mentor_gql(
+            ImportMentorGQLRequest(
+                mentor, mentor_export_json, replaced_mentor_data_changes
+            )
+        )
+    except Exception as e:
+        logging.error("Failed to import mentor")
+        logging.error(e)
+    logging.error(mentor_import_res)
     graphql_update = {"status": "DONE"}
     import_task_update_gql(
         ImportTaskUpdateGQLRequest(mentor=mentor, graphql_update=graphql_update)

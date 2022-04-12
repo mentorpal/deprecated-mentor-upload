@@ -109,7 +109,63 @@ transfer_mentor_json_schema = {
                     "type": "array",
                     "items": {"$ref": "#/$defs/AnswerGQL"},
                 },
+                "userQuestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "_id": {"type": "string"},
+                            "question": {"type": "string"},
+                            "confidence": {"type": "number"},
+                            "classifierAnswerType": {"type": "string"},
+                            "feedback": {"type": "string"},
+                            "mentor": {
+                                "type": "object",
+                                "properties": {
+                                    "_id": {"type": "string"},
+                                    "name": {"type": "string"},
+                                },
+                            },
+                            "classifierAnswer": {
+                                "type": "object",
+                                "properties": {
+                                    "_id": {"type": "string"},
+                                    "question": {
+                                        "type": "object",
+                                        "properties": {
+                                            "_id": {"type": "string"},
+                                            "question": {"type": "string"},
+                                        },
+                                    },
+                                    "transcript": {"type": "string"},
+                                },
+                            },
+                            "graderAnswer": {
+                                "type": ["object", "null"],
+                                "properties": {
+                                    "_id": {"type": "string"},
+                                    "question": {
+                                        "type": "object",
+                                        "properties": {
+                                            "_id": {"type": "string"},
+                                            "question": {"type": "string"},
+                                        },
+                                    },
+                                    "transcript": {"type": "string"},
+                                },
+                            },
+                        },
+                    },
+                },
             },
+            "required": [
+                "id",
+                "mentorInfo",
+                "subjects",
+                "questions",
+                "answers",
+                "userQuestions",
+            ],
         },
         "replacedMentorDataChanges": {
             "type": "object",
@@ -212,7 +268,7 @@ transfer_mentor_json_schema = {
 def transfer_mentor(body):
     mentor = body.get("mentor")
     mentor_export_json = body.get("mentorExportJson")
-    mentor_export_json = body.get("replacedMentorDataChanges")
+    replace_mentor_data_changes = body.get("replacedMentorDataChanges")
 
     graphql_update = {"status": "QUEUED"}
     s3_video_migration = {"status": "QUEUED", "answerMediaMigrations": []}
@@ -223,7 +279,7 @@ def transfer_mentor(body):
     req = {
         "mentor": mentor,
         "mentorExportJson": mentor_export_json,
-        "replacedMentorDataChanges": mentor_export_json,
+        "replacedMentorDataChanges": replace_mentor_data_changes,
     }
 
     t = mentor_upload_tasks.tasks.process_transfer_mentor.apply_async(

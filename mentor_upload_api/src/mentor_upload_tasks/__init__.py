@@ -5,6 +5,7 @@
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
 # flake8: noqa
+import numbers
 from os import environ
 from typing import List, TypedDict
 
@@ -138,12 +139,40 @@ class Answer:
     media: List[Media]
 
 
+class UserQuestionMentor:
+    _id: str
+    name: str
+
+
+class UserQuestionQuestion:
+    _id: str
+    question: str
+
+
+class UserQuestionAnswer:
+    _id: str
+    transcript: str
+    question: UserQuestionQuestion
+
+
+class UserQuestion:
+    _id: str
+    question: str
+    confidence: float
+    classifierEntryType: str
+    feedback: str
+    mentor: UserQuestionMentor
+    classifierAnswer: UserQuestionAnswer
+    graderAnswer: UserQuestionAnswer
+
+
 class MentorExportJson:
     id: str
     mentorInfo: MentorInfo
     subjects: List[Subject]
     questions: List[Question]
     answers: List[Answer]
+    userQuestions: List[UserQuestion]
 
 
 class AnswerGQL:
