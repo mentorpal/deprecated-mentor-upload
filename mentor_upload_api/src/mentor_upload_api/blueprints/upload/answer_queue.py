@@ -397,9 +397,10 @@ def _regen_vtt(mentor: str, question: str):
             ) = fetch_answer_transcript_and_media(mentor, question)
             web_media = next((x for x in answer_media if x["tag"] == "web"), None)
             if not web_media:
-                raise Exception(
-                    f"failed to find answer media for mentor: {mentor} and question: {question}"
+                logging.info(
+                    f"no answer media for mentor: {mentor} and question: {question}"
                 )
+                return {"regen_vtt": False}
             transcript_to_vtt(web_media["url"], vtt_file_path, transcript)
             video_path_base = f"videos/{mentor}/{question}/"
             if path.isfile(vtt_file_path):
@@ -411,14 +412,11 @@ def _regen_vtt(mentor: str, question: str):
                     ExtraArgs={"ContentType": "text/vtt"},
                 )
             else:
-                import logging
-
-                logging.error(f"Failed to find file at {vtt_file_path}")
+                raise Exception(f"Failed to find vtt file at {vtt_file_path}")
             return {"regen_vtt": True}
         except Exception as x:
-            import logging
 
-            logging.error(
+            logging.info(
                 f"failed to regenerate vtt for mentor {mentor} and question {question}"
             )
             logging.exception(x)

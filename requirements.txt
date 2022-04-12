@@ -1,4 +1,4 @@
-black==20.8b1
+black==22.3.0
 flake8==3.9.2
 mypy==v0.782
 pep8-naming==0.12.0
