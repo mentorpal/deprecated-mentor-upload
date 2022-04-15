@@ -112,6 +112,7 @@ class SubjectQuestionGQL:
 class Subject:
     _id: str
     name: str
+    type: str
     description: str
     isRequired: str
     categories: List[Category]
