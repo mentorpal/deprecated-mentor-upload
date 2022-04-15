@@ -4,7 +4,8 @@
 #
 # The full terms of this copyright and license should always be found in the root directory of this software deliverable as "license.txt" and if these terms are not found with this software, please contact the USC Stevens Center for the full license.
 #
-from typing import TypedDict
+# flake8: noqa
+from typing import TypedDict, List
 
 
 class TrimRequest(TypedDict):
@@ -58,3 +59,137 @@ class CancelTaskResponse(TypedDict):
     mentor: str
     question: str
     task_id: str
+
+
+class Media:
+    type: str
+    tag: str
+    url: str
+    needsTransfer: bool  # noqa: N815
+
+
+class MentorInfo:
+    name: str
+    firstName: str
+    title: str
+    email: str
+    thumbnail: str
+    allowContact: bool
+    defaultSubject: str
+    mentorType: str
+
+
+class Question:
+    _id: str
+    question: str
+    type: str
+    name: str
+    clientId: str
+    paraphrases: List[str]
+    mentor: str
+    mentorType: str
+    minVideoLength: str
+
+
+class Category:
+    id: str
+    name: str
+    description: str
+
+
+class Topic:
+    id: str
+    name: str
+    description: str
+
+
+class SubjectQuestionGQL:
+    question: Question
+    category: Category
+    topics: List[Topic]
+
+
+class Subject:
+    _id: str
+    name: str
+    description: str
+    isRequired: str
+    categories: List[Category]
+    topics: List[Topic]
+    questions: List[SubjectQuestionGQL]
+
+
+class Answer:
+    _id: str
+    question: Question
+    hasEditedTranscript: bool
+    transcript: str
+    status: str
+    media: List[Media]
+
+
+class UserQuestionMentor:
+    _id: str
+    name: str
+
+
+class UserQuestionQuestion:
+    _id: str
+    question: str
+
+
+class UserQuestionAnswer:
+    _id: str
+    transcript: str
+    question: UserQuestionQuestion
+
+
+class UserQuestion:
+    _id: str
+    question: str
+    confidence: float
+    classifierEntryType: str
+    feedback: str
+    mentor: UserQuestionMentor
+    classifierAnswer: UserQuestionAnswer
+    graderAnswer: UserQuestionAnswer
+
+
+class MentorExportJson:
+    id: str
+    mentorInfo: MentorInfo
+    subjects: List[Subject]
+    questions: List[Question]
+    answers: List[Answer]
+    userQuestions: List[UserQuestion]
+
+
+class AnswerGQL:
+    _id: str
+    question: Question
+    hasEditedTranscript: bool
+    transcript: str
+    status: str
+    media: List[Media]
+    hasUntransferredMedia: bool
+
+
+class ReplacedMentorQuestionChanges:
+    editType: str
+    data: Question
+
+
+class ReplacedMentorAnswerChanges:
+    editType: str
+    data: AnswerGQL
+
+
+class ReplacedMentorDataChanges:
+    questionChanges: List[ReplacedMentorQuestionChanges]
+    answerChanges: List[ReplacedMentorAnswerChanges]
+
+
+class ProcessTransferMentor(TypedDict):
+    mentor: str
+    mentorExportJson: MentorExportJson
+    replacedMentorDataChanges: List[ReplacedMentorDataChanges]

@@ -18,6 +18,7 @@ from mentor_upload_process import (  # NOQA
     CancelTaskResponse,
     ProcessAnswerRequest,
     ProcessAnswerResponse,
+    ProcessTransferMentor,
     ProcessTransferRequest,
     TrimExistingUploadRequest,
     process,
@@ -196,6 +197,13 @@ def process_transfer_video(req: ProcessTransferRequest):
     task_id = process_transfer_video.request.id
     log.debug(process_transfer_video.request)
     return process.process_transfer_video(req, task_id)
+
+
+@celery.task()
+def process_transfer_mentor(req: ProcessTransferMentor):
+    task_id = process_transfer_mentor.request.id
+    log.debug(process_transfer_mentor.request)
+    return process.process_transfer_mentor(req, task_id)
 
 
 @celery.task()
