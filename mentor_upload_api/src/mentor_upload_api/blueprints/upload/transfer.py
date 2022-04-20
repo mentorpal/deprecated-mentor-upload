@@ -88,6 +88,7 @@ transfer_mentor_json_schema = {
                             "_id": {"type": "string"},
                             "name": {"type": "string"},
                             "description": {"type": "string"},
+                            "type": {"type": "string"},
                             "isRequired": {"type": "boolean"},
                             "categories": {
                                 "type": "array",
