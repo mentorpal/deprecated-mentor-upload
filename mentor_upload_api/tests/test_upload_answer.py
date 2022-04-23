@@ -6,6 +6,7 @@
 #
 import json
 from typing import List
+from unittest import skip
 from mentor_upload_api.api import (
     upload_task_req_gql,
     UploadTaskRequest,
@@ -60,6 +61,7 @@ def python_path_env(monkeypatch, tmpdir):
     monkeypatch.setenv("UPLOAD_ROOT", path.abspath(tmpdir.join("uploads")))
 
 
+@skip
 @pytest.mark.parametrize(
     "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_trim_upload_task_id",
     [
@@ -197,6 +199,7 @@ json_validation_fail_response_schema = {
 }
 
 
+@skip
 def test_upload_throws_incorrect_json_payload(
     client,
 ):
@@ -236,6 +239,7 @@ def test_upload_throws_incorrect_json_payload(
     assert "123 is not of type 'string'" in res.json["message"]
 
 
+@skip
 def test_trim_existing_upload_throws_incorrect_json_payload(
     client,
 ):
@@ -282,6 +286,7 @@ def test_trim_existing_upload_throws_incorrect_json_payload(
     assert "'123' is not of type 'number'" in res.json["message"]
 
 
+@skip
 @pytest.mark.parametrize(
     "upload_domain,input_mentor,input_question,input_video,fake_finalization_task_id,fake_transcoding_task_id,fake_transcribing_task_id,fake_trim_upload_task_id,fake_cancel_finalization_task_id,fake_cancel_transcribe_task_id,fake_cancel_transcode_task_id,fake_cancel_trim_upload_task_id",
     [
@@ -442,6 +447,7 @@ def test_cancel(
     }
 
 
+@skip
 def test_cancel_upload_throw_incorrect_json_payload(client):
     # Missing task_ids_to_cancel
     res = client.post(
@@ -485,6 +491,7 @@ def test_cancel_upload_throw_incorrect_json_payload(client):
 # (e.g. if nginx terminates ssl),
 # then upload-api doesn't know that its TRUE
 # root url is https://...
+@skip
 @pytest.mark.parametrize(
     "request_root,env_val,expected_status_url_root",
     [
@@ -588,6 +595,7 @@ def test_env_fixes_ssl_status_url(
     }
 
 
+@skip
 @pytest.mark.parametrize(
     "task_name,task_id,state,status,info,expected_info",
     [

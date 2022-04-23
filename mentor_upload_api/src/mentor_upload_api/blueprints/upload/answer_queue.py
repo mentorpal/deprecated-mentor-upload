@@ -127,40 +127,32 @@ def submit_job(req):
 
 
 def create_task_list(trim, has_edited_transcript):
-    task_list = []
-    if trim:
-        task_list.append(
-            {
-                "task_name": "trim_upload",
-                "task_id": str(uuid.uuid4()),
-                "status": "DONE",
-            }
-        )
-
-    task_list.append(
+    transcode_web_task = {
+        "task_name": "transcoding-web",
+        "status": "QUEUED",
+    }
+    transcode_mobile_task = {
+        "task_name": "transcoding-mobile",
+        "status": "QUEUED",
+    }
+    transcribe_task = (
         {
-            "task_name": "transcoding-web",
-            "task_id": str(uuid.uuid4()),
+            "task_name": "transcribing",
             "status": "QUEUED",
         }
+        if not has_edited_transcript
+        else None
     )
-    task_list.append(
+    trim_upload_task = (
         {
-            "task_name": "transcoding-mobile",
-            "task_id": str(uuid.uuid4()),
+            "task_name": "trim-upload",
             "status": "QUEUED",
         }
+        if trim
+        else None
     )
-    if not has_edited_transcript:
-        task_list.append(
-            {
-                "task_name": "transcribing",
-                "task_id": str(uuid.uuid4()),
-                "status": "QUEUED",
-            }
-        )
 
-    return task_list
+    return transcode_web_task, transcode_mobile_task, transcribe_task, trim_upload_task
 
 
 def upload_to_s3(file_path, s3_path):
@@ -254,14 +246,22 @@ def upload(body):
     s3_path = f"videos/{mentor}/{question}"
     upload_to_s3(file_path, s3_path)
 
-    task_list = create_task_list(trim, has_edited_transcript)
+    (
+        transcode_web_task,
+        transcode_mobile_task,
+        transcribe_task,
+        trim_upload_task,
+    ) = create_task_list(trim, has_edited_transcript)
 
     req = {
         "request": {
             "mentor": mentor,
             "question": question,
             "video": f"{s3_path}/original.mp4",
-            "task_list": task_list,
+            "transcodeWebTask": transcode_web_task,
+            "transcodeMobileTask": transcode_mobile_task,
+            "trimUploadTask": trim_upload_task,
+            "transcribeTask": transcribe_task,
         }
     }
 
@@ -269,18 +269,20 @@ def upload(body):
     # we risk here overriding values, perhaps processing was already done, so status is DONE
     # but this will overwrite and revert them back to QUEUED. Can we just append?
     upload_answer_and_task_update(
-        AnswerUpdateRequest(
-            mentor=mentor,
-            question=question,
-            transcript="",
-            media=[{"type": "video", "tag": "original", "url": original_video_url}],
-        ),
+        AnswerUpdateRequest(mentor=mentor, question=question, transcript=""),
         UploadTaskRequest(
             mentor=mentor,
             question=question,
-            task_list=task_list,
+            transcode_web_task=transcode_web_task,
+            transcode_mobile_task=transcode_mobile_task,
+            trim_upload_task=trim_upload_task,
+            transcribe_task=transcribe_task,
             transcript="",
-            media=[{"type": "video", "tag": "original", "url": original_video_url}],
+            original_media={
+                "type": "video",
+                "tag": "original",
+                "url": original_video_url,
+            },
         ),
     )
     submit_job(req)
@@ -288,11 +290,11 @@ def upload(body):
     return jsonify(
         {
             "data": {
-                "taskList": task_list,
-                # this seems incorrect, passing multiple ids
-                "statusUrl": _to_status_url(
-                    request.url_root, [t["task_id"] for t in task_list]
-                ),
+                "transcodeWebTask": transcode_web_task,
+                "transcodeMobileTask": transcode_mobile_task,
+                "transcribeTask": transcribe_task,
+                "trimUploadTask": trim_upload_task,
+                "statusUrl": _to_status_url(request.url_root, str(uuid.uuid4())),
             }
         }
     )
