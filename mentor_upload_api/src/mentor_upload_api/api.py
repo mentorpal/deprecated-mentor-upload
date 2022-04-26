@@ -53,7 +53,7 @@ class UploadTaskRequest:
     mentor: str
     question: str
     trim_upload_task: TaskInfo
-    tanscode_web_task: TaskInfo
+    transcode_web_task: TaskInfo
     transcode_mobile_task: TaskInfo
     transcribe_task: TaskInfo
     transcript: str = None
@@ -73,7 +73,7 @@ def thumbnail_update_gql(req: MentorThumbnailUpdateRequest) -> GQLQueryBody:
 
 def upload_task_req_gql(req: UploadTaskRequest) -> GQLQueryBody:
     status = {}
-    status["transcodeWebTask"] = req.tanscode_web_task
+    status["transcodeWebTask"] = req.transcode_web_task
     status["transcodeMobileTask"] = req.transcode_mobile_task
     status["trimUploadTask"] = req.trim_upload_task
     status["transcribeTask"] = req.transcribe_task
@@ -192,16 +192,13 @@ def upload_answer_and_task_req_gql(
         variables["answer"]["hasEditedTranscript"] = answer_req.has_edited_transcript
 
     variables["status"] = {
-        "transcodeWebTask": task_req.transcodeWebTask,
-        "transcodeMobileTask": task_req.transcodeMobileTask,
-        "transcribeTask": task_req.transcribeTask,
-        "trimUploadTask": task_req.trimUploadTask,
+        "transcodeWebTask": task_req.transcode_web_task,
+        "transcodeMobileTask": task_req.transcode_mobile_task,
+        "transcribeTask": task_req.transcribe_task,
+        "trimUploadTask": task_req.trim_upload_task,
     }
     if task_req.transcript:
         variables["status"]["transcript"] = task_req.transcript
-
-    if task_req.media:
-        variables["status"]["media"] = task_req.media
     return {
         "query": """mutation UpdateUploadAnswerAndTaskStatus($mentorId: ID!, $questionId: ID!, $answer: UploadAnswerType!, $status: UploadTaskInputType!) {
             api {
@@ -230,11 +227,21 @@ def fetch_answer_transcript_and_media_gql(mentor: str, question: str) -> GQLQuer
         "query": """query Answer($mentor: ID!, $question: ID!) {
             answer(mentor: $mentor, question: $question){
                 transcript
-                media {
-                type
-                tag
-                url
-              }
+                webMedia {
+                    type
+                    tag
+                    url
+                }
+                mobileMedia {
+                    type
+                    tag
+                    url
+                }
+                vttMedia {
+                    type
+                    tag
+                    url
+                }
             }
         }""",
         "variables": {"mentor": mentor, "question": question},
@@ -251,16 +258,28 @@ fetch_answer_transcript_media_json_schema = {
                     "type": "object",
                     "properties": {
                         "transcript": {"type": "string"},
-                        "media": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "type": {"type": "string"},
-                                    "tag": {"type": "string"},
-                                    "url": {"type": "string"},
-                                },
-                                "required": ["type", "tag", "url"],
+                        "webMedia": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "tag": {"type": "string"},
+                                "url": {"type": "string"},
+                            },
+                        },
+                        "mobileMedia": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "tag": {"type": "string"},
+                                "url": {"type": "string"},
+                            },
+                        },
+                        "vttMedia": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "tag": {"type": "string"},
+                                "url": {"type": "string"},
                             },
                         },
                     },
@@ -280,10 +299,15 @@ def fetch_answer_transcript_and_media(mentor: str, question: str):
     json_res = exec_graphql_with_json_validation(
         gql_query, fetch_answer_transcript_media_json_schema, headers=headers
     )
-    return (
-        json_res["data"]["answer"]["transcript"],
-        json_res["data"]["answer"]["media"],
-    )
+    answer_data = json_res["data"]["answer"]
+    media = []
+    if answer_data["webMedia"] is not None:
+        media.append(answer_data["webMedia"])
+    if answer_data["mobileMedia"] is not None:
+        media.append(answer_data["mobileMedia"])
+    if answer_data["vttMedia"] is not None:
+        media.append(answer_data["vttMedia"])
+    return (answer_data["transcript"], media)
 
 
 @dataclass
