@@ -129,15 +129,18 @@ def submit_job(req):
 def create_task_list(trim, has_edited_transcript):
     transcode_web_task = {
         "task_name": "transcoding-web",
+        "task_id": str(uuid.uuid4()),
         "status": "QUEUED",
     }
     transcode_mobile_task = {
         "task_name": "transcoding-mobile",
+        "task_id": str(uuid.uuid4()),
         "status": "QUEUED",
     }
     transcribe_task = (
         {
             "task_name": "transcribing",
+            "task_id": str(uuid.uuid4()),
             "status": "QUEUED",
         }
         if not has_edited_transcript
@@ -146,6 +149,7 @@ def create_task_list(trim, has_edited_transcript):
     trim_upload_task = (
         {
             "task_name": "trim-upload",
+            "task_id": str(uuid.uuid4()),
             "status": "QUEUED",
         }
         if trim
