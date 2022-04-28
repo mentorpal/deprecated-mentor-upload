@@ -345,19 +345,8 @@ def fetch_answer_transcript_and_media(mentor: str, question: str):
     )
 
 
-# @dataclass
-# class MediaUpdateRequest:
-#     mentor: str
-#     question: str
-#     webMedia: Media
-#     mobileMedia: Media
-#     vttMedia: Media
-
 def media_update_gql(req: MediaUpdateRequest) -> GQLQueryBody:
-    variables={
-        "mentorId": req.mentor,
-        "questionId": req.question
-    }
+    variables = {"mentorId": req.mentor, "questionId": req.question}
     if req.web_media:
         variables["webMedia"] = req.web_media
     if req.mobile_media:
@@ -371,7 +360,7 @@ def media_update_gql(req: MediaUpdateRequest) -> GQLQueryBody:
                 mediaUpdate(mentorId: $mentorId, questionId: $questionId, webMedia: $webMedia, mobileMedia: $mobileMedia, vttMedia: $vttMedia)
             }
         }""",
-        "variables": variables
+        "variables": variables,
     }
 
 
