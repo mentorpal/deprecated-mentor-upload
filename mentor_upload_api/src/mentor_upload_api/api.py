@@ -43,6 +43,7 @@ class Media:
 
 @dataclass
 class TaskInfo:
+    task_name: str
     task_id: str
     status: str
 
@@ -51,9 +52,12 @@ class TaskInfo:
 class UploadTaskRequest:
     mentor: str
     question: str
-    task_list: List[TaskInfo]
+    trim_upload_task: TaskInfo
+    transcode_web_task: TaskInfo
+    transcode_mobile_task: TaskInfo
+    transcribe_task: TaskInfo
     transcript: str = None
-    media: List[Media] = None
+    original_media: Media = None
 
 
 def thumbnail_update_gql(req: MentorThumbnailUpdateRequest) -> GQLQueryBody:
@@ -69,11 +73,14 @@ def thumbnail_update_gql(req: MentorThumbnailUpdateRequest) -> GQLQueryBody:
 
 def upload_task_req_gql(req: UploadTaskRequest) -> GQLQueryBody:
     status = {}
-    status["taskList"] = req.task_list
+    status["transcodeWebTask"] = req.transcode_web_task
+    status["transcodeMobileTask"] = req.transcode_mobile_task
+    status["trimUploadTask"] = req.trim_upload_task
+    status["transcribeTask"] = req.transcribe_task
     if req.transcript:
         status["transcript"] = req.transcript
-    if req.media:
-        status["media"] = req.media
+    if req.originalMedia:
+        status["originalMedia"] = req.original_media
 
     return {
         "query": """mutation UploadStatus($mentorId: ID!, $questionId: ID!, $status: UploadTaskInputType!) {
@@ -87,47 +94,6 @@ def upload_task_req_gql(req: UploadTaskRequest) -> GQLQueryBody:
             "status": status,
         },
     }
-
-
-@dataclass
-class UpdateTaskStatusRequest:
-    mentor: str
-    question: str
-    task_id: str
-    new_status: str
-    transcript: str = None
-    media: Media = None
-
-
-def upload_task_status_req_gql(req: UpdateTaskStatusRequest) -> GQLQueryBody:
-    variables = {}
-    variables["mentorId"] = req.mentor
-    variables["questionId"] = req.question
-    variables["taskId"] = req.task_id
-    variables["newStatus"] = req.new_status
-    if req.transcript:
-        variables["transcript"] = req.transcript
-    if req.media:
-        variables["media"] = req.media
-    return {
-        "query": """mutation UpdateUploadTaskStatus($mentorId: ID!, $questionId: ID!, $taskId: String!, $newStatus: String!, $transcript: String, $media: [AnswerMediaInputType]) {
-            api {
-                uploadTaskStatusUpdate(mentorId: $mentorId, questionId: $questionId, taskId: $taskId, newStatus: $newStatus, transcript: $transcript, media: $media)
-            }
-        }""",
-        "variables": variables,
-    }
-
-
-def upload_task_status_update(req: UpdateTaskStatusRequest) -> None:
-    headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
-    body = upload_task_status_req_gql(req)
-    log.debug(body)
-    res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
-    res.raise_for_status()
-    tdjson = res.json()
-    if "errors" in tdjson:
-        raise Exception(json.dumps(tdjson.get("errors")))
 
 
 def upload_task_update(req: UploadTaskRequest) -> None:
@@ -162,9 +128,7 @@ def fetch_upload_task_gql(req: FetchUploadTaskReq) -> GQLQueryBody:
     return {
         "query": """query UploadTask($mentorId: ID!, $questionId: ID!) {
             uploadTask(mentorId: $mentorId, questionId: $questionId){
-                taskList{
-                    task_name
-                }
+                transcript
             }
             }""",
         "variables": {"mentorId": req.mentor, "questionId": req.question},
@@ -180,12 +144,8 @@ fetch_upload_task_schema = {
                 "uploadTask": {
                     "type": ["object", "null"],
                     "properties": {
-                        "taskList": {
-                            "type": "array",
-                            "item": {
-                                "type": "object",
-                                "properties": {"task_name": {"type": "string"}},
-                            },
+                        "transcript": {
+                            "type": "string",
                         }
                     },
                 }
@@ -215,7 +175,6 @@ class AnswerUpdateRequest:
     mentor: str
     question: str
     transcript: str
-    media: List[Media]
     has_edited_transcript: bool = None
 
 
@@ -226,20 +185,20 @@ def upload_answer_and_task_req_gql(
     variables["mentorId"] = answer_req.mentor
     variables["questionId"] = answer_req.question
 
-    variables["answer"] = {
-        "media": answer_req.media,
-    }
+    variables["answer"] = {}
     if answer_req.transcript:
-        variables["answer"]["transcript"] = (answer_req.transcript,)
+        variables["answer"]["transcript"] = answer_req.transcript
     if answer_req.has_edited_transcript is not None:
         variables["answer"]["hasEditedTranscript"] = answer_req.has_edited_transcript
 
-    variables["status"] = {"taskList": task_req.task_list}
+    variables["status"] = {
+        "transcodeWebTask": task_req.transcode_web_task,
+        "transcodeMobileTask": task_req.transcode_mobile_task,
+        "transcribeTask": task_req.transcribe_task,
+        "trimUploadTask": task_req.trim_upload_task,
+    }
     if task_req.transcript:
         variables["status"]["transcript"] = task_req.transcript
-
-    if task_req.media:
-        variables["status"]["media"] = task_req.media
     return {
         "query": """mutation UpdateUploadAnswerAndTaskStatus($mentorId: ID!, $questionId: ID!, $answer: UploadAnswerType!, $status: UploadTaskInputType!) {
             api {
@@ -252,7 +211,7 @@ def upload_answer_and_task_req_gql(
 
 
 def upload_answer_and_task_update(
-    answer_req: AnswerUpdateRequest, task_req: UpdateTaskStatusRequest
+    answer_req: AnswerUpdateRequest, task_req: UploadTaskRequest
 ) -> None:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     body = upload_answer_and_task_req_gql(answer_req, task_req)
@@ -268,11 +227,21 @@ def fetch_answer_transcript_and_media_gql(mentor: str, question: str) -> GQLQuer
         "query": """query Answer($mentor: ID!, $question: ID!) {
             answer(mentor: $mentor, question: $question){
                 transcript
-                media {
-                type
-                tag
-                url
-              }
+                webMedia {
+                    type
+                    tag
+                    url
+                }
+                mobileMedia {
+                    type
+                    tag
+                    url
+                }
+                vttMedia {
+                    type
+                    tag
+                    url
+                }
             }
         }""",
         "variables": {"mentor": mentor, "question": question},
@@ -289,16 +258,28 @@ fetch_answer_transcript_media_json_schema = {
                     "type": "object",
                     "properties": {
                         "transcript": {"type": "string"},
-                        "media": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "type": {"type": "string"},
-                                    "tag": {"type": "string"},
-                                    "url": {"type": "string"},
-                                },
-                                "required": ["type", "tag", "url"],
+                        "webMedia": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "tag": {"type": "string"},
+                                "url": {"type": "string"},
+                            },
+                        },
+                        "mobileMedia": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "tag": {"type": "string"},
+                                "url": {"type": "string"},
+                            },
+                        },
+                        "vttMedia": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "tag": {"type": "string"},
+                                "url": {"type": "string"},
                             },
                         },
                     },
@@ -318,10 +299,15 @@ def fetch_answer_transcript_and_media(mentor: str, question: str):
     json_res = exec_graphql_with_json_validation(
         gql_query, fetch_answer_transcript_media_json_schema, headers=headers
     )
-    return (
-        json_res["data"]["answer"]["transcript"],
-        json_res["data"]["answer"]["media"],
-    )
+    answer_data = json_res["data"]["answer"]
+    media = []
+    if answer_data["webMedia"] is not None:
+        media.append(answer_data["webMedia"])
+    if answer_data["mobileMedia"] is not None:
+        media.append(answer_data["mobileMedia"])
+    if answer_data["vttMedia"] is not None:
+        media.append(answer_data["vttMedia"])
+    return (answer_data["transcript"], media)
 
 
 @dataclass
