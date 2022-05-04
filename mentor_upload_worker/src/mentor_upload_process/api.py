@@ -79,7 +79,9 @@ class UpdateTaskStatusRequest:
 class MediaUpdateRequest:
     mentor: str
     question: str
-    media: Media
+    web_media: Media = None
+    mobile_media: Media = None
+    vtt_media: Media = None
 
 
 class GQLQueryBody(TypedDict):
@@ -344,17 +346,21 @@ def fetch_answer_transcript_and_media(mentor: str, question: str):
 
 
 def media_update_gql(req: MediaUpdateRequest) -> GQLQueryBody:
+    variables = {"mentorId": req.mentor, "questionId": req.question}
+    if req.web_media:
+        variables["webMedia"] = req.web_media
+    if req.mobile_media:
+        variables["mobileMedia"] = req.mobile_media
+    if req.vtt_media:
+        variables["vttMedia"] = req.vtt_media
+
     return {
-        "query": """mutation MediaUpdate($mentorId: ID!, $questionId: ID!, $media: AnswerMediaInputType!) {
+        "query": """mutation MediaUpdate($mentorId: ID!, $questionId: ID!, $webMedia: AnswerMediaInputType, $mobileMedia: AnswerMediaInputType, $vttMedia: AnswerMediaInputType) {
             api {
-                mediaUpdate(mentorId: $mentorId, questionId: $questionId, media: $media)
+                mediaUpdate(mentorId: $mentorId, questionId: $questionId, webMedia: $webMedia, mobileMedia: $mobileMedia, vttMedia: $vttMedia)
             }
         }""",
-        "variables": {
-            "mentorId": req.mentor,
-            "questionId": req.question,
-            "media": req.media,
-        },
+        "variables": variables,
     }
 
 
@@ -444,7 +450,19 @@ def import_mentor_gql_query(req: ImportMentorGQLRequest) -> GQLQueryBody:
                         question{
                             _id
                         }
-                        media{
+                        webMedia{
+                            url
+                            type
+                            tag
+                            needsTransfer
+                        }
+                        mobileMedia{
+                            url
+                            type
+                            tag
+                            needsTransfer
+                        }
+                        vttMedia{
                             url
                             type
                             tag
@@ -489,8 +507,36 @@ import_mentor_gql_response_schema = {
                                                 },
                                                 "required": ["_id"],
                                             },
-                                            "media": {
-                                                "type": "array",
+                                            "webMedia": {
+                                                "type": ["object", "null"],
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "url": {"type": "string"},
+                                                        "type": {"type": "string"},
+                                                        "tag": {"type": "string"},
+                                                        "needsTransfer": {
+                                                            "type": "boolean"
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                            "mobileMedia": {
+                                                "type": ["object", "null"],
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "url": {"type": "string"},
+                                                        "type": {"type": "string"},
+                                                        "tag": {"type": "string"},
+                                                        "needsTransfer": {
+                                                            "type": "boolean"
+                                                        },
+                                                    },
+                                                },
+                                            },
+                                            "vttMedia": {
+                                                "type": ["object", "null"],
                                                 "items": {
                                                     "type": "object",
                                                     "properties": {
@@ -507,7 +553,9 @@ import_mentor_gql_response_schema = {
                                         "required": [
                                             "hasUntransferredMedia",
                                             "question",
-                                            "media",
+                                            "webMedia",
+                                            "mobileMedia",
+                                            "vttMedia",
                                         ],
                                     },
                                 }
@@ -546,6 +594,17 @@ class MentorImportGQLResponse:
     answers: List[MentorImportAnswersResponse]
 
 
+def get_media_list_from_answer_gql(answer_gql):
+    media_list = []
+    if answer_gql["webMedia"]:
+        media_list.append(answer_gql["webMedia"])
+    if answer_gql["mobileMedia"]:
+        media_list.append(answer_gql["mobileMedia"])
+    if answer_gql["vttMedia"]:
+        media_list.append(answer_gql["vttMedia"])
+    return media_list
+
+
 def import_mentor_gql(req: ImportMentorGQLRequest) -> MentorImportGQLResponse:
     headers = {"mentor-graphql-req": "true", "Authorization": f"bearer {get_api_key()}"}
     query = import_mentor_gql_query(req)
@@ -553,7 +612,18 @@ def import_mentor_gql(req: ImportMentorGQLRequest) -> MentorImportGQLResponse:
         query, import_mentor_gql_response_schema, headers=headers
     )
     res_data = res["data"]["api"]["mentorImport"]
-    return res_data
+    import_response_data = {
+        "answers": list(
+            map(
+                lambda answer: {
+                    **answer,
+                    "media": get_media_list_from_answer_gql(answer),
+                },
+                res_data["answers"],
+            )
+        )
+    }
+    return import_response_data
 
 
 @dataclass

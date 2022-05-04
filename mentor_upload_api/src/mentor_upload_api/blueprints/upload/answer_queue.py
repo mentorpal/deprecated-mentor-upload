@@ -256,6 +256,11 @@ def upload(body):
         transcribe_task,
         trim_upload_task,
     ) = create_task_list(trim, has_edited_transcript)
+    task_list = [transcode_web_task, transcode_mobile_task]
+    if transcribe_task is not None:
+        task_list.append(transcribe_task)
+    if trim_upload_task is not None:
+        task_list.append(trim_upload_task)
 
     req = {
         "request": {
@@ -294,10 +299,7 @@ def upload(body):
     return jsonify(
         {
             "data": {
-                "transcodeWebTask": transcode_web_task,
-                "transcodeMobileTask": transcode_mobile_task,
-                "transcribeTask": transcribe_task,
-                "trimUploadTask": trim_upload_task,
+                "taskList": task_list,
                 "statusUrl": _to_status_url(request.url_root, str(uuid.uuid4())),
             }
         }

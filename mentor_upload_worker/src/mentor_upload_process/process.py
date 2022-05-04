@@ -885,11 +885,14 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
                         )
                         m["needsTransfer"] = False
                         m["url"] = item_path
-                        update_media(
-                            MediaUpdateRequest(
-                                mentor=mentor, question=question, media=m
-                            )
-                        )
+                        update_media_vars = {"mentor": mentor, "question": question}
+                        if tag == "en":
+                            update_media_vars["vtt_media"] = m
+                        if tag == "web":
+                            update_media_vars["web_media"] = m
+                        if tag == "mobile":
+                            update_media_vars["mobile_media"] = m
+                        update_media(MediaUpdateRequest(**update_media_vars))
                         answer_media_migrate_update = {
                             "question": question,
                             "status": "DONE",
