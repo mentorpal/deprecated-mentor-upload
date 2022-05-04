@@ -667,8 +667,5 @@ def import_task_update_gql(req: ImportTaskGQLRequest) -> None:
     res = requests.post(get_graphql_endpoint(), json=body, headers=headers)
     res.raise_for_status()
     tdjson = res.json()
-    import logging
-
-    logging.error("")
     if "errors" in tdjson:
         raise Exception(json.dumps(tdjson.get("errors")))
