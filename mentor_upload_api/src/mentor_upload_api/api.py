@@ -259,7 +259,7 @@ fetch_answer_transcript_media_json_schema = {
                     "properties": {
                         "transcript": {"type": "string"},
                         "webMedia": {
-                            "type": "object",
+                            "type": ["object", "null"],
                             "properties": {
                                 "type": {"type": "string"},
                                 "tag": {"type": "string"},
@@ -267,7 +267,7 @@ fetch_answer_transcript_media_json_schema = {
                             },
                         },
                         "mobileMedia": {
-                            "type": "object",
+                            "type": ["object", "null"],
                             "properties": {
                                 "type": {"type": "string"},
                                 "tag": {"type": "string"},
@@ -275,7 +275,7 @@ fetch_answer_transcript_media_json_schema = {
                             },
                         },
                         "vttMedia": {
-                            "type": "object",
+                            "type": ["object", "null"],
                             "properties": {
                                 "type": {"type": "string"},
                                 "tag": {"type": "string"},
@@ -283,7 +283,7 @@ fetch_answer_transcript_media_json_schema = {
                             },
                         },
                     },
-                    "required": ["transcript", "media"],
+                    "required": ["transcript", "webMedia", "mobileMedia", "vttMedia"],
                 }
             },
             "required": ["answer"],

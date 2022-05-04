@@ -243,8 +243,8 @@ transfer_mentor_json_schema = {
                 "hasEditedTranscript": {"type": "boolean"},
                 "transcript": {"type": "string"},
                 "status": {"type": "string"},
-                "media": {
-                    "type": ["array", "null"],
+                "webMedia": {
+                    "type": ["object", "null"],
                     "items": {
                         "type": "object",
                         "properties": {
@@ -255,7 +255,31 @@ transfer_mentor_json_schema = {
                         },
                     },
                 },
-                "hasUntransferredMedia": {"type": "boolean"},
+                "mobileMedia": {
+                    "type": ["object", "null"],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string"},
+                            "tag": {"type": "string"},
+                            "url": {"type": "string"},
+                            "needsTransfer": {"type": "boolean"},
+                        },
+                    },
+                },
+                "vttMedia": {
+                    "type": ["object", "null"],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string"},
+                            "tag": {"type": "string"},
+                            "url": {"type": "string"},
+                            "needsTransfer": {"type": "boolean"},
+                        },
+                    },
+                },
+                "hasUntransferredMedia": {"type": ["boolean", "null"]},
             },
         },
     },
