@@ -13,7 +13,6 @@ from tempfile import mkdtemp
 from shutil import copyfile, rmtree
 from typing import List, Tuple
 import urllib.request
-import json
 
 import boto3
 from boto3_type_annotations.s3 import Client as S3Client
@@ -779,7 +778,6 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                     item_path,
                     ExtraArgs={"ContentType": content_type},
                 )
-                logging.error("Succesfully uploaded")
                 m["needsTransfer"] = False
                 m["url"] = item_path
 
@@ -796,7 +794,6 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
                 update_media(
                     MediaUpdateRequest(mentor=mentor, question=question, media=m)
                 )
-                logging.error("sucessfully updated GQL")
             except Exception as x:
                 logging.error(f"Failed to upload video to s3 {x}")
 
@@ -824,17 +821,13 @@ def process_transfer_video(req: ProcessTransferRequest, task_id: str):
 def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
     import logging
 
-    logging.error("starting transfer process")
-    logging.error("req:")
     mentor = req.get("mentor")
     mentor_export_json = req.get("mentorExportJson")
     replaced_mentor_data_changes = req.get("replacedMentorDataChanges")
-    logging.error(json.dumps(req))
     graphql_update = {"status": "IN_PROGRESS"}
     import_task_update_gql(
         ImportTaskUpdateGQLRequest(mentor=mentor, graphql_update=graphql_update)
     )
-    logging.error("created import task")
     try:
         mentor_import_res = import_mentor_gql(
             ImportMentorGQLRequest(
@@ -844,7 +837,6 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
     except Exception as e:
         logging.error("Failed to import mentor")
         logging.error(e)
-    logging.error(mentor_import_res)
     graphql_update = {"status": "DONE"}
     import_task_update_gql(
         ImportTaskUpdateGQLRequest(mentor=mentor, graphql_update=graphql_update)
@@ -872,7 +864,6 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
     for answer in answers_with_media_transfers:
         try:
             question = answer["question"]["_id"]
-            logging.error(f"starting media transfer for question {question}")
             for m in answer["media"]:
                 if m.get("needsTransfer", False):
                     typ = m.get("type", "")
@@ -883,7 +874,6 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
                             m.get("url", "")
                         )
                         item_path = f"videos/{mentor}/{question}/{tag}.{root_ext}"
-                        logging.error(f"uploading to {item_path}")
                         s3 = _create_s3_client()
                         s3_bucket = _require_env("STATIC_AWS_S3_BUCKET")
                         content_type = "text/vtt" if typ == "subtitles" else "video/mp4"
@@ -893,7 +883,6 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
                             item_path,
                             ExtraArgs={"ContentType": content_type},
                         )
-                        logging.error("Succesfully uploaded")
                         m["needsTransfer"] = False
                         m["url"] = item_path
                         update_media(
@@ -912,7 +901,6 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
                             )
                         )
 
-                        logging.error("sucessfully updated GQL")
                     except Exception as x:
                         media_url = m.get("url", "")
                         logging.error(f"Failed to upload video {media_url} to s3 {x}")
@@ -952,4 +940,3 @@ def process_transfer_mentor(req: ProcessTransferMentor, task_id: str):
                     },
                 )
             )
-    logging.error(f"Finished importing mentor {mentor}")
