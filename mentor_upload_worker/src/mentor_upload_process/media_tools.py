@@ -75,7 +75,7 @@ def output_args_video_encode_for_mobile(
     return (
         "-y",
         "-filter:v",
-        f"crop=iw-{crop_w:.0f}:ih-{crop_h:.0f},scale={o_w:.0f}:{o_h:.0f}",
+        f"crop=iw-{crop_w:.0f}:ih-{crop_h:.0f},scale={o_w:.0f}:{o_h:.0f},fps=30",
         "-c:v",
         "libx264",
         "-crf",
@@ -118,7 +118,7 @@ def output_args_video_encode_for_web(
     return (
         "-y",
         "-filter:v",
-        f"crop=iw-{crop_w:.0f}:ih-{crop_h:.0f},scale={o_w:.0f}:{o_h:.0f}",
+        f"crop=iw-{crop_w:.0f}:ih-{crop_h:.0f},scale={o_w:.0f}:{o_h:.0f},fps=30",
         "-c:v",
         "libx264",
         "-crf",
